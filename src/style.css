@@ -164,3 +164,7 @@ audio { display: block; width: 100%; height: 36px; color-scheme: dark; }
 
 .library-load { width: 100%; margin-bottom: 12px; text-align: left; }
 @media (max-width: 740px) { .library-load { margin: 7px 0 0; font-size: 10px; } }
+
+.timeline-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.timeline-toolbar [role="group"] { display: flex; gap: 5px; }
+.timeline-toolbar > span { color: #9faac6; font-size: 11px; }

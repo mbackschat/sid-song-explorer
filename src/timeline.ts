@@ -52,3 +52,8 @@ export function visibleTimelineFrames<T extends {time: number}>(frames: readonly
   if (last && last.time < end) visible.push({...last, time: end});
   return visible;
 }
+
+export function fittedWindow(historyStart: number, observedUntil: number, selection?: {start: number; end: number}) {
+  const start = Math.min(historyStart, selection?.start ?? historyStart);
+  return {start, end: Math.max(start + FOLLOW_WINDOW_SECONDS, observedUntil, selection?.end ?? 0)};
+}

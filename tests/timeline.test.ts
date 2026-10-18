@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { positionAt, trimHistory, validateLoop, followingWindow, visibleTimelineFrames } from '../src/timeline.ts';
+import { positionAt, trimHistory, validateLoop, followingWindow, visibleTimelineFrames, fittedWindow } from '../src/timeline.ts';
 
 test('heard position follows audio time, not the emulation cursor, across a loop', () => {
   const segments = [
@@ -49,4 +49,13 @@ test('visible drawing retains its boundary state without losing resolution to ol
   assert.deepEqual(visibleTimelineFrames(recent, 27, 30), [{time: 27, value: 3}, {time: 30, value: 3}]);
   assert.deepEqual(visibleTimelineFrames(recent, 0, 10), []);
   assert.equal(recent[0].time, 19);
+});
+
+
+test('fit history expands with retained playback and includes a held selection', () => {
+  assert.deepEqual(fittedWindow(0, 5), {start: 0, end: 10});
+  assert.deepEqual(fittedWindow(0, 30), {start: 0, end: 30});
+  assert.deepEqual(fittedWindow(12, 45), {start: 12, end: 45});
+  assert.deepEqual(fittedWindow(30, 32), {start: 30, end: 40});
+  assert.deepEqual(fittedWindow(30, 40, {start: 5, end: 50}), {start: 5, end: 50});
 });

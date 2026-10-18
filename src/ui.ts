@@ -1,6 +1,6 @@
 import type { Catalog } from './catalog.ts';
 import type { PlayerControls, PlayerState, Profile, RegisterFrame, WriteObservation } from './player-types.ts';
-import { FOLLOW_WINDOW_SECONDS, followingWindow, visibleTimelineFrames } from './timeline.ts';
+import { FOLLOW_WINDOW_SECONDS, followingWindow, fittedWindow, visibleTimelineFrames } from './timeline.ts';
 import logoUrl from '../assets/branding/sid-song-explorer.svg?url';
 import './style.css';
 
@@ -54,10 +54,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
         <div id="status-message" class="status-line" role="status" aria-live="polite">Choose the published sample or open a local file.</div>
         <div class="inspection-grid">
           <section class="panel" aria-labelledby="timeline-title"><div class="panel-header"><div><h2 id="timeline-title">Voice activity</h2><small>Frequency / gate snapshots · waveform-write ticks</small></div><div class="follow-controls"><button id="follow-button" class="small" aria-pressed="true">Following</button><button id="return-button" class="small quiet" disabled>Return to playing</button></div></div>
+            <div class="timeline-toolbar"><div role="group" aria-label="Timeline view"><button id="timeline-scroll" class="small" aria-pressed="true">Scroll</button><button id="timeline-fit" class="small" aria-pressed="false">Fit history</button></div><span id="timeline-view-note">Fixed ${FOLLOW_WINDOW_SECONDS}-second window</span></div>
             <div id="history-summary" class="history-summary mono">No retained observations yet.</div>
             <div class="lane-list">${COLORS.map((color, voice) => `<div class="voice-lane" style="--voice:${color}"><div class="voice-label"><strong>Voice ${voice + 1}</strong><small id="lane-wave-${voice}">No observation</small></div><canvas id="voice-lane-${voice}" class="lane-plot" tabindex="0" role="slider" aria-label="Select inspection time for voice ${voice + 1}" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div>`).join('')}
               <div class="voice-lane filter-lane" style="--voice:#b2a1ff"><div class="voice-label"><strong>Shared filter</strong><small>Cutoff register</small></div><canvas id="filter-lane" class="lane-plot" tabindex="0" role="slider" aria-label="Select shared filter inspection time" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div><div class="timeline-key mono"><span id="timeline-start">0:00</span><span id="timeline-cursor">Heard playhead</span><span id="timeline-end">0:30</span></div>
-            </div><p class="timeline-help">Fixed ${FOLLOW_WINDOW_SECONDS}-second view scrolls with playback. Click a lane to freeze its view while music continues. Arrow keys move the inspection cursor. A line shows register frequency, not loudness; gate clear can still release sound.</p>
+            </div><p class="timeline-help">Scroll keeps a fixed ${FOLLOW_WINDOW_SECONDS}-second scale; Fit history shows all retained activity. Click a lane to hold inspection while music continues. Arrow keys move the inspection cursor. A line shows register frequency, not loudness; gate clear can still release sound.</p>
             <div class="mix-section"><div class="mix-heading"><strong>Listen by voice</strong><button id="restore-button" class="small quiet" disabled>Restore full mix</button></div><div class="mix-buttons">${COLORS.map((color, voice) => `<div class="voice-controls" style="--voice:${color}"><span>V${voice + 1}</span><button id="mute-${voice}" aria-label="Mute voice ${voice + 1}" aria-pressed="false" disabled>Mute</button><button id="solo-${voice}" aria-label="Solo voice ${voice + 1}" aria-pressed="false" disabled>Solo</button></div>`).join('')}</div><p class="intervention-note">Waveform-write intervention, not isolated stems. Mute acts on subsequent control writes; shared filtering and ring/sync coupling still apply.</p></div>
             <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="0" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="8" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restart uses replay seeking and may pause; it is not gapless.</span></div>
           </section>
@@ -94,6 +95,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let loadedProfile: Profile | null = null;
   let state: PlayerState | null = null;
   let held: HeldHistory | null = null;
+  let timelineView: 'scroll' | 'fit' = 'scroll';
   let cursor = 0;
   let selectedEnd: number | null = null;
   let selectedVoice = 0;
@@ -289,6 +291,16 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   const follow = () => { held = null; selectedEnd = null; draw(); };
   button('follow-button').addEventListener('click', () => { if (held) follow(); else holdAt(state?.position ?? 0); });
   button('return-button').addEventListener('click', follow);
+  for (const mode of ['scroll', 'fit'] as const) button(`timeline-${mode}`).addEventListener('click', () => {
+    if (mode === timelineView) return;
+    timelineView = mode;
+    if (held && mode === 'scroll') {
+      const window = followingWindow(cursor);
+      held.plotStart = window.start;
+      held.plotEnd = window.end;
+    }
+    draw();
+  });
   for (let voice = 0; voice < 3; voice++) {
     button(`inspect-${voice}`).addEventListener('click', () => { selectedVoice = voice; draw(); });
     button(`mute-${voice}`).addEventListener('click', () => { void run(async () => {
@@ -610,9 +622,14 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     const writes = held?.writes ?? state?.writes ?? [];
     const observedUntil = held?.end ?? position;
     const historyStart = held?.start ?? state?.historyStart ?? 0;
-    const window = followingWindow(position);
-    plotStart = held?.plotStart ?? window.start;
-    plotEnd = held?.plotEnd ?? window.end;
+    const window = timelineView === 'fit'
+      ? fittedWindow(historyStart, observedUntil, held ? {start: cursor, end: selectedEnd ?? cursor} : undefined)
+      : held ? {start: held.plotStart, end: held.plotEnd} : followingWindow(position);
+    plotStart = window.start;
+    plotEnd = window.end;
+    button('timeline-scroll').setAttribute('aria-pressed', String(timelineView === 'scroll'));
+    button('timeline-fit').setAttribute('aria-pressed', String(timelineView === 'fit'));
+    setText('timeline-view-note', timelineView === 'scroll' ? `Fixed ${FOLLOW_WINDOW_SECONDS}-second window` : 'All retained history · scale fits available activity');
     const plotFrames = visibleTimelineFrames(frames, Math.max(plotStart, historyStart), Math.min(plotEnd, observedUntil));
     setText('history-summary', `${held ? 'HELD COPY' : 'HEARD HISTORY'} ${time(historyStart, true)}–${time(observedUntil, true)} · ${frames.length} sampled frames · ${held?.dropped ?? state?.dropped ?? 0} dropped writes · epoch ${held?.epoch ?? state?.epoch ?? 0}`);
     setText('timeline-start', time(plotStart));
