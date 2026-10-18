@@ -80,3 +80,8 @@ The 2026-10-19 audit confirmed the public GitHub repository and tracked guide, r
 | Explanations make the documented finding clearer | Pending the user's product judgment; an async review request is outstanding. |
 
 Production build and documentation checks passed after the warning fix. The audio engine and transport were unchanged by this final presentation correction, so their passed full-duration and exact-audio checks were not repeated. Milestone 1 remains open for the direct-browser and human verdicts; dual-SID and the normalized Crafter producer remain deferred under [the plan](../../PLAN.md).
+
+
+## CI cold-seek investigation
+
+On 2026-10-19, Application runs [39174688261](https://github.com/mbackschat/sid-song-explorer/actions/runs/39174688261) and [39172020601](https://github.com/mbackschat/sid-song-explorer/actions/runs/39172020601) failed different WebKit cold-seek assertions at the existing 20-second limit, while prepared seeks passed. The first trace stopped recording page polling and screenshots during the seek, so a slow worker alone is not an established cause. Both scenarios passed locally with tracing enabled in 23.6 seconds combined. [The silent fixture](../../tests/browser/fixtures.ts) now retains bounded main-page heartbeat and load/mute/seek request/reply timings on failure, without logging loaded file bytes or changing deadlines. These diagnostics distinguish page responsiveness from engine request completion; they do not establish a performance fix.
