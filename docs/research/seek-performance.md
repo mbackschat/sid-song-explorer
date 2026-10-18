@@ -55,3 +55,50 @@ Inspection of the pinned corresponding-source archive shows the binding's `SidPl
 A silent Node 24.18.0 raw-engine probe created two identically configured PAL/MOS6581 SIDLite contexts with powerOnDelay 0, loaded the prepared Rambo sample, and checked identical 20,000-event render blocks until at least 132,300 PCM frames. Calling `mute(0, 1, true)` on the second context took 0.090292 ms and left `getTimeMs()` unchanged at 2998. Rendering another at-least-quarter-second in both contexts produced equal frame counts: 11,511 compared samples, 9,560 changed values and 11,510 nonzero values in the muted result; the muted context advanced to 3259 ms. This demonstrates live-state muting without reset or a forced silent block for this passage. It does not measure browser latency, sustained-note response, isolation or listening acceptance.
 
 The recommended next design is live audition: apply a voice's output gain before the chip's shared mixing/filter path while continuing oscillator, envelope and CPU execution, using a short gain transition to control switching clicks. The playback engine must stay close to the heard position. This is different from rendering a hypothetical history with that voice muted from initialization; shared-filter history should continue naturally. Immediate response for sustained notes requires engine support beyond the current write-mask API. Preserving fast seeking alongside this behavior requires state restoration/checkpoints or another explicitly verified separation of playback state and preparation; the existing mixed-PCM cache alone cannot supply it. Complete engine snapshots are not currently exposed, so this remains a proposed architecture and feasibility gate, not an implemented fix or a promised latency. Keeping old audio playing until a replacement mix is prepared is a fallback, not the preferred interaction.
+
+
+## Bounded live-gain prototype and integration decision
+
+On 2026-10-19 the user authorized a bounded prototype, with production integration conditional on success and limited change scope. The native gain experiment passed; the production integration condition did not. Production playback is unchanged, including the current pause when changing voice selection. The recommendation is to treat live audition with fast seeking as a separate architecture change, using this prototype as an executable starting point. Delayed replacement-mix preparation was not substituted for the requested behavior.
+
+### Reproduce the native experiment
+
+Run [the bounded runner](../../scripts/experiments/live-voice/run.py) with Python 3.10+ and `clang++`, after preparing the existing engine assets:
+
+```sh
+python3 scripts/experiments/live-voice/run.py
+```
+
+It verifies the complete-source archive SHA-256 `d0a3fa551bde2b55733b3c2bfd8ebd6f886ec9d81407c069d2ded15600eef0fb`, extracts only the named SIDLite sources into ignored `build/live-voice-prototype/`, and compiles stock, output-gain and deliberately incorrect mask variants. Every subprocess is capped at 20 seconds within a 60-second execution budget. Logs, native executables, raw synthetic PCM and `result.json` remain in that ignored directory; no audio device is opened. A new run removes the previous success receipt before starting.
+
+The patch touches three extracted upstream files: `SID.h`, `WavGen.h` and `WavGen.cpp`. It applies a per-voice gain after the existing integer envelope multiplication/division and before the filtered/unfiltered sums. Oscillator and envelope execution continue. A 256-sample linear transition takes 5.805 ms at 44.1 kHz; this is generated-audio transition duration, not measured browser or speaker response. The shared filter still processes the changed sum and retains its history.
+
+[The independent probe](../../scripts/experiments/live-voice/probe.cpp) exercises all seven nonempty mute masks on MOS6581 and MOS8580 with sustained saw, triangle ring/sync, swept resonant lowpass, D418 volume changes and noise fixtures. It first rejects a no-op gain control and an always-mute-all mutation. For the uncoupled, unfiltered saw fixture, selected output after the ramp must equal a separately initialized engine with the selected voices' gates never opened. This oracle proves mask selection without implementing a second copy of the gain arithmetic. Gate suppression is valid only for this fixture; it is not proposed as the general live-control implementation.
+
+The successful run completed in 18.67 seconds (final repeat: 9.80 seconds with identical checks and PCM hash) on macOS 27.0.1 arm64 with Apple clang 21.0.0. Across 6,174,000 frames, stock and patched default full-mix PCM were byte-identical (12,348,000 bytes; SHA-256 `ca03ef43df7c590eae231d558e68ef197e06e12a7ed2f92c072ceb31eeff21e4`). All 12,348,000 OSC3/ENV3 readback comparisons and 150,766 independent selection comparisons passed. Sustained all-voice muting reached exact zero without further voice register writes in the unfiltered saw fixture. Restoring unity gain recovered exact reference PCM after the ramp for the unfiltered saw, ring/sync and noise fixtures. Filtered and D418 cases are excluded from that restoration claim because their output history can differ.
+
+These are native synthetic SIDLite results. They do not prove complete internal-state equality, CPU execution equivalence, arbitrary SID compatibility, independent digi isolation, click-free perception, browser scheduling or listening acceptance. The D418 fixture exercises volume changes; it does not establish a separate digi-channel control. Source inspection also found that upstream `WavGen::reset` omits scalar wave state including ring/sync source state and readback fields. The harness uses controlled zero-filled storage to make the native fixture deterministic; it neither repairs that separate upstream issue nor establishes equivalence to reused WASM allocations.
+
+### Why the production change is broader
+
+The corresponding-source archive exposes a possible separation: `SID.cpp` clocks `WavGen`, then `Filter`, then saturates output; CPU SID reads use OSC3/ENV3 rather than filter state. `WavGen.cpp` produces envelope-scaled signed contributions in the range −4080 through 4079 before mixing. Capturing those contributions and sample-exact filter controls could let a filter at the heard cursor apply live gains while the C64 producer prepares ahead. This is a source-backed architecture hypothesis, not an implemented cache or verified replay path.
+
+For the existing 8,527,125-frame sample, payload costs are:
+
+| Representation | Bytes | MiB | Scope |
+| --- | ---: | ---: | --- |
+| Current mono Int16 PCM | 17,054,250 | 16.26 | Current cache additionally retains observations. |
+| Three Int16 voice contributions | 51,162,750 | 48.79 | Excludes controls, observations and filter checkpoints. |
+| Three fixed-width 13-bit contributions | 41,569,735 | 39.64 | Ideal packed payload, rounded up; still excludes other state. |
+| Current complete typed cache | 20,314,970 | 19.37 | Measured PCM plus observations, within the 32 MiB cap. |
+
+Even fixed-width packing exceeds the current 32 MiB budget before retaining the other required state. Compression could change this tradeoff but has not been measured. Reducing retained coverage would weaken currently prepared seeks; raising the cap changes the memory contract.
+
+Several other boundaries must be settled together:
+
+- **Native/WASM interface and distribution:** expose prefilter contributions, exact control changes and filter state, rebuild the engine and retain its corresponding-source packaging. The current observations do not establish exact filter-write sample boundaries.
+- **Filter correctness:** MOS6581 cutoff depends on the input signal, so separately filtered voice stems cannot simply be summed. D418 behavior belongs to the filter/output path. Startup also advances the filter before discarding initial audio; its playback baseline is not a zeroed filter.
+- **Seek semantics and cache:** a filter checkpoint depends on earlier audition gains. Seeking must define whether it restores a canonical all-on history or a prior live-audition history, then preserve that contract through accounting, eviction and continuation. Required filter state includes lowpass/bandpass history, volume smoothing and level state; model-dependent tables must be recreated consistently.
+- **Adapter and transport:** align raw buffers with observations, separate the heard filter cursor from the producer frontier, and apply changes at the effective playback position. Existing queued audio otherwise delays the result even when native gain changes are cheap. Worker mute/coverage messages and scheduling need corresponding guards.
+
+The small native patch alone cannot satisfy these boundaries. No production integration is justified by this trial under the user's limited-scope condition. A follow-up should first settle seek-history semantics and the memory/coverage contract, then prove exact native replay before replacing the current cache. Complete C64 snapshots are another broader option; neither route is a contained button-handler fix.

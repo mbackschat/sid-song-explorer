@@ -25,6 +25,12 @@ The [interim POC catalog snapshot](docs/integration/poc-sources.md) pins cleared
 
 The [completion audit](docs/validation/mono-poc.md#completion-audit) on 2026-10-19 verified the public handoff and current automated evidence, restored an inline warning for dropped traces, and requested the remaining human review. No listening or explanation-value acceptance has been recorded.
 
+## Bounded live-voice prototype
+
+On 2026-10-19 the user authorized a bounded prototype and automatic integration only if it works with limited change scope. Success requires unchanged full-mix PCM, prompt sustained-note output switching without restarting oscillator/envelope execution, preserved shared-filter behavior, and compatibility with fast seeking and bounded storage. The silent native trial is complete; [the owning study](docs/research/seek-performance.md#bounded-live-gain-prototype-and-integration-decision) retains the reproducible runner, passing selective-gain checks and integration decision. Do not substitute delayed replacement-mix preparation for this live-control trial. Human listening remains a separate gate.
+
+Native output gains passed the bounded fixtures, but preserving prepared seeking exceeds the limited-scope condition: the minimum design crosses WASM packaging, raw-buffer alignment, cache storage, filter-history semantics and playback scheduling. Three lossless Int16 voice signals alone require 48.79 MiB for the current sample, beyond the existing 32 MiB cache cap. Production integration is therefore not undertaken. The voice-control pause remains unresolved; a broader implementation requires an explicitly accepted memory/coverage and seek-history contract.
+
 ## Next completion gates
 
 The user directed on 2026-10-18 to use Playwright and headless validation as much as possible. Prioritize those checks; do not block this POC handoff on enabling Safari automation. Real-device and human listening gates remain explicitly unverified.
