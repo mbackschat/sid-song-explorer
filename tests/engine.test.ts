@@ -259,3 +259,81 @@ test('full Rambo export and tail render within the focused test budget', { timeo
     session.dispose();
   }
 });
+
+test('write timestamps stay within the raw PCM interval that produced each trace', async () => {
+  const module = await loadLibsidplayfp({ engine: 'sidlite' });
+  const context = new module.SidPlayerContext();
+  const session = await SidSession.create();
+  try {
+    await session.load(sample(), options);
+    const writes = session.render(88200).writes;
+    const times = new Map(writes.map((write) => [write.cyclePhi1, write.timeSeconds]));
+    assert.ok(context.configure(44100, false));
+    assert.ok(context.setEmulationConfig({
+      frequency: 44100, stereo: false, c64Model: 'PAL', forceC64Model: true,
+      sidModel: 'MOS6581', forceSidModel: true, powerOnDelay: 0,
+      secondSidAddress: 0, thirdSidAddress: 0,
+    }));
+    context.setSidWriteTraceEnabled(true);
+    assert.ok(context.loadSidBuffer(sample()));
+    context.getAndClearSidWriteTracesPacked();
+    let produced = 0;
+    let checked = 0;
+    while (produced < 88200) {
+      const pcm = context.render(20000)!.slice();
+      const packed = context.getAndClearSidWriteTracesPacked();
+      const end = produced + pcm.length;
+      for (let index = 0; index < packed.length; index += 4) {
+        const time = times.get(packed[index + 3]);
+        if (time === undefined) continue;
+        const frame = time * 44100;
+        // First-write calibration is sample-quantized; raw PCM counts independently bound its clock scale.
+        assert.ok(frame >= produced - 1 && frame <= end + 1,
+          `write at PCM frame ${frame} escaped raw interval ${produced}..${end}`);
+        checked++;
+      }
+      produced = end;
+    }
+    assert.ok(checked > 200);
+  } finally {
+    context.delete();
+    session.dispose();
+  }
+});
+
+test('late PAL observations stay in their PCM intervals and match cached seek slices', async () => {
+  const continuous = await SidSession.create();
+  const replay = await loaded();
+  try {
+    const info = await continuous.load(sample(), options);
+    const pcm = new Int16Array(32 * 44100);
+    const writes: ReturnType<SidSession['render']>['writes'] = [];
+    for (let frame = 0; frame < pcm.length;) {
+      const block = continuous.render(44100);
+      pcm.set(block.pcm, frame);
+      for (const write of block.writes) {
+        assert.ok(write.timeSeconds >= block.startFrame / 44100 && write.timeSeconds < block.endFrame / 44100,
+          `write at ${write.timeSeconds}s escaped PCM interval ${block.startFrame / 44100}..${block.endFrame / 44100}`);
+      }
+      writes.push(...block.writes);
+      frame = block.endFrame;
+    }
+    const seconds = 30.731234;
+    const frame = Math.floor(seconds * 44100);
+    const endFrame = frame + 4096;
+    const expectedWrites = writes.filter((write) => write.timeSeconds >= frame / 44100 && write.timeSeconds < endFrame / 44100);
+    const expectedRegisters = [...info.registers];
+    for (const write of writes) {
+      if (write.timeSeconds >= endFrame / 44100) break;
+      expectedRegisters[write.address] = write.value;
+    }
+    await replay.seek(seconds);
+    const actual = replay.render(4096);
+    assert.deepEqual(actual.pcm, pcm.slice(frame, endFrame));
+    assert.deepEqual(actual.writes, expectedWrites);
+    assert.deepEqual(actual.registers, expectedRegisters);
+  } finally {
+    continuous.dispose();
+    replay.dispose();
+  }
+});

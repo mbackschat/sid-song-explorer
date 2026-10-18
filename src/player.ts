@@ -1,3 +1,4 @@
+import type { CacheCoverage, EngineEvent, EngineReply } from './engine/protocol.ts';
 import type { PlayerControls, PlayerState, Profile, TuneDetails, WriteObservation } from './player-types.ts';
 import { positionAt, trimHistory, validateLoop, type AudioSegment } from './timeline.ts';
 
@@ -14,31 +15,44 @@ interface ScheduledSegment extends AudioSegment { source: AudioBufferSourceNode 
 class EngineClient {
   private worker: Worker;
   private sequence = 0;
+  private cacheEpoch = 0;
+  private terminalError: Error | null = null;
   private pending = new Map<number, {resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>}>();
 
-  constructor() {
+  constructor(onCache: (coverage: CacheCoverage) => void, onFatal: (error: Error) => void) {
     this.worker = new Worker(new URL('./engine/worker.ts', import.meta.url), {type: 'module'});
-    this.worker.onmessage = (event: MessageEvent<{id: number; result?: unknown; error?: string}>) => {
+    this.worker.onmessage = (event: MessageEvent<EngineReply | EngineEvent>) => {
+      if ('event' in event.data) {
+        if (!this.terminalError && event.data.coverage.epoch === this.cacheEpoch) onCache(event.data.coverage);
+        return;
+      }
       const request = this.pending.get(event.data.id);
       if (!request) return;
       clearTimeout(request.timer);
       this.pending.delete(event.data.id);
-      if (event.data.error) request.reject(new Error(event.data.error));
+      if ('error' in event.data) request.reject(new Error(event.data.error));
       else request.resolve(event.data.result);
     };
-    this.worker.onerror = (event) => this.terminate(new Error(event.message || 'Playback worker failed. Reload the sample to retry.'));
+    this.worker.onerror = (event) => {
+      const error = new Error(event.message || 'Playback worker failed. Reload the sample to retry.');
+      this.terminate(error);
+      onFatal(error);
+    };
   }
 
   request<T>(method: string, payload: unknown): Promise<T> {
+    if (this.terminalError) return Promise.reject(this.terminalError);
+    if (method === 'load' || method === 'mute') this.cacheEpoch++;
     const id = ++this.sequence;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => this.terminate(new Error(`${method} exceeded 30 seconds. Reload the sample to retry.`)), 30_000);
       this.pending.set(id, {resolve: value => resolve(value as T), reject, timer});
-      this.worker.postMessage({id, method, payload});
+      this.worker.postMessage({id, method, payload, cacheEpoch:this.cacheEpoch});
     });
   }
 
   terminate(error = new Error('Playback session replaced.')) {
+    this.terminalError ??= error;
     this.worker.terminate();
     for (const request of this.pending.values()) {
       clearTimeout(request.timer);
@@ -64,7 +78,7 @@ export class ExplorerPlayer implements PlayerControls {
   private timer: ReturnType<typeof setInterval>;
   private animation = 0;
   private state: PlayerState = {
-    status: 'empty', position: 0, seekTarget: null, renderedUntil: 0, duration: null, error: null,
+    status: 'empty', position: 0, seekTarget: null, preparedRange: null, renderedUntil: 0, duration: null, error: null,
     info: null, muted: [false, false, false], loop: null, peakDb: -Infinity,
     rmsDb: -Infinity, spectrum: new Uint8Array(512), waveform: new Float32Array(1024),
     frames: [], writes: [], historyStart: 0, dropped: 0, underruns: 0, epoch: 0,
@@ -139,6 +153,7 @@ export class ExplorerPlayer implements PlayerControls {
     this.generation++;
     this.stopSources();
     this.state.status = 'error';
+    this.state.preparedRange = null;
     this.state.seekTarget = null;
     this.state.error = error instanceof Error ? error.message : String(error);
     this.emit();
@@ -149,9 +164,16 @@ export class ExplorerPlayer implements PlayerControls {
     const generation = ++this.generation;
     this.stopSources();
     this.engine?.terminate();
-    const engine = new EngineClient();
+    const engine = new EngineClient(coverage => {
+      if (this.engine !== engine || this.state.status === 'error') return;
+      this.state.preparedRange = {start:coverage.startFrame / 44100, end:coverage.endFrame / 44100};
+      this.emit();
+    }, error => {
+      if (this.engine === engine) this.fail(error);
+    });
     this.engine = engine;
     this.state.status = 'loading';
+    this.state.preparedRange = null;
     this.state.seekTarget = null;
     this.state.error = null;
     this.state.info = null;
@@ -165,7 +187,7 @@ export class ExplorerPlayer implements PlayerControls {
     this.clearHistory(Array<number>(32).fill(0));
     this.emit();
     try {
-      const info = await engine.request<TuneDetails>('load', {bytes, options: profile});
+      const info = await engine.request<TuneDetails>('load', {bytes, options: profile, durationSeconds:profile.durationSeconds});
       if (generation !== this.generation) return;
       this.state.info = info;
       this.clearHistory(info.registers);
@@ -245,7 +267,8 @@ export class ExplorerPlayer implements PlayerControls {
     if (!this.engine || !this.state.info) throw new Error('Load a SID file first.');
     this.state.muted = mask.slice();
     this.updateHeardState();
-    const position = this.state.position;
+    const position = this.state.seekTarget ?? this.state.position;
+    this.state.preparedRange = null;
     const generation = ++this.generation;
     const engine = this.engine;
     this.stopSources();

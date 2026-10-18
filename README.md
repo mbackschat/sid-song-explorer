@@ -16,7 +16,7 @@ The first mono proof of concept is implemented, with passing engine and headless
 
 - Load the published Rambo loader main-music reconstruction from pinned, hash-verified files, with its matching generated WAV, attribution, license and source links.
 - Open callable mono PSID files locally, with subtune, PAL/NTSC and MOS6581/MOS8580 controls; local files and their hashes stay on the device.
-- Play, pause, restart, seek by forward emulation with a visible busy indicator and requested position, and set A–B study loops.
+- Play, pause, restart, seek quickly within the prepared audio range, with busy feedback for unprepared positions, and set A–B study loops.
 - Mute or solo the three physical SID voices, with the waveform-write intervention and shared hardware dependencies labelled.
 - Switch voice activity between **Scroll** (the default fixed ten-second window) and **Fit history** (the former expanding overview) in the graph header; select retained voice/register history while music continues, hold an inspection cursor, and return to following the heard playhead.
 - Inspect frequency, waveform, gate, pulse width, ADSR settings, ring/sync, the shared filter and ordered writes, alongside PCM levels, waveform and spectrum.

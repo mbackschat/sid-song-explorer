@@ -120,7 +120,8 @@ test('timeline switches between scrolling and fitted history without changing pl
   await expect.poll(async () => (await range()).start).toBeGreaterThan(20);
   await page.locator('#timeline-fit').click();
   await expect(page.locator('#timeline-fit')).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(async () => (await range()).start).toBe(30);
+  await expect.poll(async () => (await range()).start).toBeGreaterThanOrEqual(30);
+  expect((await range()).start).toBeLessThan(30.02);
   await expect(page.locator('#play-status')).toHaveText('Live SID');
   await page.locator('#follow-button').click();
   const cursor = await page.locator('#inspection-time').textContent();
@@ -131,7 +132,8 @@ test('timeline switches between scrolling and fitted history without changing pl
   await expect(page.locator('#inspection-time')).toHaveText(cursor!);
   await expect(page.locator('#return-button')).toBeVisible();
   await page.locator('#timeline-fit').click();
-  await expect.poll(async () => (await range()).start).toBe(30);
+  await expect.poll(async () => (await range()).start).toBeGreaterThanOrEqual(30);
+  expect((await range()).start).toBeLessThan(30.02);
   const held = await range();
   const heard = await page.locator('#heard-time').textContent();
   await expect(page.locator('#heard-time')).not.toHaveText(heard!);
@@ -189,7 +191,7 @@ test('seek feedback keeps the requested position visible until playback resumes'
   await expect(page.locator('#play-button')).toHaveText('Seeking…');
   await expect(page.locator('#status-message')).toHaveClass(/seeking/);
   await expect(page.locator('#status-message')).toContainText('Seeking to 3:00.00');
-  await expect(page.locator('#status-message')).toContainText('replaying from the start');
+  await expect(page.locator('#status-message')).toContainText('preparing sound');
   await expect(page.locator('#seek-slider')).toHaveValue('180');
   await expect(page.locator('#seek-note')).toContainText('Requested position');
   await page.screenshot({path:`build/poc/${test.info().project.name}-seeking-feedback.png`,fullPage:true});
@@ -211,4 +213,32 @@ test('seek feedback keeps the requested position visible until playback resumes'
   await expect(page.locator('#status-message')).not.toHaveClass(/seeking/);
   await expect(page.locator('#play-button')).not.toHaveClass(/seeking/);
   await expect(page.locator('#seek-note')).not.toContainText('Requested position');
+});
+
+
+test('prepared audio supports quick repeated seeks while playback advances', async ({page}) => {
+  await page.goto('/');
+  await page.locator('#load-button').click();
+  await expect(page.locator('#play-button')).toBeEnabled();
+  await expect(page.locator('#render-lead')).toHaveAttribute('data-prepared-until', /[0-9]/);
+  await expect.poll(() => page.locator('#render-lead').getAttribute('data-prepared-until').then(Number), {timeout:25000}).toBeGreaterThan(181);
+  await page.locator('#play-button').click();
+  await expect(page.locator('#play-status')).toHaveText('Live SID');
+  for (const [seconds, label] of [[180, '3:00'], [30, '0:30'], [90, '1:30']] as const) {
+    const elapsed = await page.evaluate(async ({seconds, label}) => {
+      const slider = document.querySelector<HTMLInputElement>('#seek-slider')!;
+      const start = performance.now();
+      slider.value = String(seconds);
+      slider.dispatchEvent(new Event('change', {bubbles:true}));
+      while (performance.now() - start < 2000) {
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        if (document.querySelector('#heard-time')!.textContent === label && document.querySelector('#play-status')!.textContent === 'Live SID') return performance.now() - start;
+      }
+      return 2000;
+    }, {seconds, label});
+    console.log(`${test.info().project.name}: prepared seek to ${seconds}s resumed UI in ${elapsed.toFixed(1)} ms`);
+    expect(elapsed).toBeLessThan(750);
+  }
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(90.5);
+  await page.locator('#play-button').click();
 });

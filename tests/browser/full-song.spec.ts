@@ -15,7 +15,8 @@ test('uninterrupted full Rambo playback reaches its ending', async ({page}) => {
   await page.screenshot({path:`build/poc/${test.info().project.name}-live.png`,fullPage:true});
   await expect(page.locator('#play-status')).toHaveText('Ended', {timeout:215000});
   await expect(page.locator('#heard-time')).toHaveText('3:13');
-  await expect(page.locator('#history-summary')).toContainText('0 dropped writes');
+  await expect(page.locator('#history-summary')).toHaveAttribute('title', /0 dropped writes/);
+  await expect(page.locator('#audio-diagnostics')).toContainText('0 buffer underruns');
   expect(errors).toEqual([]);
   await page.screenshot({path:`build/poc/${test.info().project.name}-full-song.png`,fullPage:true});
   console.log(await page.locator('#audio-diagnostics').textContent());

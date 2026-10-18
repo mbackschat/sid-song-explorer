@@ -9,6 +9,14 @@ const RAW_RENDER_CYCLES = 20000;
 const OPERATION_BUDGET_MS = 15000;
 const CLOCK_HZ = { PAL: 4433618.75 * 4 / 18, NTSC: 3579545.455 * 4 / 14 };
 
+function sidlitePcmClockHz(clockHz: number): number {
+  // SIDLite's SID::setSamplingParameters and sl_constants.h quantize the clock to four fractional bits;
+  // trace delivery must follow that produced-PCM rate to avoid accumulating nominal-clock drift.
+  return Math.floor(Math.trunc(clockHz) * 16 / SAMPLE_RATE) / 16 * SAMPLE_RATE;
+}
+
+const PCM_CLOCK_HZ = { PAL: sidlitePcmClockHz(CLOCK_HZ.PAL), NTSC: sidlitePcmClockHz(CLOCK_HZ.NTSC) };
+
 export interface PlaybackOptions {
   clock: 'PAL' | 'NTSC';
   model: 'MOS6581' | 'MOS8580';
@@ -190,7 +198,7 @@ export class SidSession {
         samplingMethod: configuration.samplingMethod,
         digiBoost: configuration.digiBoost,
         traceCycleOrigin: state.traceCycleOrigin,
-        traceTimeBasis: 'first-write calibrated to produced PCM frames; sample-quantized, resampler latency unmeasured',
+        traceTimeBasis: 'first-write calibrated to SIDLite quantized PCM clock; sample-quantized, resampler latency unmeasured',
       },
     };
   }
@@ -242,7 +250,7 @@ export class SidSession {
         state.dropped += context.getDroppedSidWriteTraceCount();
         const packed = context.getAndClearSidWriteTracesPacked();
         if (!packed.length) continue;
-        state.traceCycleOrigin = packed[3] - probeFrames * CLOCK_HZ[options.clock] / SAMPLE_RATE;
+        state.traceCycleOrigin = packed[3] - probeFrames * PCM_CLOCK_HZ[options.clock] / SAMPLE_RATE;
         if (!context.reset()) throw new Error(`Could not reset after SID clock calibration: ${context.getLastError()}`);
         context.getAndClearSidWriteTracesPacked();
         state.dropped = 0;
@@ -264,7 +272,7 @@ export class SidSession {
       const cyclePhi1 = packed[index + 3];
       state.pendingWrites.push({
         sidNumber: packed[index], address: packed[index + 1], value: packed[index + 2], cyclePhi1,
-        timeSeconds: (cyclePhi1 - state.traceCycleOrigin) / CLOCK_HZ[state.options.clock],
+        timeSeconds: (cyclePhi1 - state.traceCycleOrigin) / PCM_CLOCK_HZ[state.options.clock],
       });
     }
   }
