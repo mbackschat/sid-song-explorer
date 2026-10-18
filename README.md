@@ -26,7 +26,7 @@ The POC accepts a bounded callable mono PSID subset; RSID, ROM/interrupt-driven 
 
 ## Set up and validate
 
-Use Node.js 24.18.0 (package minimum 24.12) and pnpm 11.20.0. The current development run uses Node.js 26.10.0; package versions are pinned in [package.json](package.json) and [the lockfile](pnpm-lock.yaml).
+Use Node.js 24.18.0 (package minimum 24.12) and pnpm 11.20.0. Package versions are pinned in [package.json](package.json) and [the lockfile](pnpm-lock.yaml).
 
 ```sh
 git clone https://github.com/mbackschat/sid-song-explorer.git

@@ -64,3 +64,19 @@ The final integrated unit suite passed all 38 tests in 15.36 seconds on Node 24.
 The first uninterrupted rerun reached the declared ending with zero dropped writes and zero buffer underruns in its retained page snapshot, but its assertion still searched the visible history text after the feedback revision had moved diagnostic counts into the tooltip. The guard now checks the title attribute and explicitly asserts zero buffer underruns. This was a test-selector mismatch, not interrupted playback.
 
 The corrected silent WebKit full-song check passed in 3.3 minutes: uninterrupted playback reached 3:13 with zero buffer underruns, zero dropped writes and no page errors. The final production build passed after updating the loop help text to describe cache-aware restarts; uninterrupted playback still makes no gapless-loop or physical-listening claim.
+
+## Completion audit
+
+The 2026-10-19 audit confirmed the public GitHub repository and tracked guide, relative AGENTS symlink, README, license and selected logo exports. The README now uses the pinned Node version consistently and displays the current compact transport with prepared seeking.
+
+| Required POC outcome | Evidence and disposition |
+| --- | --- |
+| Public standalone handoff | GitHub reports `mbackschat/sid-song-explorer` as PUBLIC; guide, symlink and branding are tracked. Asset preparation and catalog guards exercise pinned downloads without a sibling checkout; the interim snapshot boundary remains explicit in [source preparation](../integration/poc-sources.md). |
+| Mono playback, local opening, voice controls, loops and heard-position inspection | Engine/timeline guards and sixteen silent Chrome/WebKit interactions pass; supported PSID/profile limitations remain in [the adapter](../architecture/playback-adapter.md). |
+| Trace loss is visibly disclosed | The audit found that compacting the history strip had left the count only in a tooltip. [The regression](../../tests/browser/trace-coverage.spec.ts) failed before the fix; both browsers passed in 6.2 seconds afterward. Nonzero losses now show an inline warning in the existing strip; held inspection retains its own warning across a seek, and returning live uses the current interval. |
+| Responsive prepared seeking without changing audio/observations | Exact replay comparisons, memory bounds, configuration invalidation and browser response measurements pass as recorded above and in [the study](../research/seek-performance.md). |
+| Uninterrupted complete-song automated playback | Silent WebKit reached the ending with zero underruns, zero dropped writes and no page errors. This remains execution evidence. |
+| Actual Safari playback and audible agreement with the retained render | Not established by Playwright. Pending direct browser/listening review; no Safari setting change is required for the handoff. |
+| Explanations make the documented finding clearer | Pending the user's product judgment; an async review request is outstanding. |
+
+Production build and documentation checks passed after the warning fix. The audio engine and transport were unchanged by this final presentation correction, so their passed full-duration and exact-audio checks were not repeated. Milestone 1 remains open for the direct-browser and human verdicts; dual-SID and the normalized Crafter producer remain deferred under [the plan](../../PLAN.md).

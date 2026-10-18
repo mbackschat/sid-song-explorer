@@ -169,6 +169,7 @@ audio { display: block; width: 100%; height: 36px; color-scheme: dark; }
 .follow-controls { flex-shrink: 0; }
 .follow-controls button { white-space: nowrap; }
 [hidden] { display: none !important; }
+#trace-warning { color: #ffb6c4; font-weight: 600; }
 .history-summary.held { color: #d5c4ff; background: #211c37; }
 #view-inspector { white-space: nowrap; margin-left: 5px; }
 .inspector.held { border-color: #aa8bdf; }
