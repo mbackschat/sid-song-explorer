@@ -1,0 +1,27 @@
+{
+  "source_repository": "https://github.com/mbackschat/sid-song-crafter",
+  "source_commit": "3db086b6963676ef75f34d7f77c3b67232a777fb",
+  "transfer_date": "2026-10-18",
+  "files": [
+    {
+      "source": "docs/proposals/web-player-and-analyser.md",
+      "destination": "docs/design/web-player-and-analyser.md",
+      "source_sha256": "30e8ded7c2a60ce8a80b4bbf84db2b5bb435d3da066cea6fe62c82b88007f660"
+    },
+    {
+      "source": "docs/research/tools/web-music-explorers.md",
+      "destination": "docs/research/web-music-explorers.md",
+      "source_sha256": "a44b4b217b91b6aacb95abe886b2edccc9939adde4f7cd693cd26efcfd1849d0"
+    },
+    {
+      "source": "LICENSE",
+      "destination": "LICENSES/sid-song-crafter-MIT.txt",
+      "source_sha256": "11890fae1065b64e4f3a65e82ac5c20f29407325a1ed5b48ad7c252b8acec062"
+    }
+  ],
+  "adaptations": [
+    "Relocate internal links between transferred documents",
+    "Pin other Crafter-relative links to the source commit",
+    "Reconcile founding-design status, repository identity and adopted license; retain dated research and unimplemented milestones"
+  ]
+}

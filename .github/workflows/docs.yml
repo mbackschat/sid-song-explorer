@@ -1,0 +1,14 @@
+name: Documentation
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check-docs.py
+      - run: git show --format= --check HEAD
