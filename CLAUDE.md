@@ -23,6 +23,7 @@ Explorer implementation, experiments, decision records and working output belong
 - Use Node.js 24.18.0 (package minimum 24.12) and the pinned pnpm 11.20.0 for JavaScript/TypeScript; prefer uv for Python dependencies. Keep dependency pins and the pnpm lockfile consistent.
 - Keep generated output in ignored `build/`, `dist/` or `public/generated/`, third-party checkouts in `.tools/`, and local state/archives in `.local/`. Keep project material inside this project. Machine-local agent configuration stays ignored; portable examples belong in `config/` if needed.
 - Do not create or switch Git worktrees without explicit instructions. Preserve unrelated user changes. Commit coherent verified checkpoints using Conventional Commits; add a concise body when the rationale is not obvious from the subject and diff.
+- Before calling a pushed checkpoint verified, inspect the required GitHub Actions results for that exact commit. Keep local and CI evidence separate: a local run with tracing disabled or a focused subset does not establish that the configured CI suite passes. Report failures and continue diagnosis rather than handing off a successful push as successful validation.
 - Never push without authorization. Before every GitHub push verify that `git config user.email` is `mbackschat@mail.de`; stop on a mismatch.
 - Ask for listening or product decisions with a recommendation and rationale. Make routine execution choices autonomously. Do not send messages to others without explicit authorization.
 

@@ -1,0 +1,41 @@
+name: Browser engine comparison
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        playwright: ['1.56.1', '1.64.1']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prepare:assets
+      - run: pnpm add --save-dev --save-exact @playwright/test@${{ matrix.playwright }}
+      - run: pnpm exec playwright install --with-deps webkit
+      - run: node scripts/experiments/browser-engine.mjs --output build/browser-engine/result.json
+        timeout-minutes: 2
+      - run: pnpm build
+        if: always()
+        timeout-minutes: 2
+      - run: pnpm test:browser --project webkit
+        if: always()
+        timeout-minutes: 3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-engine-${{ matrix.playwright }}
+          path: |
+            build/browser-engine/
+            test-results/
