@@ -1,42 +1,61 @@
+<p align="center">
+  <img src="assets/branding/sid-song-explorer.svg" alt="SID Song Explorer — rainbow sound lens with C64 and SID lettering" width="144" height="144">
+</p>
+
 # SID Song Explorer
 
-SID Song Explorer is a planned browser application for playing Commodore 64 SID music and exploring its instruments and arrangements. It connects a heard passage to chip activity, musical roles, sound programs and supporting evidence.
+SID Song Explorer is a browser application project for playing Commodore 64 SID music and examining how its instruments and arrangements work. It aims to connect a heard passage to chip activity, musical roles, sound programs and supporting evidence.
 
-This repository is ready for development: the founding design, application research, contributor conventions and first implementation gates are in place. There is no application, playback engine, dependency installation or deployed site yet. The technology stack remains open.
+## Current state
+
+The repository is ready for development: it contains the founding design, application research, contributor conventions, project identity and documentation checks. Playback and the user interface are not implemented yet; there is no deployed application. The application stack and final playback-engine choice remain open. [The plan](PLAN.md) owns progress and the first prototype’s completion criteria.
 
 ## Intended capabilities
 
-- Play published samples and locally opened SID files, without sending local files or their hashes to external services.
+- Play published samples and locally opened SID files without sending local files or their hashes to external services.
 - Support MOS6581 and MOS8580, with one SID or two SIDs and explicit chip-to-output routing.
-- Connect playback to retained voice/register history, phrase selection, instrument information and evidence-linked explanations.
-- Provide voice mute/solo, state-preserving navigation, loops, output levels and spectral views.
-- Work in recent Safari on macOS and iOS, with desktop exploration as the design priority.
+- Inspect retained voice/register history, select phrases and connect sound to instrument information and source-backed explanations.
+- Provide voice mute/solo, state-preserving seeking, loops, output levels and spectral views.
+- Work in recent Safari on macOS and iOS, prioritizing desktop exploration.
 
-These are requirements, not implemented features. [The founding design](docs/design/web-player-and-analyser.md) defines required, optional and excluded functionality; [PLAN.md](PLAN.md) owns progress.
+These are product requirements. [The founding design](docs/design/web-player-and-analyser.md) separates required capabilities from optional depth and exclusions.
 
-## Start working
+## Set up and validate
+
+Only Git and Python 3.10 or newer are needed for the current documentation workflow:
 
 ```sh
 git clone https://github.com/mbackschat/sid-song-explorer.git
 cd sid-song-explorer
 python3 scripts/check-docs.py
+git diff --check
 ```
 
-Only Python 3.10 or newer and Git are needed for the current documentation checks. Open this directory in Codex or Claude Code; both use the same [contributor guide](CLAUDE.md) through the relative [AGENTS.md](AGENTS.md) symlink. No sibling checkout, inherited cache, private files or live emulator bridge is required.
+Open this directory in Codex or Claude Code. Both read the same [contributor guide](CLAUDE.md) through the relative [AGENTS.md](AGENTS.md) symlink. No sibling checkout, private cache or live emulator bridge is required. Application installation, start, build and test commands will be documented when the first prototype establishes them.
 
-Read [PLAN.md](PLAN.md), then the [founding design](docs/design/web-player-and-analyser.md) and [application research](docs/research/web-music-explorers.md). The first implementation milestone is a mono Rambo playback/inspection prototype; it must record the smallest justified application/engine/stack choice and pass the design's Safari and listening checks. Do not treat the existing source reviews as runtime validation.
+The documentation check validates local Markdown links and heading fragments, not external website availability. GitHub CI runs the documentation and whitespace checks. Logo regeneration is optional; its prerequisites and command are in the [branding guide](assets/branding/README.md).
+
+## First exploration example
+
+The first planned example uses the Rambo loader main-music reconstruction: hear a phrase, inspect its voice and register history, and follow evidence explaining the sound. The [prototype contract](docs/design/web-player-and-analyser.md#milestone-1-first-playable-inspection-with-one-mono-sample) requires full-ending playback, stateful loops, synchronized inspection and a real desktop Safari listening check. A worked application walkthrough and screenshot will accompany the working prototype.
 
 ## Relationship to SID Song Crafter
 
-[SID Song Crafter](https://github.com/mbackschat/sid-song-crafter) owns composition tools, instrument programs, musical studies, sample generation and publication clearance. Explorer owns the browser application and presentation of matching evidence. Its sources and future build must not require a relative path to Crafter.
+[SID Song Crafter](https://github.com/mbackschat/sid-song-crafter) owns composition tools, instrument programs, musical studies, sample generation and publication clearance. Explorer owns browser playback and presentation of matching evidence.
 
-The recommended integration is a versioned static catalog and optional analysis packages, pinned and hash-verified by Explorer. Musical knowledge remains in Crafter and is linked rather than copied. The catalog is not implemented yet. See [ownership and shared knowledge](docs/integration/crafter-handoff.md) for the contract and when shared code would be justified.
+Both repositories can be worked on together in one agent session, with coordinated changes and separate commits. Explorer remains independently cloneable and buildable. The intended integration uses a versioned catalog and optional analysis packages, pinned and hash-verified by Explorer; those formats are not implemented yet. [The shared-knowledge guide](docs/integration/crafter-handoff.md) defines ownership and coordinated development.
 
-## Documentation and license
+## Documentation
 
-- [Documentation index](docs/README.md): design, research and integration.
-- [Contributor guide](CLAUDE.md): development, validation and publication rules.
-- [Plan](PLAN.md): current scope, milestones and completion gates.
-- [Third-party notices](THIRD_PARTY_NOTICES.md): transferred material and dependency boundaries.
+- [Plan](PLAN.md): current scope and next development task.
+- [Founding design](docs/design/web-player-and-analyser.md): product contracts and verification gates.
+- [Application research](docs/research/web-music-explorers.md): dated comparisons and reuse alternatives.
+- [Contributor guide](CLAUDE.md): development conventions and validation.
+- [Branding](assets/branding/README.md): selected logo, exports and reproduction.
+- [Documentation index](docs/README.md): navigation.
 
-Copyright (c) 2026 Martin Backschat. Original Explorer work is licensed under **GPL-3.0-or-later**: you may redistribute and modify it under version 3 of the GNU General Public License or any later version, without warranty. See [LICENSE](LICENSE). Transferred Crafter documents retain their MIT notice; music and future dependencies require their own applicable terms.
+## License
+
+Copyright (c) 2026 Martin Backschat. Original Explorer work is licensed under **GPL-3.0-or-later**: you may redistribute and modify it under version 3 of the GNU General Public License or any later version, without warranty. See [LICENSE](LICENSE).
+
+Transferred Crafter documents and reused logo geometry retain their MIT notice. Music and future dependencies require their own applicable terms; see [third-party notices](THIRD_PARTY_NOTICES.md).

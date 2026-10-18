@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="224" viewBox="0 0 1040 224" role="img" aria-labelledby="title desc">
+  <title id="title">SID Song Explorer</title>
+  <desc id="desc">Rainbow sound lens beside the project name and the description SID playback and arrangement analysis.</desc>
+  <g transform="translate(0 8) scale(.40625)"><path xmlns="http://www.w3.org/2000/svg" d="m329 329 109 109" stroke="#262626" stroke-width="76" stroke-linecap="round" />
+
+<path xmlns="http://www.w3.org/2000/svg" d="m373 373 65 65" stroke="#B0B0B0" stroke-width="12" stroke-linecap="round" />
+
+<circle xmlns="http://www.w3.org/2000/svg" cx="216" cy="216" r="178" fill="#262626" />
+
+<circle xmlns="http://www.w3.org/2000/svg" cx="216" cy="216" r="151" fill="none" stroke="#B0B0B0" stroke-width="8" />
+
+<path xmlns="http://www.w3.org/2000/svg" d="M91 176h39v-24h42v34h49v-10h119" fill="none" stroke="#E6352B" stroke-width="14" />
+
+<path xmlns="http://www.w3.org/2000/svg" d="M91 206h72v-20h43v30h47v-10h87" fill="none" stroke="#F28C28" stroke-width="14" />
+
+<path xmlns="http://www.w3.org/2000/svg" d="M91 236h32v-20h45v31h86v-11h86" fill="none" stroke="#F4D83B" stroke-width="14" />
+
+<path xmlns="http://www.w3.org/2000/svg" d="M91 266h81v-21h45v32h51v-11h72" fill="none" stroke="#42A54B" stroke-width="14" />
+
+<path xmlns="http://www.w3.org/2000/svg" d="M105 296h28v-20h46v30h56v-10h91" fill="none" stroke="#2155C8" stroke-width="14" />
+
+<g xmlns="http://www.w3.org/2000/svg" fill="#FFF" transform="translate(114 59) scale(.40)">
+    <path d="M192 74H115Q74 74 74 116v3q0 41 41 41h77v-27h-72q-15 0-15-16t15-16h72q2 0 2-2V76q0-2-2-2Z" />
+    <path fill-rule="evenodd" d="M313 74h-71q-42 0-42 42v7q0 37 39 37h42q34 0 34-31t-34-31h-50q2-5 13-5h69q2 0 2-2V76q0-2-2-2Zm-72 51h39q6 0 6 6t-6 6h-39q-6 0-6-6t6-6Z" />
+    <path fill-rule="evenodd" d="M391 74h33v47h12v26h-12v13h-30v-13h-69v-28Zm3 28-31 19h31Z" />
+  </g>
+
+<g xmlns="http://www.w3.org/2000/svg" fill="#FFF" transform="translate(114 172) scale(.40)">
+    <path d="M214 364h-94q-22 0-22 16t22 16h64q22 0 22 16t-22 16H88" fill="none" stroke="#FFF" stroke-width="20" />
+    <rect x="229" y="354" width="28" height="84" rx="2" />
+    <path fill-rule="evenodd" d="M275 354h97q54 0 54 42t-54 42h-97Zm30 25v34h63q26 0 26-17t-26-17Z" />
+  </g>
+</g>
+  <text x="238" y="102" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="65" letter-spacing="-1">SID Song Explorer</text>
+  <text x="241" y="150" fill="#B0B0B0" font-family="Arial, Helvetica, sans-serif" font-size="28">SID playback and arrangement analysis</text>
+</svg>

@@ -42,3 +42,11 @@ Explorer should pin a catalog version or Crafter revision, verify each fetched f
 - [Publication boundary](https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/docs/workflows/publication-boundary.md): source/music/player clearance requirements.
 
 Update pins deliberately when consuming new findings. New application observations belong in Explorer; new general chip/composition findings should be contributed to Crafter's existing owner and linked back, preserving execution and listening evidence separately.
+
+## Coordinated development
+
+The user explicitly authorized working across both repositories in one session on 2026-10-18, treating them as one working context while retaining separate repositories. A local sibling checkout is optional. Read both guides, name the owner of each change, run the affected checks in each repository and make separate coherent commits. Report each repository’s commit and publication status independently.
+
+For a shared-format change, first agree the producer/consumer contract and its compatibility boundary. Verify the producer’s output and the consumer against the same version. Advance Explorer’s pin only to the intended available Crafter revision after its bytes and schema pass validation; never hide a local sibling dependency in the normal build. An explicit local source override may support development when the consumer implements it, but is not an existing command or permission to bypass hashes. Publishing one repository does not automatically authorize pushing the other.
+
+Keep musical/engine knowledge with its existing Crafter owner and browser integration decisions here. The catalog and analysis-package implementation remains future work; coordinating the workspace does not itself begin the playable prototype.

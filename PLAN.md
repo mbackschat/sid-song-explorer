@@ -4,7 +4,7 @@ This file owns scope, priorities and completion. [The founding design](docs/desi
 
 ## Current status
 
-2026-10-18: the user authorized a standalone sibling project and public GitHub repository and confirmed the name `sid-song-explorer`. The documentation bootstrap is complete. No application code, engine adoption, package installation or GitHub Pages deployment is included in this checkpoint.
+2026-10-18: the user authorized a standalone sibling project and public GitHub repository and confirmed the name `sid-song-explorer`. The documentation bootstrap is complete. The user subsequently accepted the contributor/README improvements, authorized coordinated work across both repositories, and selected the [sound-lens identity](assets/branding/README.md); those setup refinements are complete. No application code, engine adoption, package installation or GitHub Pages deployment is included in this checkpoint.
 
 | Stage | State | Completion gate |
 | --- | --- | --- |

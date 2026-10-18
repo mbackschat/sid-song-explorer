@@ -8,6 +8,10 @@ Build a standalone browser player and arrangement analyser, with a C64-inspired 
 
 Crafter owns composition tools, musical knowledge, evidence and sample publication. Link pinned owners through [the integration guide](docs/integration/crafter-handoff.md); do not copy its study corpus or assume a sibling checkout exists. Keep browser adaptations here until actual reuse warrants extraction. Do not import Crafter's musical backlog or reopen accepted studies.
 
+## Work across the two repositories
+
+The user authorizes working on Crafter and Explorer in the same session as a coordinated workspace. Read each repository’s guide and plan before editing there, use explicit repository working directories, and respect each owner’s contract. Keep commits, validation and status reports separate. A nearby sibling is an editing convenience, not an implicit build/runtime dependency. The [integration guide](docs/integration/crafter-handoff.md#coordinated-development) owns pin-update and compatibility rules.
+
 ## Working conventions
 
 - Define the success criterion and independent oracle before implementing. Prefer red/green regression guards for reusable code and defects; use link/parsing checks for documentation and real browser/audio evidence for playback.
@@ -30,9 +34,21 @@ Local SID opening must remain device-local, including file hashes and metadata l
 
 Original work is GPL-3.0-or-later; retain MIT notices for transferred documentation. Record exact licenses and provenance before adopting components. The research lists candidates, not installed dependencies or a blanket license clearance.
 
-## Validation and handoff
+## Commands and validation
 
-Run `python3 scripts/check-docs.py` and `git diff --check` for documentation. The checker validates local Markdown targets and fragments; it does not check external site availability. CI repeats these checks. Application commands will be added with the selected stack.
+The current documentation workflow requires Git and Python 3.10 or newer. The application stack and its commands remain open until the first prototype records a justified choice.
+
+| Task | Command | Evidence |
+| --- | --- | --- |
+| Check documentation | `python3 scripts/check-docs.py` | Local Markdown targets and heading fragments; external availability excluded. |
+| Check patch whitespace | `git diff --check` | Whitespace errors in current changes. |
+| Rebuild logo exports | `python3 scripts/render-branding.py` | Raster assets from the selected vector masters; optional tools and visual checks in the [branding guide](assets/branding/README.md). |
+
+CI repeats the documentation and whitespace checks. Add runnable installation, development, build and test commands with the first application implementation. Keep README’s implemented capabilities separate from future requirements and replace its planned exploration example with an executable walkthrough when that prototype works.
+
+Use the selected sound-lens identity and its [owning assets](assets/branding/README.md); preserve the distinction from Crafter’s chip silhouette. Record new visual verdicts in that owner and avoid regenerating accepted geometry without a requested change.
+
+## Handoff and bounded execution
 
 For later JavaScript/TypeScript work, budget focused tests at 60 seconds and builds at 120 seconds unless a measured exception is documented. Use the runner's native bounded waits and session IDs; poll at most 30 seconds at a time and terminate/reap abandoned processes. Do not increase a budget just to wait longer. Diagnose sustained CPU saturation without progress; silence alone does not prove a hang. Use cancellation/deadlines at risky external-call boundaries.
 

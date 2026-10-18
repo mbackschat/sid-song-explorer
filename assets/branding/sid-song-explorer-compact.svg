@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">SID Song Explorer</title>
+  <desc id="desc">A magnifying glass containing five rainbow signal tracks.</desc>
+  <path d="m42 42 13 13" stroke="#262626" stroke-width="10" stroke-linecap="round"/>
+  <path d="m47 47 8 8" stroke="#B0B0B0" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="27" cy="27" r="23" fill="#262626"/>
+  <circle cx="27" cy="27" r="19" fill="none" stroke="#B0B0B0" stroke-width="1.5"/>
+  <path d="M13 18h5v-3h6v4h5v-1h12" fill="none" stroke="#E6352B" stroke-width="3"/>
+  <path d="M12 24h9v-3h6v4h6v-1h9" fill="none" stroke="#F28C28" stroke-width="3"/>
+  <path d="M12 30h4v-3h6v4h10v-1h10" fill="none" stroke="#F4D83B" stroke-width="3"/>
+  <path d="M13 36h10v-3h6v4h6v-1h6" fill="none" stroke="#42A54B" stroke-width="3"/>
+  <path d="M17 41h5v-3h6v4h7v-1h3" fill="none" stroke="#2155C8" stroke-width="3"/>
+</svg>

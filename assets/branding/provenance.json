@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-18",
+  "sourceRepository": "https://github.com/mbackschat/sid-song-crafter",
+  "sourceCommit": "3db086b6963676ef75f34d7f77c3b67232a777fb",
+  "sourcePath": "assets/branding/sid-song-crafter.svg",
+  "sourceSha256": "c248081ae9df2503af14365e1298645c77a05d39694484242cafd10737c92122",
+  "sourceLicense": "MIT",
+  "retained": [
+    "Outlined C64/SID lettering",
+    "Five badge-inspired rainbow colors",
+    "Charcoal and silver colors"
+  ],
+  "changed": [
+    "Whole silhouette is a magnifying glass",
+    "Smaller lettering",
+    "Rainbow bands become stepped signal tracks",
+    "No chip outline, pins or musical note"
+  ],
+  "selection": {
+    "date": "2026-10-18",
+    "direction": "Round 2 A \u2014 Sound lens",
+    "verdict": "User selected A after rejecting chip variants that changed only the central symbol."
+  },
+  "selectedPreviewSha256": "55af8ca6cb24017d747640e00058868f5f7e0a08a2668aebf6f3622d27a1c205",
+  "adaptations": [
+    "Canonical SVG formatted without changing geometry",
+    "Text-free compact companion for favicon sizes",
+    "Light/dark wordmarks with system sans-serif text"
+  ],
+  "production": "Native SVG geometry; no embedded bitmap, downloaded font or image-generation service.",
+  "verification": {
+    "date": "2026-10-18",
+    "rasterizer": "rsvg-convert version 2.63.3\n\nlibraries used:\n  cairo 1.18.6\n  pango 1.58.2\n  harfbuzz 14.6.0\n  fontconfig 2.18.3",
+    "selectedPreviewPixelDifference": 0,
+    "fullIconReviewedSizes": [
+      512,
+      144
+    ],
+    "compactIconReviewedSizes": [
+      32,
+      16
+    ],
+    "icoSizes": [
+      16,
+      32,
+      48
+    ],
+    "selfContainedSvgStructure": true,
+    "sourceHashMatchesPinnedCommit": true
+  }
+}
