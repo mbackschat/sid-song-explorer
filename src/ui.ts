@@ -1,5 +1,6 @@
 import type { Catalog } from './catalog.ts';
 import type { PlayerControls, PlayerState, Profile, RegisterFrame, WriteObservation } from './player-types.ts';
+import { FOLLOW_WINDOW_SECONDS, followingWindow, visibleTimelineFrames } from './timeline.ts';
 import logoUrl from '../assets/branding/sid-song-explorer.svg?url';
 import './style.css';
 
@@ -12,6 +13,8 @@ type HeldHistory = {
   end: number;
   dropped: number;
   epoch: number;
+  plotStart: number;
+  plotEnd: number;
 };
 const COLORS = ['#6ee0de', '#f3c681', '#f493b5'];
 const MAX_FILE_BYTES = 65_662;
@@ -54,7 +57,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
             <div id="history-summary" class="history-summary mono">No retained observations yet.</div>
             <div class="lane-list">${COLORS.map((color, voice) => `<div class="voice-lane" style="--voice:${color}"><div class="voice-label"><strong>Voice ${voice + 1}</strong><small id="lane-wave-${voice}">No observation</small></div><canvas id="voice-lane-${voice}" class="lane-plot" tabindex="0" role="slider" aria-label="Select inspection time for voice ${voice + 1}" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div>`).join('')}
               <div class="voice-lane filter-lane" style="--voice:#b2a1ff"><div class="voice-label"><strong>Shared filter</strong><small>Cutoff register</small></div><canvas id="filter-lane" class="lane-plot" tabindex="0" role="slider" aria-label="Select shared filter inspection time" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div><div class="timeline-key mono"><span id="timeline-start">0:00</span><span id="timeline-cursor">Heard playhead</span><span id="timeline-end">0:30</span></div>
-            </div><p class="timeline-help">Click a lane to hold a moment while music continues. Arrow keys move the inspection cursor. A line shows register frequency, not loudness; gate clear can still release sound.</p>
+            </div><p class="timeline-help">Fixed ${FOLLOW_WINDOW_SECONDS}-second view scrolls with playback. Click a lane to freeze its view while music continues. Arrow keys move the inspection cursor. A line shows register frequency, not loudness; gate clear can still release sound.</p>
             <div class="mix-section"><div class="mix-heading"><strong>Listen by voice</strong><button id="restore-button" class="small quiet" disabled>Restore full mix</button></div><div class="mix-buttons">${COLORS.map((color, voice) => `<div class="voice-controls" style="--voice:${color}"><span>V${voice + 1}</span><button id="mute-${voice}" aria-label="Mute voice ${voice + 1}" aria-pressed="false" disabled>Mute</button><button id="solo-${voice}" aria-label="Solo voice ${voice + 1}" aria-pressed="false" disabled>Solo</button></div>`).join('')}</div><p class="intervention-note">Waveform-write intervention, not isolated stems. Mute acts on subsequent control writes; shared filtering and ring/sync coupling still apply.</p></div>
             <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="0" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="8" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restart uses replay seeking and may pause; it is not gapless.</span></div>
           </section>
@@ -101,7 +104,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let animationFrame = 0;
   let lastDraw = 0;
   let plotStart = 0;
-  let plotEnd = 30;
+  let plotEnd = FOLLOW_WINDOW_SECONDS;
   let evidenceKey = '';
   let sourceKey = '';
   let previousEpoch = -1;
@@ -274,6 +277,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     end: state?.position ?? 0,
     dropped: state?.dropped ?? 0,
     epoch: state?.epoch ?? 0,
+    plotStart,
+    plotEnd,
   });
   const holdAt = (seconds: number, end: number | null = null) => {
     if (!held) held = copyHeardHistory();
@@ -328,6 +333,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   const hearPhrase = async (annotation: Annotation) => {
     reference.pause();
     held = copyHeardHistory();
+    held.plotStart = annotation.startSeconds;
+    held.plotEnd = annotation.startSeconds + FOLLOW_WINDOW_SECONDS;
     cursor = annotation.startSeconds;
     selectedEnd = annotation.endSeconds;
     selectedVoice = Math.max(0, (annotation.voices[0] ?? 1) - 1);
@@ -603,16 +610,17 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     const writes = held?.writes ?? state?.writes ?? [];
     const observedUntil = held?.end ?? position;
     const historyStart = held?.start ?? state?.historyStart ?? 0;
-    plotStart = held ? Math.min(historyStart, cursor) : historyStart;
-    plotEnd = Math.max(plotStart + 10, observedUntil, selectedEnd ?? 0, held ? cursor : 0);
-    if (!frames.length && !state?.info) plotEnd = 30;
+    const window = followingWindow(position);
+    plotStart = held?.plotStart ?? window.start;
+    plotEnd = held?.plotEnd ?? window.end;
+    const plotFrames = visibleTimelineFrames(frames, Math.max(plotStart, historyStart), Math.min(plotEnd, observedUntil));
     setText('history-summary', `${held ? 'HELD COPY' : 'HEARD HISTORY'} ${time(historyStart, true)}–${time(observedUntil, true)} · ${frames.length} sampled frames · ${held?.dropped ?? state?.dropped ?? 0} dropped writes · epoch ${held?.epoch ?? state?.epoch ?? 0}`);
     setText('timeline-start', time(plotStart));
     setText('timeline-end', time(plotEnd));
     setText('timeline-cursor', held ? `Held ${time(cursor, true)}` : `Heard ${time(position, true)}`);
     const lastFrame = frames[frames.length - 1];
-    for (let voice = 0; voice < 3; voice++) { setText(`lane-wave-${voice}`, lastFrame ? waveforms(lastFrame.registers[voice * 7 + 4] ?? 0) : 'No observation'); drawLane(`voice-lane-${voice}`, frames, writes, voice, observedUntil); }
-    drawLane('filter-lane', frames, writes, null, observedUntil);
+    for (let voice = 0; voice < 3; voice++) { setText(`lane-wave-${voice}`, lastFrame ? waveforms(lastFrame.registers[voice * 7 + 4] ?? 0) : 'No observation'); drawLane(`voice-lane-${voice}`, plotFrames, writes, voice, observedUntil); }
+    drawLane('filter-lane', plotFrames, writes, null, observedUntil);
     renderInspector(frames, writes, observedUntil);
     setText('peak-label', db(state?.peakDb ?? -Infinity));
     setText('rms-label', db(state?.rmsDb ?? -Infinity));

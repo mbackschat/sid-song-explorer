@@ -82,3 +82,27 @@ test('a short evidence annotation plays useful context while preserving its exac
   await expect(page.locator('#inspector-note')).toContainText('Held');
   await page.screenshot({path:`build/poc/${test.info().project.name}-exploring.png`,fullPage:true});
 });
+
+test('voice activity follows playback at a fixed scale and freezes its held window', async ({page}) => {
+  await page.goto('/');
+  await page.locator('#load-button').click();
+  await expect(page.locator('#play-button')).toBeEnabled();
+  await page.locator('#seek-slider').fill('30');
+  await expect(page.locator('#play-button')).toBeEnabled();
+  await page.locator('#play-button').click();
+  const lane = page.locator('#voice-lane-0');
+  const range = () => lane.evaluate(element => ({start:Number(element.getAttribute('aria-valuemin')),end:Number(element.getAttribute('aria-valuemax'))}));
+  await expect.poll(async () => (await range()).start).toBeGreaterThan(20);
+  const first = await range();
+  expect(first.end - first.start).toBeCloseTo(10, 2);
+  await expect.poll(async () => (await range()).start).toBeGreaterThan(first.start + 1);
+  const moved = await range();
+  expect(moved.end - moved.start).toBeCloseTo(10, 2);
+  await page.locator('#follow-button').click();
+  const heldRange = await range();
+  const heard = await page.locator('#heard-time').textContent();
+  await expect(page.locator('#heard-time')).not.toHaveText(heard!);
+  expect(await range()).toEqual(heldRange);
+  await page.locator('#return-button').click();
+  await expect.poll(async () => (await range()).start).toBeGreaterThan(heldRange.start);
+});

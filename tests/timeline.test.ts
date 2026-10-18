@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { positionAt, trimHistory, validateLoop } from '../src/timeline.ts';
+import { positionAt, trimHistory, validateLoop, followingWindow, visibleTimelineFrames } from '../src/timeline.ts';
 
 test('heard position follows audio time, not the emulation cursor, across a loop', () => {
   const segments = [
@@ -28,4 +28,25 @@ test('loop admission rejects invalid ranges before emulator work', () => {
   }
   assert.deepEqual(validateLoop({start: 1, end: 2}, 10), {start: 1, end: 2});
   assert.equal(validateLoop(null, 10), null);
+});
+
+
+test('the following window keeps ten seconds across startup, long playback and backwards seeks', () => {
+  for (const position of [0, 5, 10, 30, 193, 2]) {
+    const window = followingWindow(position);
+    assert.equal(window.end - window.start, 10);
+    assert.equal(window.start, Math.max(0, position - 10));
+    assert.ok(position >= window.start && position <= window.end);
+  }
+});
+
+test('visible drawing retains its boundary state without losing resolution to older history', () => {
+  const recent = [{time: 19, value: 1}, {time: 22, value: 2}, {time: 26, value: 3}, {time: 31, value: 4}];
+  const older = Array.from({length: 1500}, (_, index) => ({time: index / 100, value: 0}));
+  const expected = [{time: 20, value: 1}, {time: 22, value: 2}, {time: 26, value: 3}, {time: 30, value: 3}];
+  assert.deepEqual(visibleTimelineFrames(recent, 20, 30), expected);
+  assert.deepEqual(visibleTimelineFrames([...older, ...recent], 20, 30), expected);
+  assert.deepEqual(visibleTimelineFrames(recent, 27, 30), [{time: 27, value: 3}, {time: 30, value: 3}]);
+  assert.deepEqual(visibleTimelineFrames(recent, 0, 10), []);
+  assert.equal(recent[0].time, 19);
 });

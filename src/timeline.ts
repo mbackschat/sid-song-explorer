@@ -30,3 +30,25 @@ export function validateLoop(loop: {start: number; end: number} | null, duration
   }
   return {start: loop.start, end: loop.end};
 }
+
+export const FOLLOW_WINDOW_SECONDS = 10;
+
+export function followingWindow(position: number) {
+  const start = Math.max(0, position - FOLLOW_WINDOW_SECONDS);
+  return {start, end: start + FOLLOW_WINDOW_SECONDS};
+}
+
+export function visibleTimelineFrames<T extends {time: number}>(frames: readonly T[], start: number, end: number): T[] {
+  if (end < start) return [];
+  const visible: T[] = [];
+  let preceding: T | undefined;
+  for (const frame of frames) {
+    if (frame.time > end) break;
+    if (frame.time < start) preceding = frame;
+    else visible.push(frame);
+  }
+  if (preceding && visible[0]?.time !== start) visible.unshift({...preceding, time: start});
+  const last = visible.at(-1);
+  if (last && last.time < end) visible.push({...last, time: end});
+  return visible;
+}
