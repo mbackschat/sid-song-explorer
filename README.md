@@ -41,11 +41,13 @@ Open the local URL printed by Vite, normally `http://127.0.0.1:5173`. Asset prep
 ```sh
 pnpm test
 pnpm build
-pnpm exec playwright install chromium webkit
+pnpm exec playwright install chrome
+# On macOS, also install the WebKit test browser:
+pnpm exec playwright install webkit
 pnpm test:browser
 ```
 
-The browser tests use Playwright's browsers; WebKit automation does not establish playback in Apple's Safari application. For documentation checks, use Python 3.10 or newer to run `python3 scripts/check-docs.py`, then `git diff --check`. The checker validates local Markdown links and heading fragments, excluding external availability. Logo regeneration is optional; see [branding](assets/branding/README.md).
+Browser checks use Google Chrome on Linux and macOS, plus Playwright WebKit on macOS only. CI runs Chrome on Ubuntu and WebKit on macOS; Linux WebKit is outside the supported test matrix. macOS WebKit automation does not establish playback in Apple's Safari application. For documentation checks, use Python 3.10 or newer to run `python3 scripts/check-docs.py`, then `git diff --check`. The checker validates local Markdown links and heading fragments, excluding external availability. Logo regeneration is optional; see [branding](assets/branding/README.md).
 
 ## Explore the Rambo main entry
 

@@ -64,14 +64,14 @@ The application uses TypeScript 5.9.3, Vite 7.3.1 and `libsidplayfp-wasm` 1.1.0/
 | Start development | `pnpm dev` | Local Vite application; playback requires user interaction. |
 | Check focused software behavior | `pnpm test` | Catalog, engine and timeline guards; no human listening verdict. |
 | Build the application | `pnpm build` | Type checking and production output in `dist/`; prepare assets first. |
-| Check browser behavior | `pnpm test:browser` | Playwright browser checks after installing its Chromium/WebKit; not real Safari acceptance. |
+| Check browser behavior | `pnpm test:browser` | Chrome and macOS WebKit checks after browser installation; not real Safari acceptance. |
 | Check documentation | `python3 scripts/check-docs.py` | Local Markdown targets and heading fragments; external availability excluded. |
 | Check patch whitespace | `git diff --check` | Whitespace errors in current changes. |
 | Rebuild logo exports | `python3 scripts/render-branding.py` | Raster assets from the selected vector masters; optional tools and visual checks in the [branding guide](assets/branding/README.md). |
 
 Browser automation must be silent: use [the shared test fixture](tests/browser/fixtures.ts), which inserts a zero-gain sink after the analyser and mutes native media. Headless mode alone does not silence WebKit. Do not change system volume for tests.
 
-Prefer headless Playwright Chromium/WebKit for automated checks, as requested by the user. Keep real Safari/iOS and human listening claims separate without requiring browser-setting changes to hand off a POC.
+Use headless Google Chrome for the Chrome target and Playwright WebKit on macOS for automated Safari-engine checks. Linux WebKit is outside the supported matrix; do not spend compatibility work on that port. CI must preserve the browser/platform pairing. Keep real Safari/iOS and human listening claims separate without requiring browser-setting changes to hand off a POC.
 
 Keep README's implemented capabilities separate from product requirements, and retain an executable walkthrough. Update the owning validation record when the runtime, engine, browser or tested behavior changes; distinguish a build or automated WebKit result from real Safari sound and human acceptance.
 

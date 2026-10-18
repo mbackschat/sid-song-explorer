@@ -11,7 +11,9 @@ pnpm install --frozen-lockfile
 pnpm prepare:assets
 pnpm test
 pnpm build
-pnpm exec playwright install chromium webkit
+pnpm exec playwright install chrome
+# macOS only:
+pnpm exec playwright install webkit
 pnpm test:browser
 python3 scripts/check-docs.py
 pnpm dev
@@ -19,7 +21,7 @@ pnpm dev
 
 All browser tests use [a silent-output fixture](../../tests/browser/fixtures.ts). Headless WebKit sent audio to physical macOS speakers during the first full-song attempt; that run was stopped after the user reported loud sound. The fixture intercepts destination connections with a zero-gain sink after the application analyser and mutes native media playback. PCM, timeline and analyser checks remain active; test output cannot establish speaker listening. System volume is untouched.
 
-Browser tests serve the production build on `127.0.0.1:4173`; ordinary development uses `127.0.0.1:5173`. `EXPLORER_CHROME=1 pnpm test:browser` explicitly selects installed Google Chrome instead of Playwright's Chromium. Browser screenshots go to ignored `build/poc/`, failure diagnostics to `test-results/`. Run tests after a build, without source changes during the run. Run the full-song check separately from replay-heavy interaction tests, so concurrent emulation does not distort their execution budgets. Test assertions concern browser behavior and advancing PCM, not sound heard by a person.
+Browser tests serve the production build on `127.0.0.1:4173`; ordinary development uses `127.0.0.1:5173`. The `chrome` project uses installed Google Chrome. The `webkit` project is available only on macOS; `pnpm test:browser` runs the available projects for the host. CI runs Chrome on Ubuntu 24.04 and WebKit on macOS 26. Browser screenshots go to ignored `build/poc/`, failure diagnostics to `test-results/`. Run tests after a build, without source changes during the run. Run the full-song check separately from replay-heavy interaction tests, so concurrent emulation does not distort their execution budgets. Test assertions concern browser behavior and advancing PCM, not sound heard by a person.
 
 The focused unit/engine suite has a 60-second budget. The opt-in `pnpm test:full` runs uninterrupted 193-second real-time playback in headless WebKit with a 240-second budget; this measured duration requires a separate test rather than extending ordinary checks. Browser interaction tests have a 45-second per-test budget, one worker, and a 30-second server-start budget. The whole browser suite may exceed 60 seconds because it runs independent interactions in two browsers. On this machine Node 26.10.0 stalled during Playwright download/trace finalization; Node 24.18.0 completed those operations. This is a tooling observation, not a claim that the application requires a specific browser Node version.
 
@@ -89,6 +91,16 @@ On 2026-10-19, Application runs [39174688261](https://github.com/mbackschat/sid-
 
 The diagnostic run [39175236084](https://github.com/mbackschat/sid-song-explorer/actions/runs/39175236084) passed both cold-seek scenarios but failed an initial load with `access to a null reference (evaluating 'r.shift()(f)')` after 65 ms; page heartbeats continued normally. The expression is Emscripten's runtime-callback invocation, whose initialization callback is the exported WASM constructor. This does not establish that the callback array itself contains null, or that the initialization failure and earlier stalls share a cause.
 
-[The raw browser-engine probe](../../scripts/experiments/browser-engine.mjs) isolates the pinned package on a blank page, bypassing Explorer, its bundle and Web Audio. It exercises fresh module initialization and two long raw render trials, retains input/runtime hashes, error names/stacks and heartbeat/progress events, and enforces a 60-second total budget with browser process termination. Run `node scripts/experiments/browser-engine.mjs --output build/browser-engine/result.json` after asset preparation and WebKit installation. [The manual comparison workflow](../../.github/workflows/browser-engine.yml) runs that probe and the unchanged WebKit interaction suite on Ubuntu 24.04 with Playwright 1.56.1 and the official [1.64.1 release](https://github.com/microsoft/playwright/releases/tag/v1.64.1). It changes only the diagnostic job's test runtime, not the application's pinned dependencies.
+[The raw browser-engine probe](../../scripts/experiments/browser-engine.mjs) isolates the pinned package on a blank page, bypassing Explorer, its bundle and Web Audio. It exercises fresh module initialization and two long raw render trials, retains input/runtime hashes, error names/stacks and heartbeat/progress events, and enforces a 60-second total budget with browser process termination. Run `node scripts/experiments/browser-engine.mjs --output build/browser-engine/result.json` after asset preparation and WebKit installation. [The historical manual comparison workflow](https://github.com/mbackschat/sid-song-explorer/blob/1c2d30e7a9286c86f2aa21eb8753e6f9566beedf/.github/workflows/browser-engine.yml) runs that probe and the unchanged WebKit interaction suite on Ubuntu 24.04 with Playwright 1.56.1 and the official [1.64.1 release](https://github.com/microsoft/playwright/releases/tag/v1.64.1). It changes only the diagnostic job's test runtime, not the application's pinned dependencies.
 
 The validation escape was procedural: the last complete local suite used `--trace=off`, the subsequent presentation correction received focused tests only, and the failed pushed CI run was not checked before handoff. The contributor guide now requires inspecting required CI results for the exact pushed commit and reporting local/CI scope separately.
+
+
+### Correct the supported browser/platform matrix
+
+The user clarified on 2026-10-19 that Safari is a macOS target and the remaining browser target is Chrome. The configuration defect was running both Playwright projects in a single Ubuntu job: Linux WebKit is a separate port and does not establish Safari behavior. The supported matrix is now Google Chrome on Ubuntu 24.04 and Playwright WebKit on macOS 26. Local macOS runs cover Chrome and WebKit; other local hosts expose Chrome only. Real Safari listening remains a separate gate.
+
+The old/new Linux comparison [39175919555](https://github.com/mbackschat/sid-song-explorer/actions/runs/39175919555) passed nine application checks on Playwright 1.64.1 and failed two cold-seek checks on 1.56.1. Its isolated raw probes both failed at blank-page creation before engine initialization, so they establish no Linux engine result. The precise internal Linux WebKit defect remains unproven and is outside the supported matrix. The proposed Playwright upgrade was left on a separate branch; this platform correction retains the existing dependency pin, playback code, assertions and timeouts. The Linux comparison workflow has been removed.
+
+
+The corrected configuration type-checks and builds locally. The original two failing scenarios passed on both actual Chrome and macOS WebKit with tracing enabled and silent output (four checks, 1.2 minutes including browser startup). The corrected [Application workflow](../../.github/workflows/app.yml) installs dependencies, prepares assets, runs the unit suite, builds the application and executes the corresponding browser suite on each OS; macOS CI build coverage is new, not inherited from earlier local results.
