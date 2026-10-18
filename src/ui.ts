@@ -1,0 +1,637 @@
+import type { Catalog } from './catalog.ts';
+import type { PlayerControls, PlayerState, Profile, RegisterFrame, WriteObservation } from './player-types.ts';
+import logoUrl from '../assets/branding/sid-song-explorer.svg?url';
+import './style.css';
+
+type Entry = Catalog['entries'][number];
+type Annotation = Entry['analysis']['annotations'][number];
+type HeldHistory = {
+  frames: RegisterFrame[];
+  writes: WriteObservation[];
+  start: number;
+  end: number;
+  dropped: number;
+  epoch: number;
+};
+const COLORS = ['#6ee0de', '#f3c681', '#f493b5'];
+const MAX_FILE_BYTES = 65_662;
+const MAX_SEEK_SECONDS = 600;
+const hex = (value: number, width = 2) => value.toString(16).toUpperCase().padStart(width, '0');
+const time = (seconds: number, precise = false) => {
+  const safe = Math.max(0, seconds);
+  const minutes = Math.floor(safe / 60);
+  return `${minutes}:${Math.floor(safe % 60).toString().padStart(2, '0')}${precise ? `.${Math.floor((safe % 1) * 100).toString().padStart(2, '0')}` : ''}`;
+};
+const db = (value: number) => Number.isFinite(value) ? `${value.toFixed(1)} dBFS` : '−∞ dBFS';
+const waveforms = (control: number) => ['Triangle', 'Saw', 'Pulse', 'Noise'].filter((_, index) => control & (16 << index)).join(' + ') || 'None';
+const generated = (filename: string) => `${import.meta.env.BASE_URL}generated/${encodeURIComponent(filename)}`;
+
+export function mountExplorer(root: HTMLElement, controls: PlayerControls, catalog: Catalog): void {
+  root.innerHTML = `
+    <header class="app-header">
+      <div class="brand"><img id="brand-logo" alt="SID Song Explorer sound lens" /><div><div class="brand-name">SID Song Explorer</div><div class="brand-subtitle">Hear the music. Explore the chip.</div></div></div>
+      <div class="header-note"><span class="mono">COMMODORE 64</span><span class="badge">Mono POC</span></div>
+    </header>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Music library">
+        <section><div class="eyebrow">Your listening desk</div><div class="library-mark"><span class="sid-icon mono">SID</span><div><strong>Published samples</strong><small>Source-backed listening</small></div></div>
+          <label for="sample-select">Sample library</label><select id="sample-select" class="library-select"></select><button id="use-sample-button" class="small quiet library-load">Load selected sample →</button><p id="library-summary" class="library-summary"></p>
+        </section>
+        <section class="local-section"><h2>Bring your own SID</h2><input id="local-file" class="file-input" type="file" accept=".sid,audio/prs.sid" /><label for="local-file" class="file-button">＋ Open local SID</label><p class="privacy-note">Stays on your device. No uploads, file-hash requests or metadata lookups. Mono PSID · max 65,662 bytes.</p></section>
+        <div class="sidebar-footer"><span class="eyebrow">Made to explore</span><p>Three voices. One shared filter.<br />A whole world of sound.</p><p style="margin-top:12px"><a href="https://github.com/mbackschat/sid-song-explorer" target="_blank" rel="noreferrer">Project & source ↗</a></p></div>
+      </aside>
+      <main class="workspace">
+        <section aria-labelledby="track-title"><div class="track-heading"><div><div class="eyebrow" id="source-kind">From the sample library</div><h1 id="track-title">Choose a SID to explore</h1><p id="track-description" class="track-description">Listen to a phrase, hold a moment, and see what the three SID voices are doing.</p><div class="track-profile"><span id="profile-badge" class="badge">PAL · MOS6581</span><span class="badge">1 SID · $D400 · mono</span><span id="analysis-badge" class="badge">Generic inspection</span></div></div><span id="play-status" class="badge">Ready to load</span></div></section>
+        <section class="panel" aria-label="Playback controls">
+          <div class="transport"><div class="transport-top"><div class="transport-buttons"><button id="play-button" class="primary" disabled>▶ Play</button><button id="restart-button" class="quiet" disabled aria-label="Restart from beginning">↺ Restart</button></div><div class="time-display"><span id="heard-time">0:00</span> <small id="duration-label">/ —</small></div></div>
+            <div class="seek-row"><input id="seek-slider" type="range" min="0" max="30" step="0.01" value="0" disabled aria-label="Seek playback in seconds" /></div><div class="transport-foot"><span id="seek-note">Heard position · load a sample to begin</span><span id="render-lead">Emulation lead: —</span></div>
+          </div>
+          <div class="settings"><label><span>Clock</span><select id="clock-select"><option>PAL</option><option>NTSC</option></select></label><label><span>Chip model</span><select id="model-select"><option value="MOS6581">MOS 6581</option><option value="MOS8580">MOS 8580</option></select></label><label><span>Subtune</span><select id="subtune-select"><option value="1">1</option></select></label><button id="load-button">Load sample</button><p id="settings-note" class="settings-note">Settings apply when you load. Seeking replays chip state to the requested sample. Trace timestamp alignment is approximate.</p></div>
+        </section>
+        <div id="status-message" class="status-line" role="status" aria-live="polite">Choose the published sample or open a local file.</div>
+        <div class="inspection-grid">
+          <section class="panel" aria-labelledby="timeline-title"><div class="panel-header"><div><h2 id="timeline-title">Voice activity</h2><small>Frequency / gate snapshots · waveform-write ticks</small></div><div class="follow-controls"><button id="follow-button" class="small" aria-pressed="true">Following</button><button id="return-button" class="small quiet" disabled>Return to playing</button></div></div>
+            <div id="history-summary" class="history-summary mono">No retained observations yet.</div>
+            <div class="lane-list">${COLORS.map((color, voice) => `<div class="voice-lane" style="--voice:${color}"><div class="voice-label"><strong>Voice ${voice + 1}</strong><small id="lane-wave-${voice}">No observation</small></div><canvas id="voice-lane-${voice}" class="lane-plot" tabindex="0" role="slider" aria-label="Select inspection time for voice ${voice + 1}" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div>`).join('')}
+              <div class="voice-lane filter-lane" style="--voice:#b2a1ff"><div class="voice-label"><strong>Shared filter</strong><small>Cutoff register</small></div><canvas id="filter-lane" class="lane-plot" tabindex="0" role="slider" aria-label="Select shared filter inspection time" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div><div class="timeline-key mono"><span id="timeline-start">0:00</span><span id="timeline-cursor">Heard playhead</span><span id="timeline-end">0:30</span></div>
+            </div><p class="timeline-help">Click a lane to hold a moment while music continues. Arrow keys move the inspection cursor. A line shows register frequency, not loudness; gate clear can still release sound.</p>
+            <div class="mix-section"><div class="mix-heading"><strong>Listen by voice</strong><button id="restore-button" class="small quiet" disabled>Restore full mix</button></div><div class="mix-buttons">${COLORS.map((color, voice) => `<div class="voice-controls" style="--voice:${color}"><span>V${voice + 1}</span><button id="mute-${voice}" aria-label="Mute voice ${voice + 1}" aria-pressed="false" disabled>Mute</button><button id="solo-${voice}" aria-label="Solo voice ${voice + 1}" aria-pressed="false" disabled>Solo</button></div>`).join('')}</div><p class="intervention-note">Waveform-write intervention, not isolated stems. Mute acts on subsequent control writes; shared filtering and ring/sync coupling still apply.</p></div>
+            <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="0" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="8" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restart uses replay seeking and may pause; it is not gapless.</span></div>
+          </section>
+          <aside class="panel inspector" aria-labelledby="inspector-title"><div class="panel-header"><h2 id="inspector-title">Sound inspector</h2><span id="inspection-time" class="inspection-time mono">0:00.00</span></div><div class="inspector-body"><p id="inspector-note" class="inspector-note">Following heard playback. Register settings are derived observations, not recovered instruments or measured envelope amplitude.</p><div class="voice-tabs" role="group" aria-label="Inspect voice">${COLORS.map((_, voice) => `<button id="inspect-${voice}" class="small" aria-pressed="${voice === 0}">Voice ${voice + 1}</button>`).join('')}</div>
+            <dl class="register-grid"><div><dt>Frequency register</dt><dd id="reg-frequency">—</dd></div><div><dt>Derived oscillator Hz</dt><dd id="reg-hz">—</dd></div><div class="wide"><dt>Waveform selection</dt><dd id="reg-waveform">—</dd></div><div><dt>Gate / Test</dt><dd id="reg-gate">—</dd></div><div><dt>Pulse width · 12-bit</dt><dd id="reg-pulse">—</dd></div><div><dt>AD / SR settings</dt><dd id="reg-adsr">—</dd></div><div><dt>Ring / Sync</dt><dd id="reg-coupling">—</dd></div></dl>
+            <h3 class="inspector-subhead">One filter · all three voices</h3><div id="filter-details" class="shared-filter">No observed register frame.</div><h3 class="inspector-subhead">Last ordered writes ≤ cursor</h3><ol id="write-list" class="write-list"><li class="write-empty">Load and play to collect writes.</li></ol></div></aside>
+        </div>
+        <div class="bottom-grid"><section class="panel" aria-labelledby="evidence-title"><div class="panel-header"><h2 id="evidence-title">Listen a little closer</h2><span class="badge">Linked evidence</span></div><div class="evidence-body"><p id="evidence-scope" class="evidence-scope">Authored annotations apply only to their exact catalog file, clock, chip model and subtune.</p><div id="evidence-cards"></div></div></section>
+          <section class="panel" aria-labelledby="output-title"><div class="panel-header"><h2 id="output-title">Audio output</h2><span class="badge">PCM · mono</span></div><div class="audio-body"><div class="meter-label"><span>Peak · measured PCM</span><span id="peak-label" class="mono">−∞ dBFS</span></div><div class="meter-track"><span id="peak-meter" class="meter-level"></span></div><div class="meter-label"><span>RMS</span><span id="rms-label" class="mono">−∞ dBFS</span></div><canvas id="waveform-plot" class="audio-plot" aria-label="Actual output waveform"></canvas><div class="plot-caption"><span>WAVEFORM</span><span>Audio output</span></div><canvas id="spectrum-plot" class="audio-plot" aria-label="Actual output frequency spectrum"></canvas><div class="plot-caption"><span>SPECTRUM</span><span id="spectrum-range">0 → Nyquist</span></div></div><div id="reference-section" class="reference-body"><h3>Retained reference · WAV</h3><p id="reference-scope">Load a catalog sample for its retained listening reference.</p><audio id="reference-audio" controls preload="none" aria-label="Retained reference recording"></audio></div></section>
+        </div>
+        <footer class="source-footer"><div id="source-links" class="source-links"></div><span id="audio-diagnostics">Device-local playback · no backend</span><div id="engine-links" class="source-links" aria-label="Playback engine licenses and source"></div></footer>
+      </main>
+    </div>`;
+
+  const el = <T extends HTMLElement = HTMLElement>(id: string) => {
+    const found = root.querySelector<T>(`#${id}`);
+    if (!found) throw new Error(`Missing UI element: ${id}`);
+    return found;
+  };
+  const select = (id: string) => el<HTMLSelectElement>(id);
+  const input = (id: string) => el<HTMLInputElement>(id);
+  const button = (id: string) => el<HTMLButtonElement>(id);
+  const setText = (id: string, value: string) => { const target = el(id); if (target.textContent !== value) target.textContent = value; };
+  el<HTMLImageElement>('brand-logo').src = logoUrl;
+  const reference = el<HTMLAudioElement>('reference-audio');
+  const sampleSelect = select('sample-select');
+  for (const entry of catalog.entries) sampleSelect.add(new Option(entry.title, entry.id));
+  let chosenEntry: Entry | null = catalog.entries[0] ?? null;
+  let loadedEntry: Entry | null = null;
+  let loadedBytes: Uint8Array | null = null;
+  let localBytes: Uint8Array | null = null;
+  let sourceMode: 'catalog' | 'local' = 'catalog';
+  let localName = '';
+  let loadedProfile: Profile | null = null;
+  let state: PlayerState | null = null;
+  let held: HeldHistory | null = null;
+  let cursor = 0;
+  let selectedEnd: number | null = null;
+  let selectedVoice = 0;
+  let busy = false;
+  let notice = '';
+  let seekDragging = false;
+  let exploredUntil = 30;
+  let animationFrame = 0;
+  let lastDraw = 0;
+  let plotStart = 0;
+  let plotEnd = 30;
+  let evidenceKey = '';
+  let sourceKey = '';
+  let previousEpoch = -1;
+
+  const report = (message: string, isError = false) => {
+    notice = message;
+    setText('status-message', message);
+    el('status-message').classList.toggle('error', isError);
+  };
+  const run = async (operation: () => void | Promise<void>) => {
+    try { await operation(); } catch (error) { report(error instanceof Error ? error.message : String(error), true); }
+  };
+  const currentProfile = (): Profile => ({
+    clock: select('clock-select').value as Profile['clock'],
+    model: select('model-select').value as Profile['model'],
+    subtune: Number(select('subtune-select').value),
+    ...(sourceMode === 'catalog' && chosenEntry && select('clock-select').value === chosenEntry.target.clock ? { durationSeconds: chosenEntry.durationSeconds } : {}),
+  });
+  const hasMatchingAnalysis = () => Boolean(state?.info && !['error', 'loading'].includes(state.status) && loadedEntry && loadedProfile && loadedProfile.clock === loadedEntry.target.clock && loadedProfile.model === loadedEntry.target.model && loadedProfile.subtune === loadedEntry.target.subtune && loadedEntry.analysis.sidSha256 === loadedEntry.files.sid.sha256);
+  const setSubtunes = (count: number, selected: number) => {
+    const target = select('subtune-select');
+    target.replaceChildren();
+    for (let song = 1; song <= count; song++) target.add(new Option(String(song), String(song), false, song === selected));
+  };
+  const applyCatalogDefaults = () => {
+    if (!chosenEntry) return;
+    select('clock-select').value = chosenEntry.target.clock;
+    select('model-select').value = chosenEntry.target.model;
+    setSubtunes(1, chosenEntry.target.subtune);
+    setText('library-summary', chosenEntry.description);
+    if (!loadedBytes) {
+      setText('track-title', chosenEntry.title);
+      setText('track-description', chosenEntry.description);
+      setText('profile-badge', `${chosenEntry.target.clock} · ${chosenEntry.target.model}`);
+    }
+  };
+  const updateReference = () => {
+    reference.pause();
+    if (loadedEntry) {
+      reference.src = generated(loadedEntry.files.reference.filename);
+      setText('reference-scope', `${loadedEntry.listening.status}: ${loadedEntry.listening.scope} This retained render is separate from live emulation.`);
+      el('reference-section').hidden = false;
+    } else {
+      reference.removeAttribute('src');
+      reference.load();
+      el('reference-section').hidden = true;
+    }
+  };
+  const resetInspection = () => { held = null; cursor = 0; selectedEnd = null; exploredUntil = 30; evidenceKey = ''; sourceKey = ''; };
+  const loadBytes = async (bytes: Uint8Array, entry: Entry | null) => {
+    reference.pause();
+    const profile = currentProfile();
+    loadedEntry = null;
+    loadedProfile = null;
+    evidenceKey = '';
+    updateReference();
+    await controls.load(bytes, profile);
+    loadedBytes = bytes;
+    loadedEntry = entry;
+    loadedProfile = profile;
+    resetInspection();
+    if (state?.info) setSubtunes(state.info.songs, state.info.subtune);
+    setText('track-title', entry?.title ?? state?.info?.title ?? localName);
+    setText('track-description', entry?.description ?? `${state?.info?.author || 'Unknown author'}${state?.info?.released ? ` · ${state.info.released}` : ''}. Generic inspection from locally observed SID registers.`);
+    setText('source-kind', entry ? 'From the sample library' : `Local file · ${localName}`);
+    setText('load-button', 'Reload settings');
+    updateReference();
+    report('Loaded. Press Play to start live SID emulation.');
+  };
+  const loadSelected = async () => {
+    if (busy) return;
+    busy = true;
+    draw();
+    try {
+      if (sourceMode === 'local') {
+        if (!localBytes) throw new Error('Open a local SID first.');
+        report('Reloading local SID with the selected settings…');
+        await loadBytes(localBytes, null);
+      } else {
+        if (!chosenEntry) throw new Error('No catalog samples are available. Open a local mono PSID.');
+        report('Fetching sample and verifying its SHA-256…');
+        const response = await fetch(generated(chosenEntry.files.sid.filename), { signal: AbortSignal.timeout(20000) });
+        if (!response.ok) throw new Error(`Sample download failed (${response.status}). You can retry Load sample.`);
+        const buffer = await response.arrayBuffer();
+        if (buffer.byteLength !== chosenEntry.files.sid.bytes || buffer.byteLength > MAX_FILE_BYTES) throw new Error('Sample size does not match the catalog. Playback was not started.');
+        const digest = await crypto.subtle.digest('SHA-256', buffer);
+        const checksum = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+        if (checksum !== chosenEntry.files.sid.sha256.toLowerCase()) throw new Error('Sample SHA-256 does not match the catalog. Playback was not started.');
+        await loadBytes(new Uint8Array(buffer), chosenEntry);
+      }
+    } catch (error) {
+      report(error instanceof Error ? error.message : String(error), true);
+    } finally {
+      busy = false;
+      draw();
+    }
+  };
+  const openLocal = async (file: File) => {
+    if (busy) return;
+    if (file.size > MAX_FILE_BYTES) throw new Error(`This prototype accepts SID files up to ${MAX_FILE_BYTES.toLocaleString()} bytes.`);
+    busy = true;
+    draw();
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (bytes.length < 118 || String.fromCharCode(...bytes.slice(0, 4)) !== 'PSID') throw new Error('Open a mono PSID .sid file. RSID and ROM-dependent formats are outside this prototype.');
+      const header = new DataView(bytes.buffer);
+      const version = header.getUint16(4);
+      const songs = header.getUint16(14);
+      const start = header.getUint16(16);
+      if (version < 1 || version > 4 || songs < 1 || songs > 256 || start < 1 || start > songs) throw new Error('The PSID header has an unsupported version or invalid subtune information.');
+      if (version >= 2 && bytes.length < 124) throw new Error('The PSID header is truncated.');
+      if ((version >= 3 && bytes[122]) || (version >= 4 && bytes[123])) throw new Error('This first prototype supports one mono SID. This file declares additional chips.');
+      const flags = version >= 2 ? header.getUint16(118) : 0;
+      select('clock-select').value = ((flags >> 2) & 3) === 2 ? 'NTSC' : 'PAL';
+      select('model-select').value = ((flags >> 4) & 3) === 2 ? 'MOS8580' : 'MOS6581';
+      setSubtunes(songs, start);
+      sourceMode = 'local';
+      localBytes = bytes;
+      localName = file.name;
+      report('Opening local SID on this device…');
+      await loadBytes(bytes, null);
+    } finally {
+      busy = false;
+      draw();
+    }
+  };
+
+  sampleSelect.addEventListener('change', () => {
+    chosenEntry = catalog.entries.find(entry => entry.id === sampleSelect.value) ?? null;
+    sourceMode = 'catalog';
+    applyCatalogDefaults();
+    setText('load-button', 'Load sample');
+    report('Sample selected. Load sample applies its profile and replaces the current tune.');
+  });
+  button('load-button').addEventListener('click', () => { void loadSelected(); });
+  button('use-sample-button').addEventListener('click', () => {
+    sourceMode = 'catalog';
+    applyCatalogDefaults();
+    void loadSelected();
+  });
+  input('local-file').addEventListener('change', event => {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (file) void run(() => openLocal(file));
+    input('local-file').value = '';
+  });
+  root.addEventListener('dragover', event => { event.preventDefault(); root.classList.add('drop-active'); });
+  root.addEventListener('dragleave', event => { if (!root.contains(event.relatedTarget as Node)) root.classList.remove('drop-active'); });
+  root.addEventListener('drop', event => {
+    event.preventDefault();
+    root.classList.remove('drop-active');
+    const file = event.dataTransfer?.files[0];
+    if (file) void run(() => openLocal(file));
+  });
+  for (const id of ['clock-select', 'model-select', 'subtune-select']) select(id).addEventListener('change', () => { report('Settings changed. Reload settings applies the new profile and restarts the tune.'); });
+  button('play-button').addEventListener('click', () => { void run(async () => {
+    reference.pause();
+    if (state?.status === 'playing') controls.pause();
+    else { await controls.play(); notice = ''; }
+  }); });
+  button('restart-button').addEventListener('click', () => { void run(async () => { reference.pause(); await controls.seek(0); notice = ''; }); });
+  reference.addEventListener('play', () => { controls.pause(); report('Retained reference playing. Its native transport is independent of live SID time.'); });
+  reference.addEventListener('error', () => { if (reference.hasAttribute('src')) report('The retained reference could not be opened. Live SID playback remains available.', true); });
+  input('seek-slider').addEventListener('input', () => { seekDragging = true; setText('heard-time', time(Number(input('seek-slider').value))); });
+  input('seek-slider').addEventListener('change', () => { const target = Number(input('seek-slider').value); seekDragging = false; void run(async () => { reference.pause(); report(`Seeking to ${time(target, true)} by forward emulation…`); await controls.seek(target); notice = ''; }); });
+
+  const copyHeardHistory = (): HeldHistory => ({
+    frames: (state?.frames ?? []).filter(frame => frame.time <= (state?.position ?? 0)).map(frame => ({ time: frame.time, registers: [...frame.registers] })),
+    writes: (state?.writes ?? []).filter(write => write.timeSeconds <= (state?.position ?? 0)).map(write => ({ ...write })),
+    start: state?.historyStart ?? 0,
+    end: state?.position ?? 0,
+    dropped: state?.dropped ?? 0,
+    epoch: state?.epoch ?? 0,
+  });
+  const holdAt = (seconds: number, end: number | null = null) => {
+    if (!held) held = copyHeardHistory();
+    cursor = Math.max(0, seconds);
+    selectedEnd = end;
+    draw();
+  };
+  const follow = () => { held = null; selectedEnd = null; draw(); };
+  button('follow-button').addEventListener('click', () => { if (held) follow(); else holdAt(state?.position ?? 0); });
+  button('return-button').addEventListener('click', follow);
+  for (let voice = 0; voice < 3; voice++) {
+    button(`inspect-${voice}`).addEventListener('click', () => { selectedVoice = voice; draw(); });
+    button(`mute-${voice}`).addEventListener('click', () => { void run(async () => {
+      const mask = [...(state?.muted ?? [false, false, false])];
+      mask[voice] = !mask[voice];
+      await controls.setMuted(mask);
+      evidenceKey = '';
+    }); });
+    button(`solo-${voice}`).addEventListener('click', () => { void run(async () => {
+      const soloed = state?.muted.every((muted, index) => muted === (index !== voice));
+      await controls.setMuted(soloed ? [false, false, false] : [0, 1, 2].map(index => index !== voice));
+      evidenceKey = '';
+    }); });
+  }
+  button('restore-button').addEventListener('click', () => { void run(async () => { await controls.setMuted([false, false, false]); evidenceKey = ''; }); });
+  for (const id of ['voice-lane-0', 'voice-lane-1', 'voice-lane-2', 'filter-lane']) {
+    const canvas = el<HTMLCanvasElement>(id);
+    canvas.addEventListener('pointerdown', event => {
+      const rect = canvas.getBoundingClientRect();
+      const selectedTime = plotStart + Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * (plotEnd - plotStart);
+      if (id.startsWith('voice-lane')) selectedVoice = Number(id.slice(-1));
+      holdAt(selectedTime);
+    });
+    canvas.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      holdAt(Math.min(plotEnd, Math.max(plotStart, (held ? cursor : state?.position ?? 0) + (event.key === 'ArrowRight' ? 1 : -1) * (event.shiftKey ? 1 : .1))));
+    });
+  }
+  button('mark-a').addEventListener('click', () => { input('loop-start').value = (state?.position ?? 0).toFixed(2); });
+  button('mark-b').addEventListener('click', () => { input('loop-end').value = (state?.position ?? 0).toFixed(2); });
+  button('loop-button').addEventListener('click', () => { void run(async () => {
+    if (state?.loop) { await controls.setLoop(null); return; }
+    const start = input('loop-start').valueAsNumber;
+    const end = input('loop-end').valueAsNumber;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > Math.min(state?.duration ?? MAX_SEEK_SECONDS, MAX_SEEK_SECONDS)) throw new Error(`Choose a valid loop: A ≥ 0, B > A, and B at most ${Math.min(state?.duration ?? MAX_SEEK_SECONDS, MAX_SEEK_SECONDS)} seconds.`);
+    await controls.setLoop({ start, end });
+    report(`Loop set from ${time(start, true)} to ${time(end, true)}. Start playback to hear it.`);
+  }); });
+  button('clear-loop').addEventListener('click', () => { void run(async () => { await controls.setLoop(null); }); });
+
+  const hearPhrase = async (annotation: Annotation) => {
+    reference.pause();
+    held = copyHeardHistory();
+    cursor = annotation.startSeconds;
+    selectedEnd = annotation.endSeconds;
+    selectedVoice = Math.max(0, (annotation.voices[0] ?? 1) - 1);
+    const playbackLimit = Math.min(state?.duration ?? MAX_SEEK_SECONDS, MAX_SEEK_SECONDS);
+    const contextEnd = Math.min(playbackLimit, Math.max(annotation.endSeconds, annotation.startSeconds + 4));
+    const contextStart = Math.max(0, Math.min(annotation.startSeconds, contextEnd - 4));
+    input('loop-start').value = String(contextStart);
+    input('loop-end').value = String(contextEnd);
+    await controls.setLoop({ start: contextStart, end: contextEnd });
+    report(`Hearing ${annotation.title}. Playback context ${time(contextStart, true)}–${time(contextEnd, true)}; evidence span ${time(annotation.startSeconds, true)}–${time(annotation.endSeconds, true)} stays selected. The held view contains only observations available when selected; Return to playing follows new activity.`);
+    draw();
+    await controls.seek(contextStart);
+    await controls.play();
+  };
+  const link = (text: string, href: string) => {
+    const anchor = document.createElement('a');
+    anchor.textContent = text;
+    anchor.href = href;
+    anchor.target = '_blank';
+    anchor.rel = 'noreferrer';
+    return anchor;
+  };
+  const renderEvidence = () => {
+    const matches = hasMatchingAnalysis();
+    const intervention = state?.muted.some(Boolean) ?? false;
+    const key = `${loadedEntry?.id}|${matches}|${intervention}`;
+    if (key === evidenceKey) return;
+    evidenceKey = key;
+    const cards = el('evidence-cards');
+    cards.replaceChildren();
+    setText('analysis-badge', matches ? 'Source-linked analysis' : 'Generic inspection');
+    setText('evidence-scope', matches ? `Exact catalog profile matched: ${loadedProfile?.clock} · ${loadedProfile?.model} · subtune ${loadedProfile?.subtune}.${intervention ? ' Voice intervention active; authored listening claims describe the full mix.' : ''} Timings are seconds from initialization.` : 'Generic inspection. Source-linked annotations require the exact catalog SID, clock, chip model and subtune. No instrument identity is inferred from live registers.');
+    if (!matches || !loadedEntry) {
+      const text = document.createElement('p');
+      text.className = 'evidence-scope';
+      text.textContent = loadedBytes ? 'Play, select a moment in any lane, and compare frequency, gate, pulse, waveform and shared-filter settings. These observations remain useful without annotations.' : 'Load the published sample to follow its documented sound programs, or open your own SID for live register inspection.';
+      cards.append(text);
+      return;
+    }
+    for (const annotation of loadedEntry.analysis.annotations) {
+      const card = document.createElement('article');
+      card.className = 'evidence-card';
+      const body = document.createElement('div');
+      const tag = document.createElement('span');
+      tag.className = `evidence-tag ${annotation.evidenceLevel}`;
+      tag.textContent = `${annotation.evidenceLevel} · ${time(annotation.startSeconds, true)}–${time(annotation.endSeconds, true)} · ${annotation.voices.length ? annotation.voices.map(voice => `V${voice}`).join(' / ') : 'Shared SID'}`;
+      const title = document.createElement('h3');
+      title.textContent = annotation.title;
+      const description = document.createElement('p');
+      description.textContent = annotation.description;
+      body.append(tag, title, description, link('Read the evidence ↗', annotation.sourceUrl));
+      const hear = document.createElement('button');
+      hear.className = 'small quiet';
+      hear.textContent = '▶ Hear phrase';
+      hear.dataset.annotation = annotation.id;
+      hear.addEventListener('click', () => { void run(() => hearPhrase(annotation)); });
+      card.append(body, hear);
+      cards.append(card);
+    }
+  };
+  const engineLinks = el('engine-links');
+  for (const [label, filename] of [['Engine license', 'engine-LICENSE.txt'], ['Notices', 'engine-NOTICES.txt'], ['Modifications', 'engine-MODIFICATIONS.txt'], ['Complete engine source ↓', 'engine-complete-source.tar.gz']]) engineLinks.append(link(label!, generated(filename!)));
+
+  const renderSources = () => {
+    const key = `${loadedEntry?.id}|${Boolean(loadedBytes)}`;
+    if (sourceKey === key) return;
+    sourceKey = key;
+    const links = el('source-links');
+    links.replaceChildren();
+    if (loadedEntry) {
+      links.append(link('Sample & attribution ↗', loadedEntry.rights.sourceUrl), link(loadedEntry.rights.license, loadedEntry.rights.licenseUrl), link('Corresponding source ↗', loadedEntry.rights.correspondingSourceUrl), link('Listening verdict ↗', loadedEntry.listening.sourceUrl), link('SID ↓', generated(loadedEntry.files.sid.filename)));
+      const attribution = document.createElement('span');
+      attribution.textContent = loadedEntry.rights.attribution;
+      attribution.className = 'attribution';
+      links.append(attribution);
+      links.title = loadedEntry.rights.attribution;
+    } else links.append(link('Explorer · GPL-3.0-or-later ↗', 'https://github.com/mbackschat/sid-song-explorer/blob/main/LICENSE'));
+  };
+
+  const canvasContext = (id: string) => {
+    const canvas = el<HTMLCanvasElement>(id);
+    const ratio = window.devicePixelRatio || 1;
+    const width = Math.max(1, canvas.clientWidth);
+    const height = Math.max(1, canvas.clientHeight);
+    if (canvas.width !== Math.round(width * ratio) || canvas.height !== Math.round(height * ratio)) {
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    return { ctx, width, height };
+  };
+  const drawLane = (id: string, frames: RegisterFrame[], writes: WriteObservation[], voice: number | null, observedUntil: number) => {
+    const plot = canvasContext(id);
+    if (!plot) return;
+    const { ctx, width, height } = plot;
+    const x = (seconds: number) => (seconds - plotStart) / (plotEnd - plotStart) * width;
+    ctx.strokeStyle = '#222c44';
+    ctx.lineWidth = 1;
+    for (let quarter = 1; quarter < 4; quarter++) { ctx.beginPath(); ctx.moveTo(width * quarter / 4, 0); ctx.lineTo(width * quarter / 4, height); ctx.stroke(); }
+    const coverageStart = held?.start ?? state?.historyStart ?? 0;
+    const minX = Math.min(width, Math.max(0, x(coverageStart)));
+    const maxX = Math.min(width, Math.max(0, x(observedUntil)));
+    ctx.fillStyle = '#171a2b';
+    ctx.fillRect(maxX, 0, width - maxX, height);
+    ctx.fillRect(0, 0, minX, height);
+    if (selectedEnd !== null && held) { ctx.fillStyle = '#8b72d322'; ctx.fillRect(x(cursor), 0, x(selectedEnd) - x(cursor), height); }
+    let previous: RegisterFrame | null = null;
+    const stride = Math.max(1, Math.floor(frames.length / Math.max(1, width * 2)));
+    ctx.strokeStyle = voice === null ? '#b2a1ff' : COLORS[voice]!;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    let started = false;
+    for (let index = 0; index < frames.length; index += stride) {
+      const frame = frames[index]!;
+      if (frame.time < Math.max(plotStart, coverageStart) || frame.time > observedUntil) continue;
+      const registers = frame.registers;
+      const base = (voice ?? 0) * 7;
+      const value = voice === null ? ((registers[22] ?? 0) << 3) | ((registers[21] ?? 0) & 7) : ((registers[base + 1] ?? 0) << 8) | (registers[base] ?? 0);
+      const normalized = voice === null ? value / 2047 : Math.log2(1 + value) / 16;
+      const y = height - 15 - normalized * (height - 23);
+      if (!started) { ctx.moveTo(x(frame.time), y); started = true; } else ctx.lineTo(x(frame.time), y);
+      if (voice !== null && previous && ((previous.registers[base + 4] ?? 0) & 1)) {
+        ctx.fillStyle = `${COLORS[voice]}60`;
+        ctx.fillRect(x(previous.time), height - 7, Math.max(1, x(frame.time) - x(previous.time)), 3);
+      }
+      previous = frame;
+    }
+    ctx.stroke();
+    if (voice !== null) {
+      let previousWaveform: number | null = null;
+      for (const write of writes) {
+        if (write.timeSeconds < Math.max(plotStart, coverageStart) || write.timeSeconds > observedUntil || (write.address & 31) !== voice * 7 + 4) continue;
+        const waveform = write.value & 0xf0;
+        if (previousWaveform !== waveform) { ctx.fillStyle = COLORS[voice]!; ctx.fillRect(x(write.timeSeconds), 4, 2, 4); }
+        previousWaveform = waveform;
+      }
+    }
+    const heardPosition = state?.position ?? 0;
+    if (heardPosition >= plotStart && heardPosition <= plotEnd) { ctx.strokeStyle = '#dce9fa'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x(heardPosition), 0); ctx.lineTo(x(heardPosition), height); ctx.stroke(); ctx.setLineDash([]); }
+    if (held) { ctx.strokeStyle = '#c2a6ff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x(cursor), 0); ctx.lineTo(x(cursor), height); ctx.stroke(); }
+    const canvas = el(id);
+    canvas.setAttribute('aria-valuemin', plotStart.toFixed(2));
+    canvas.setAttribute('aria-valuemax', plotEnd.toFixed(2));
+    canvas.setAttribute('aria-valuenow', (held ? cursor : heardPosition).toFixed(2));
+    canvas.setAttribute('aria-valuetext', `${time(held ? cursor : heardPosition, true)} ${held ? 'held inspection' : 'heard playback'}`);
+  };
+  const drawAudio = () => {
+    const waveform = canvasContext('waveform-plot');
+    if (waveform) {
+      const { ctx, width, height } = waveform;
+      ctx.strokeStyle = '#27324b'; ctx.beginPath(); ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2); ctx.stroke();
+      if (state?.waveform.length) {
+        ctx.strokeStyle = '#7dd7d4'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = 0; x < width; x++) { const amplitude = state.waveform[Math.floor(x / width * state.waveform.length)] ?? 0; const y = height / 2 - amplitude * height * .45; if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+        ctx.stroke();
+      }
+    }
+    const spectrum = canvasContext('spectrum-plot');
+    if (spectrum && state?.spectrum.length) {
+      const { ctx, width, height } = spectrum;
+      const bins = Math.min(64, state.spectrum.length);
+      ctx.fillStyle = '#ac96ed';
+      for (let index = 0; index < bins; index++) {
+        const start = Math.floor((index / bins) ** 2 * state.spectrum.length);
+        const end = Math.max(start + 1, Math.floor(((index + 1) / bins) ** 2 * state.spectrum.length));
+        let maximum = 0;
+        for (let bin = start; bin < end; bin++) maximum = Math.max(maximum, state.spectrum[bin] ?? 0);
+        const bar = maximum / 255 * (height - 5);
+        ctx.fillRect(index / bins * width, height - bar, Math.max(1, width / bins - 2), bar);
+      }
+    }
+  };
+  const renderInspector = (frames: RegisterFrame[], writes: WriteObservation[], observedUntil: number) => {
+    const selectedTime = held ? cursor : state?.position ?? 0;
+    let frame: RegisterFrame | undefined;
+    const coverageStart = held?.start ?? state?.historyStart ?? 0;
+    if (selectedTime >= coverageStart && selectedTime <= observedUntil + .001) {
+      for (let index = frames.length - 1; index >= 0; index--) if (frames[index]!.time <= selectedTime + .000001) { frame = frames[index]; break; }
+    }
+    setText('inspection-time', time(selectedTime, true));
+    const coverage = held ? `Held copy · epoch ${held.epoch} · available ${time(held.start, true)}–${time(held.end, true)}.${selectedEnd !== null ? ` Selected span ends ${time(selectedEnd, true)}.` : ''} ` : 'Following heard playback. ';
+    setText('inspector-note', `${coverage}${frame ? `Frame baseline ${time(frame.time, true)} plus retained writes through the cursor. Derived register settings, not instrument identity or envelope amplitude.` : 'No retained observation at this time. Play or seek here, then return to playing to inspect new observations.'}`);
+    for (let voice = 0; voice < 3; voice++) button(`inspect-${voice}`).setAttribute('aria-pressed', String(voice === selectedVoice));
+    const ids = ['reg-frequency', 'reg-hz', 'reg-waveform', 'reg-gate', 'reg-pulse', 'reg-adsr', 'reg-coupling'];
+    if (!frame) { for (const id of ids) setText(id, '—'); setText('filter-details', 'No observed register frame at the selected time.'); }
+    else {
+      const r = [...frame.registers];
+      const intervening: WriteObservation[] = [];
+      for (let index = writes.length - 1; index >= 0; index--) {
+        const write = writes[index]!;
+        if (write.timeSeconds < frame.time) break;
+        if (write.timeSeconds <= selectedTime && write.timeSeconds <= observedUntil && write.sidNumber === 0) intervening.unshift(write);
+      }
+      for (const write of intervening) { const offset = write.address >= 0xd400 ? write.address - 0xd400 : write.address; if (offset >= 0 && offset < 32) r[offset] = write.value; }
+      const base = selectedVoice * 7;
+      const word = (offset: number) => (r[base + offset] ?? 0) | ((r[base + offset + 1] ?? 0) << 8);
+      const frequency = word(0);
+      const control = r[base + 4] ?? 0;
+      const clockHz = loadedProfile?.clock === 'NTSC' ? 1022727 : 985248;
+      setText('reg-frequency', `$${hex(frequency, 4)} · ${frequency}`);
+      setText('reg-hz', `${(frequency * clockHz / 16777216).toFixed(2)} Hz`);
+      setText('reg-waveform', waveforms(control));
+      setText('reg-gate', `${control & 1 ? 'On' : 'Off'} / ${control & 8 ? 'On' : 'Off'}`);
+      setText('reg-pulse', `${word(2) & 4095} / 4095`);
+      setText('reg-adsr', `$${hex(r[base + 5] ?? 0)} / $${hex(r[base + 6] ?? 0)}`);
+      setText('reg-coupling', `${control & 4 ? 'On' : 'Off'} / ${control & 2 ? 'On' : 'Off'}`);
+      const route = r[23] ?? 0;
+      const modeVolume = r[24] ?? 0;
+      const modes = ['Low-pass', 'Band-pass', 'High-pass'].filter((_, index) => modeVolume & (16 << index));
+      const voices = [0, 1, 2].filter(voice => route & (1 << voice)).map(voice => `V${voice + 1}`);
+      setText('filter-details', `Cutoff ${((r[22] ?? 0) << 3) | ((r[21] ?? 0) & 7)} / 2047 · resonance ${route >> 4} / 15. ${modes.join(' + ') || 'No filter mode'}. Routed: ${voices.join(', ') || 'none'}. Master volume ${modeVolume & 15} / 15${modeVolume & 128 ? ' · V3 direct off' : ''}. Settings, not a measured frequency response.`);
+    }
+    const ordered: WriteObservation[] = [];
+    for (let index = writes.length - 1; index >= 0 && ordered.length < 7; index--) {
+      const write = writes[index]!;
+      if (write.timeSeconds < coverageStart) break;
+      if (write.timeSeconds <= selectedTime + .000001 && write.timeSeconds <= observedUntil) ordered.unshift(write);
+    }
+    const list = el('write-list');
+    const writeKey = ordered.map(write => `${write.cyclePhi1}:${write.address}:${write.value}`).join('|');
+    if (list.dataset.key !== writeKey) {
+      list.dataset.key = writeKey;
+      list.replaceChildren();
+      if (!ordered.length) { const item = document.createElement('li'); item.className = 'write-empty'; item.textContent = 'No retained writes at this cursor.'; list.append(item); }
+      for (const write of ordered) { const item = document.createElement('li'); item.textContent = `${time(write.timeSeconds, true)}  $${hex(write.address >= 0xd400 ? write.address : 0xd400 + write.address, 4)} ← $${hex(write.value)}`; item.title = `Ordered emulation write · cycle φ1 ${write.cyclePhi1} · SID ${write.sidNumber}`; list.append(item); }
+    }
+  };
+
+  function draw(): void {
+    const loaded = Boolean(state?.info) && !['empty', 'error', 'loading'].includes(state?.status ?? 'empty');
+    const changing = busy || state?.status === 'loading' || state?.status === 'seeking';
+    for (const id of ['play-button', 'restart-button', 'restore-button', 'mark-a', 'mark-b', 'loop-button', 'clear-loop', 'mute-0', 'mute-1', 'mute-2', 'solo-0', 'solo-1', 'solo-2']) button(id).disabled = !loaded || changing;
+    button('load-button').disabled = changing || sourceMode === 'catalog' && !chosenEntry;
+    button('use-sample-button').disabled = changing || !chosenEntry;
+    for (const id of ['clock-select', 'model-select', 'subtune-select', 'sample-select']) select(id).disabled = changing;
+    input('local-file').disabled = changing;
+    setText('play-button', state?.status === 'playing' ? 'Ⅱ Pause' : '▶ Play');
+    const labels: Record<string, string> = { empty: 'Ready to load', loading: 'Loading…', ready: 'Ready', playing: 'Live SID', paused: 'Paused', seeking: 'Seeking…', ended: 'Ended', error: 'Playback error' };
+    setText('play-status', busy ? 'Loading…' : labels[state?.status ?? 'empty']!);
+    el('play-status').classList.toggle('live', state?.status === 'playing');
+    if (state?.error) report(state.error, true);
+    else if (!notice) {
+      const message = state?.status === 'playing' ? 'Live SID emulation · select a lane to hold an inspection moment.' : state?.status === 'seeking' ? 'Forward-emulating to restore playback state…' : state?.status === 'ended' ? state.duration === null ? 'Playback reached the 10-minute prototype limit. Restart to listen again.' : 'Playback reached the declared ending. Restart to listen again.' : state?.status === 'paused' ? 'Live playback paused.' : loaded ? 'Ready to play.' : 'Choose the published sample or open a local file.';
+      setText('status-message', message);
+      el('status-message').classList.remove('error');
+    }
+    const position = state?.position ?? 0;
+    exploredUntil = Math.min(MAX_SEEK_SECONDS, Math.max(exploredUntil, position + 10, state?.renderedUntil ?? 0));
+    if (!seekDragging) { input('seek-slider').max = String(Math.min(state?.duration ?? exploredUntil, MAX_SEEK_SECONDS)); input('seek-slider').value = String(position); setText('heard-time', time(position)); }
+    input('seek-slider').disabled = !loaded || changing;
+    input('loop-start').max = String(Math.min(state?.duration ?? MAX_SEEK_SECONDS, MAX_SEEK_SECONDS));
+    input('loop-end').max = String(Math.min(state?.duration ?? MAX_SEEK_SECONDS, MAX_SEEK_SECONDS));
+    input('seek-slider').setAttribute('aria-valuetext', `${time(position, true)} heard${state?.duration == null ? '; duration unknown' : ` of ${time(state.duration)}`}`);
+    setText('duration-label', state?.duration != null ? `/ ${time(state.duration)}` : '/ duration unknown');
+    setText('seek-note', state?.duration != null ? 'Heard position · white dashed cursor' : `Unknown duration · explored seek window ${time(exploredUntil)} · 10-minute prototype limit`);
+    setText('render-lead', `Emulated to ${time(state?.renderedUntil ?? 0, true)} · lead ${Math.max(0, (state?.renderedUntil ?? 0) - position).toFixed(2)} s`);
+    if (loadedProfile) setText('profile-badge', `${loadedProfile.clock} · ${loadedProfile.model} · subtune ${loadedProfile.subtune}`);
+    button('follow-button').setAttribute('aria-pressed', String(!held));
+    setText('follow-button', held ? 'Follow playback' : 'Following');
+    button('return-button').disabled = !held;
+    for (let voice = 0; voice < 3; voice++) {
+      button(`mute-${voice}`).setAttribute('aria-pressed', String(Boolean(state?.muted[voice])));
+      button(`solo-${voice}`).setAttribute('aria-pressed', String(state?.muted.every((muted, index) => muted === (index !== voice)) ?? false));
+    }
+    button('loop-button').setAttribute('aria-pressed', String(Boolean(state?.loop)));
+    setText('loop-button', state?.loop ? 'Loop on' : 'Loop A–B');
+    setText('loop-summary', state?.loop ? `Looping ${time(state.loop.start, true)}–${time(state.loop.end, true)} · replay seek may pause; not gapless.` : 'Set A before B. Loop restart uses replay seeking and may pause; it is not gapless.');
+    const frames = held?.frames ?? (state?.frames ?? []).filter(frame => frame.time <= position);
+    const writes = held?.writes ?? state?.writes ?? [];
+    const observedUntil = held?.end ?? position;
+    const historyStart = held?.start ?? state?.historyStart ?? 0;
+    plotStart = held ? Math.min(historyStart, cursor) : historyStart;
+    plotEnd = Math.max(plotStart + 10, observedUntil, selectedEnd ?? 0, held ? cursor : 0);
+    if (!frames.length && !state?.info) plotEnd = 30;
+    setText('history-summary', `${held ? 'HELD COPY' : 'HEARD HISTORY'} ${time(historyStart, true)}–${time(observedUntil, true)} · ${frames.length} sampled frames · ${held?.dropped ?? state?.dropped ?? 0} dropped writes · epoch ${held?.epoch ?? state?.epoch ?? 0}`);
+    setText('timeline-start', time(plotStart));
+    setText('timeline-end', time(plotEnd));
+    setText('timeline-cursor', held ? `Held ${time(cursor, true)}` : `Heard ${time(position, true)}`);
+    const lastFrame = frames[frames.length - 1];
+    for (let voice = 0; voice < 3; voice++) { setText(`lane-wave-${voice}`, lastFrame ? waveforms(lastFrame.registers[voice * 7 + 4] ?? 0) : 'No observation'); drawLane(`voice-lane-${voice}`, frames, writes, voice, observedUntil); }
+    drawLane('filter-lane', frames, writes, null, observedUntil);
+    renderInspector(frames, writes, observedUntil);
+    setText('peak-label', db(state?.peakDb ?? -Infinity));
+    setText('rms-label', db(state?.rmsDb ?? -Infinity));
+    el('peak-meter').style.width = `${Math.min(100, Math.max(0, ((state?.peakDb ?? -60) + 60) / 60 * 100))}%`;
+    setText('spectrum-range', state?.info ? `0 → ${(state.info.sampleRate / 2000).toFixed(1)} kHz · frequency bins` : '0 → Nyquist');
+    setText('audio-diagnostics', state?.info ? `${state.info.sampleRate.toLocaleString()} Hz PCM · ${state.underruns} buffer underruns · mono` : 'Device-local playback · no backend');
+    drawAudio();
+    renderEvidence();
+    root.querySelectorAll<HTMLButtonElement>('[data-annotation]').forEach(control => { control.disabled = changing || !loaded; });
+    renderSources();
+  }
+
+  applyCatalogDefaults();
+  updateReference();
+  controls.subscribe(next => {
+    state = next;
+    if (next.epoch !== previousEpoch) { previousEpoch = next.epoch; exploredUntil = Math.min(MAX_SEEK_SECONDS, Math.max(30, next.position + 10)); }
+    if (!animationFrame) animationFrame = requestAnimationFrame(timestamp => { animationFrame = 0; if (timestamp - lastDraw >= 70 || next.status !== 'playing') { lastDraw = timestamp; draw(); } });
+  });
+  window.addEventListener('resize', () => draw());
+  draw();
+}

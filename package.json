@@ -1,0 +1,30 @@
+{
+  "name": "sid-song-explorer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=24.12"
+  },
+  "scripts": {
+    "prepare:samples": "node --experimental-strip-types scripts/prepare-samples.ts",
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:browser": "playwright test",
+    "prepare:assets": "pnpm prepare:samples && node --experimental-strip-types scripts/prepare-runtime.ts",
+    "test:full": "EXPLORER_FULL_SONG=1 playwright test --project webkit --grep uninterrupted"
+  },
+  "dependencies": {
+    "libsidplayfp-wasm": "1.1.0"
+  },
+  "devDependencies": {
+    "vite": "7.3.1",
+    "typescript": "5.9.3",
+    "@playwright/test": "1.56.1",
+    "@types/node": "24.10.1"
+  }
+}

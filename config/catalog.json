@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "https://github.com/mbackschat/sid-song-crafter",
+    "revision": "3db086b6963676ef75f34d7f77c3b67232a777fb"
+  },
+  "entries": [
+    {
+      "id": "rambo-loader-main",
+      "title": "Rambo loader — main music",
+      "description": "Martin Galway's 1985 loading music, independently reconstructed by SID Song Crafter as an editable symbolic score and computed C64 player. This main-music entry omits the Morse introduction and retains the original ending.",
+      "durationSeconds": 193.35884353741497,
+      "files": {
+        "sid": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-loader/rambo-loader-main.sid",
+          "sha256": "99c61d30de4a27e800d185709192de0af92e6d1f2b2350ff8b80f47d8dc4a8cc",
+          "bytes": 6580,
+          "filename": "rambo-loader-main.sid"
+        },
+        "reference": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-loader/rambo-loader-main.wav",
+          "sha256": "4d3f3c78a89a384a14244f4ca6a36efe0022ea2f636327619ebc00be93909544",
+          "bytes": 17054294,
+          "filename": "rambo-loader-main.wav"
+        },
+        "license": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-loader/LICENSE",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "bytes": 35149,
+          "filename": "rambo-loader-LICENSE.txt"
+        }
+      },
+      "target": {
+        "clock": "PAL",
+        "model": "MOS6581",
+        "sidCount": 1,
+        "baseAddress": 54272,
+        "subtune": 1
+      },
+      "rights": {
+        "license": "GPL-3.0-only",
+        "attribution": "Composed, arranged and programmed by Martin Galway, 1985; historical credit: (C) Ocean Software 1985. Galway's upstream README dated 2026-04-14 states that he acquired the music/programming rights from Infogrames. Modified version: SID Song Crafter's independent symbolic-score/computed-player reconstruction, packaged 2026-10-15, with the main-entry modification dated 2026-10-16. The combined score, SID and generated WAV are distributed under GNU GPL version 3, without warranty; separately used independently authored tools retain their MIT license.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-loader/README.md",
+        "licenseUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-loader/LICENSE",
+        "correspondingSourceUrl": "https://github.com/mbackschat/sid-song-crafter/archive/3db086b6963676ef75f34d7f77c3b67232a777fb.tar.gz"
+      },
+      "listening": {
+        "status": "Underlying characteristic phrase and natural ending accepted",
+        "scope": "On 2026-10-13 the listener heard no audible difference in the characteristic phrase and natural ending comparisons of the complete reconstruction. This is not a full-song perceptual comparison, PCM identity or hardware equivalence. The new cold-start entrance is not separately listening-reviewed. The reference WAV is a render of this reconstructed main-entry SID, not an original recording.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-loader/README.md#main-music-demo-2026-10-16"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "sidSha256": "99c61d30de4a27e800d185709192de0af92e6d1f2b2350ff8b80f47d8dc4a8cc",
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": [
+          {
+            "id": "restored-main-entry",
+            "startSeconds": 0,
+            "endSeconds": 0.019950294553405162,
+            "title": "Restored main entry",
+            "description": "Entry time zero corresponds to source play call 1586. The computed score and sound-program state are retained; SID envelopes, oscillators and filter history start fresh. The package records the lead starting on the next frame. This is a newly initialized performance, not a crop of the complete WAV.",
+            "evidenceLevel": "derived",
+            "voices": [1, 2, 3],
+            "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-loader/README.md#main-music-demo-2026-10-16"
+          },
+          {
+            "id": "score-returns",
+            "startSeconds": 178.71473860940344,
+            "endSeconds": 179.05389361681134,
+            "title": "The score streams return",
+            "description": "Source calls 10544, 10559 and 10560 end the score streams for physical voices 2, 3 and 1. Returning from the score clears its active bit; each voice's separate sound lifetime continues to be processed. Times are rebased from source call 1586 at the declared PAL cadence.",
+            "evidenceLevel": "derived",
+            "voices": [1, 2, 3],
+            "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/docs/research/composition/rambo-preparation.md#finite-traversal-and-natural-stop"
+          },
+          {
+            "id": "sound-lifetimes",
+            "startSeconds": 179.03394332225793,
+            "endSeconds": 184.12126843337623,
+            "title": "Sound processing continues after the score",
+            "description": "Final register stores for physical voices 1, 2 and 3 occur at source calls 10660, 10799 and 10814; the source stops producing SID stores from call 10815. The lifetime path can continue pitch and pulse motion after score return. These execution facts do not measure the audible release or prove an isolated stem.",
+            "evidenceLevel": "derived",
+            "voices": [1, 2, 3],
+            "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/docs/research/composition/rambo-preparation.md#ongoing-sound-lifetime-and-programmed-motion"
+          }
+        ]
+      }
+    }
+  ]
+}

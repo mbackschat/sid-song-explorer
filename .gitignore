@@ -18,3 +18,7 @@ __pycache__/
 *.[pP][rR][gG]
 *.[wW][aA][vV]
 *.rom
+
+/public/generated/
+/test-results/
+/playwright-report/
