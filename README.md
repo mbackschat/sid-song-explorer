@@ -16,9 +16,9 @@ The first mono proof of concept is implemented, with passing engine and headless
 
 - Load the published Rambo loader main-music reconstruction from pinned, hash-verified files, with its matching generated WAV, attribution, license and source links.
 - Open callable mono PSID files locally, with subtune, PAL/NTSC and MOS6581/MOS8580 controls; local files and their hashes stay on the device.
-- Play, pause, restart, seek by forward emulation and set A–B study loops.
+- Play, pause, restart, seek by forward emulation with a visible busy indicator and requested position, and set A–B study loops.
 - Mute or solo the three physical SID voices, with the waveform-write intervention and shared hardware dependencies labelled.
-- Switch voice activity between **Scroll** (the default fixed ten-second window) and **Fit history** (the former expanding overview); select retained voice/register history while music continues, hold an inspection cursor, and return to following the heard playhead.
+- Switch voice activity between **Scroll** (the default fixed ten-second window) and **Fit history** (the former expanding overview) in the graph header; select retained voice/register history while music continues, hold an inspection cursor, and return to following the heard playhead.
 - Inspect frequency, waveform, gate, pulse width, ADSR settings, ring/sync, the shared filter and ordered writes, alongside PCM levels, waveform and spectrum.
 - Read three evidence-linked Rambo annotations with their exact evidence and listening scope.
 
@@ -50,7 +50,7 @@ The browser tests use Playwright's browsers; WebKit automation does not establis
 ## Explore the Rambo main entry
 
 1. Leave **Rambo loader — main music** selected and press **Load sample**, then **Play**. This runs the SID live; the retained WAV has separate controls.
-2. Click a voice lane to hold an earlier moment while playback continues. Select a voice in **Sound inspector** to inspect its register state and the last ordered writes at or before the cursor. Press **Return to playing** to follow playback again.
+2. Click a voice lane to hold an earlier moment while playback continues. Select a voice in **Sound inspector** to inspect its register state and the last ordered writes at or before the cursor. The highlighted held state names the selected voice and time; **View inspector** brings its settings into view on small screens. Press **Resume live** to follow playback again. Chart selection does not seek the audio; use the playback slider above.
 3. Try **Solo** on a voice, then **Restore full mix**. The control changes SID waveform writes; shared filtering and oscillator coupling can affect the result.
 4. Set A and B around a passage and enable **Loop A–B**. Use the linked evidence cards to inspect the main entrance, score returns and continuing sound lifetimes.
 5. Play the retained WAV separately for context and read its scope beside the controls. The accepted underlying phrase and ending do not establish acceptance of the new cold-start entrance or of this browser performance.

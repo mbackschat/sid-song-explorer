@@ -30,6 +30,7 @@ export type PlayerStatus = 'empty' | 'loading' | 'ready' | 'playing' | 'paused' 
 export interface PlayerState {
   status: PlayerStatus;
   position: number;
+  seekTarget: number | null;
   renderedUntil: number;
   duration: number | null;
   error: string | null;

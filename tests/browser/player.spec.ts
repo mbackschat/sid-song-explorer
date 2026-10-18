@@ -129,7 +129,7 @@ test('timeline switches between scrolling and fitted history without changing pl
   expect(scrolled.end - scrolled.start).toBeCloseTo(10, 2);
   expect(scrolled.start).toBeLessThan(30);
   await expect(page.locator('#inspection-time')).toHaveText(cursor!);
-  await expect(page.locator('#follow-button')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#return-button')).toBeVisible();
   await page.locator('#timeline-fit').click();
   await expect.poll(async () => (await range()).start).toBe(30);
   const held = await range();
@@ -141,4 +141,74 @@ test('timeline switches between scrolling and fitted history without changing pl
   await expect.poll(async () => (await range()).start).toBeLessThan(30);
   await page.setViewportSize({width:390, height:844});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+
+test('compact chart controls explain held inspection without moving playback', async ({page}) => {
+  await page.goto('/');
+  const header = page.locator('[aria-labelledby="timeline-title"] > .panel-header');
+  await expect(header.locator('#timeline-scroll')).toBeVisible();
+  await expect(header.locator('#timeline-fit')).toBeVisible();
+  expect((await header.boundingBox())!.height).toBeLessThan(85);
+  await page.locator('#load-button').click();
+  await expect(page.locator('#play-button')).toBeEnabled();
+  await page.locator('#play-button').click();
+  await expect(page.locator('#heard-time')).toHaveText('0:01');
+  const lane = page.locator('#voice-lane-1');
+  const box = (await lane.boundingBox())!;
+  await lane.click({position:{x:box.width * .05, y:20}});
+  await expect(page.locator('#history-summary')).toContainText(/Inspecting Voice 2 at 0:00\.[45]\d/);
+  await expect(page.locator('#history-summary')).toContainText('music continues');
+  await expect(page.locator('#inspect-1')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#reg-frequency')).not.toHaveText('—');
+  await expect(page.locator('#inspector-title')).toHaveText('Held sound inspector');
+  await expect(page.locator('#return-button')).toHaveText('Resume live');
+  await expect(page.locator('#follow-button')).toBeHidden();
+  const selected = await page.locator('#inspection-time').textContent();
+  await expect(page.locator('#heard-time')).toHaveText('0:02');
+  await expect(page.locator('#inspection-time')).toHaveText(selected!);
+  await page.screenshot({path:`build/poc/${test.info().project.name}-held-feedback.png`,fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('link', {name:'View inspector'}).click();
+  await expect(page.locator('#inspector-title')).toBeInViewport();
+  await page.locator('#return-button').click();
+  await expect(page.locator('#history-summary')).not.toContainText('Inspecting');
+  await expect(page.locator('#follow-button')).toBeVisible();
+  await expect(page.locator('#return-button')).toBeHidden();
+});
+
+test('seek feedback keeps the requested position visible until playback resumes', async ({page}) => {
+  await page.goto('/');
+  await page.locator('#load-button').click();
+  await expect(page.locator('#play-button')).toBeEnabled();
+  await page.locator('#play-button').click();
+  await expect(page.locator('#heard-time')).toHaveText('0:01');
+  await page.locator('#seek-slider').fill('180');
+  await expect(page.locator('#play-status')).toHaveText('Seeking…');
+  await expect(page.locator('#play-button')).toHaveText('Seeking…');
+  await expect(page.locator('#status-message')).toHaveClass(/seeking/);
+  await expect(page.locator('#status-message')).toContainText('Seeking to 3:00.00');
+  await expect(page.locator('#status-message')).toContainText('replaying from the start');
+  await expect(page.locator('#seek-slider')).toHaveValue('180');
+  await expect(page.locator('#seek-note')).toContainText('Requested position');
+  await page.screenshot({path:`build/poc/${test.info().project.name}-seeking-feedback.png`,fullPage:true});
+  await expect(page.locator('#play-status')).toHaveText('Live SID', {timeout:20000});
+  await expect(page.locator('#status-message')).not.toHaveClass(/seeking/);
+  await expect(page.locator('#play-button')).toHaveText('Ⅱ Pause');
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(180.5);
+  await page.evaluate(() => {
+    const post = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function (message, ...options) {
+      if (message.method === 'seek') {
+        Worker.prototype.postMessage = post;
+        setTimeout(() => this.dispatchEvent(new MessageEvent('message', {data:{id:message.id,error:'Injected seek failure'}})), 300);
+      } else Reflect.apply(post, this, [message, ...options]);
+    };
+  });
+  await page.locator('#seek-slider').fill('90');
+  await expect(page.locator('#status-message')).toContainText('Injected seek failure');
+  await expect(page.locator('#status-message')).not.toHaveClass(/seeking/);
+  await expect(page.locator('#play-button')).not.toHaveClass(/seeking/);
+  await expect(page.locator('#seek-note')).not.toContainText('Requested position');
 });
