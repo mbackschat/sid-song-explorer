@@ -26,6 +26,22 @@ Explorer implementation, experiments, decision records and working output belong
 - Never push without authorization. Before every GitHub push verify that `git config user.email` is `mbackschat@mail.de`; stop on a mismatch.
 - Ask for listening or product decisions with a recommendation and rationale. Make routine execution choices autonomously. Do not send messages to others without explicit authorization.
 
+## Choose sub-agent tiers by task
+
+Delegation is authorized. **LOW, MEDIUM and HIGH are symbolic model tiers**, not fixed roles or agent counts. Resolve the active CLI's model and effort settings through the [global model tier mappings](https://github.com/mbackschat/coding-setup/blob/main/CLAUDE.md#model-tier-mappings); keep concrete selectors only there. Report missing or unsupported configurations rather than substituting silently. Start a fresh agent when changing tier so a fork cannot retain the previous model.
+
+Choose the least expensive tier that can meet the task's evidence requirements. Judge uncertainty, independence, scope and consequences of error, rather than file type, task length or familiar keywords. These criteria apply to future tasks as well as current work:
+
+| Tier | Assignment criteria | Boundary and expected result |
+| --- | --- | --- |
+| LOW | Well-specified, low-uncertainty work with authoritative inputs and a direct check: extraction, comparison, mechanical edits or routine verification. | Supply the exact scope, source of truth and pass/fail criteria. Return verifiable facts and discrepancies. Escalate when completion needs diagnosis, interpretation of conflicting evidence or a new design decision. |
+| MEDIUM | Bounded work requiring investigation or implementation judgment within established contracts: component changes, focused diagnosis, experiments, regression tests or correctness review. | Define ownership, constraints, interfaces and an independent oracle. Make local decisions within that boundary; escalate when the evidence challenges the contract, crosses ownership boundaries or exposes consequential uncertainty. |
+| HIGH | Work with ambiguous contracts, substantial uncertainty or broad consequences: architecture, cross-component diagnosis, conflicting-evidence resolution, verification design and final integration. | State the unresolved decision, alternatives and evidence that will settle it. Delegate separable bounded work; retain responsibility for integration, scope and the strength of final claims. |
+
+Keep small or tightly dependent tasks local. Do not duplicate work just to use another tier, prescribe a fixed team size or parallelize dependent edits. Give every delegate the active objective, minimal sufficient context, owned files or boundaries, acceptance criteria and a stopping condition. Reuse informed agents while their tier remains suitable; reassign when the work's uncertainty or consequences exceed that tier. Stop obsolete assignments.
+
+Delegation does not expand authorization or relax publication, privacy, provenance or human-acceptance requirements. Keep source evidence, executable results and human judgments distinct. Delegates report unresolved assumptions and unpersisted findings; the coordinator checks their evidence and reconciles the owning documents before handoff.
+
 ## Evidence and publication
 
 Keep source inspection, executed behavior, rendered audio and human listening verdicts distinct. Human listening establishes musical acceptance; successful PCM generation does not prove real Safari playback. The heard playhead differs from the emulation lead. Register snapshots differ from ordered writes; live derived observations do not become recovered instrument identities.
