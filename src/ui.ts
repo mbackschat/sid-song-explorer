@@ -96,7 +96,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let timelineView: 'scroll' | 'fit' = 'scroll';
   let timelineZoom = TIMELINE_DENSITIES.indexOf(64);
   let timelineSpan = FOLLOW_WINDOW_SECONDS;
-  let seekViewport: {center: number; span: number; heard: number | null} | null = null;
+  let seekViewport: {center: number; span: number; heard: number | null; marker: number | null} | null = null;
   let cursor = 0;
   let selectedEnd: number | null = null;
   let selectedVoice = 0;
@@ -392,14 +392,16 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   button('timeline-scroll-forward').addEventListener('click', () => browseAtStart(plotStart + timelineSpan / 10));
   const seekTimeline = (target: number) => {
     if (!state?.info || busy || state.seekTarget !== null || state.status === 'loading') return;
-    seekViewport = {center:(plotStart + plotEnd) / 2, span:plotEnd - plotStart, heard:null};
+    const destination = Math.max(0, Math.min(timelineTotal(), target));
+    const center = (plotStart + plotEnd) / 2;
+    seekViewport = {center, span:plotEnd - plotStart, heard:null, marker:timelineView === 'scroll' && destination > center ? destination : null};
     held = null;
     selectedEnd = null;
     void run(async () => {
       reference.pause();
       notice = '';
       controls.setTimelineCenter(null);
-      await controls.seek(Math.max(0, Math.min(timelineTotal(), target)));
+      await controls.seek(destination);
     });
   };
   const ruler = input('seek-slider');
@@ -603,6 +605,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     const { ctx, width, height } = plot;
     const x = (seconds: number) => (seconds - plotStart) / (plotEnd - plotStart) * width;
     const heardPosition = state?.position ?? 0;
+    const seekMarker = seekViewport?.marker ?? null;
+    const linePosition = seekMarker ?? heardPosition;
     const heardX = Math.min(width, Math.max(0, x(chartHeld?.heardUntil ?? heardPosition)));
     ctx.fillStyle = '#20344740';
     ctx.fillRect(heardX, 0, width - heardX, height);
@@ -646,7 +650,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
         previousWaveform = waveform;
       }
     }
-    if (heardPosition >= plotStart && heardPosition <= plotEnd) { ctx.strokeStyle = '#dce9fa'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x(heardPosition), 0); ctx.lineTo(x(heardPosition), height); ctx.stroke(); ctx.setLineDash([]); }
+    if (linePosition >= plotStart && linePosition <= plotEnd) { ctx.strokeStyle = '#dce9fa'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x(linePosition), 0); ctx.lineTo(x(linePosition), height); ctx.stroke(); ctx.setLineDash([]); }
     if (held) { ctx.strokeStyle = '#c2a6ff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x(cursor), 0); ctx.lineTo(x(cursor), height); ctx.stroke(); }
     const canvas = el(id);
     canvas.dataset.observedStart = String(coverageStart);
@@ -654,8 +658,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     canvas.dataset.futureFrames = String(frames.filter(frame => frame.time > (chartHeld?.heardUntil ?? heardPosition)).length);
     canvas.setAttribute('aria-valuemin', plotStart.toFixed(2));
     canvas.setAttribute('aria-valuemax', plotEnd.toFixed(2));
-    canvas.setAttribute('aria-valuenow', Math.max(plotStart, Math.min(plotEnd, held ? cursor : heardPosition)).toFixed(2));
-    canvas.setAttribute('aria-valuetext', `${time(held ? cursor : heardPosition, true)} ${held ? 'held inspection' : 'heard playback'}`);
+    canvas.setAttribute('aria-valuenow', Math.max(plotStart, Math.min(plotEnd, held ? cursor : linePosition)).toFixed(2));
+    canvas.setAttribute('aria-valuetext', `${time(held ? cursor : linePosition, true)} ${held ? 'held inspection' : seekMarker !== null ? 'seek point' : 'heard playback'}`);
   };
   const drawAudio = () => {
     const waveform = canvasContext('waveform-plot');
@@ -811,11 +815,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       if (elapsed < 0 || timelineView === 'fit' && elapsed > 0) seekViewport = null;
       else {
         if (state?.status === 'playing' && elapsed > 0) {
-          // TIMELINE-3 in docs/PLAN.md requires automatic centering from either side while keeping the playhead aligned with heard time.
-          const offset = seekViewport.heard! - seekViewport.center;
-          const remaining = Math.max(0, Math.abs(offset) - elapsed);
-          if (remaining === 0) seekViewport = null;
-          else seekViewport.center = position - Math.sign(offset) * remaining;
+          // TIMELINE-3 in docs/PLAN.md pins right-side clicks to their note until center; only then does the line track heard time again.
+          if (seekViewport.marker !== null) {
+            seekViewport.center += elapsed;
+            if (seekViewport.center >= seekViewport.marker) seekViewport = null;
+          } else if (position >= seekViewport.center) seekViewport = null;
         }
         if (seekViewport) seekViewport.heard = position;
       }
@@ -880,7 +884,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     el('history-summary').classList.toggle('held', Boolean(held));
     setText('timeline-start', time(plotStart, plotEnd - plotStart < 2));
     setText('timeline-end', time(plotEnd, plotEnd - plotStart < 2));
-    setText('timeline-cursor', held ? `Held ${time(cursor, true)}` : `Heard ${time(position, true)}`);
+    setText('timeline-cursor', held ? `Held ${time(cursor, true)}` : seekViewport?.marker != null ? `Seek ${time(seekViewport.marker, true)}` : `Heard ${time(position, true)}`);
     const inspectedTime = held ? cursor : position;
     let inspection = held ?? observations;
     let registers = observationRegistersAt(inspection, inspectedTime, inspection.endInclusive);

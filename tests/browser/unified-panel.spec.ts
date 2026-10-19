@@ -248,7 +248,7 @@ test('timeline seeking keeps chart and toolbar geometry stable while feedback is
   }
 });
 
-for (const fraction of [.8, .2]) test(`timeline click on the ${fraction > .5 ? 'right' : 'left'} automatically returns to center during playback`, async ({page}) => {
+for (const fraction of [.8, .2]) test(`timeline click on the ${fraction > .5 ? 'right' : 'left'} preserves the clicked-note motion before centered following`, async ({page}) => {
   await openPaused(page);
   await page.locator('#seek-slider').fill('30');
   const lane = page.locator('#voice-lane-0');
@@ -269,11 +269,21 @@ for (const fraction of [.8, .2]) test(`timeline click on the ${fraction > .5 ? '
   const initialOffset = startHeard - (before.start + before.end) / 2;
   await page.locator('#play-button').click();
   const frames = await lane.evaluate(async (element, {start, distance}) => {
-    const samples: {center:number;heard:number}[] = [];
+    const samples: {center:number;heard:number;marker:number}[] = [];
     const deadline = performance.now() + 7000;
     while (performance.now() < deadline) {
       const heard = Number((document.querySelector('#seek-slider') as HTMLInputElement).value);
-      samples.push({center:(Number(element.getAttribute('aria-valuemin')) + Number(element.getAttribute('aria-valuemax'))) / 2,heard});
+      const startTime = Number(element.getAttribute('aria-valuemin'));
+      const endTime = Number(element.getAttribute('aria-valuemax'));
+      const canvas = element as HTMLCanvasElement;
+      const pixels = canvas.getContext('2d')!.getImageData(0, Math.round(19 * devicePixelRatio), canvas.width, 1).data;
+      let weightedX = 0;
+      let weight = 0;
+      for (let x = 0; x < canvas.width; x++) {
+        const red = pixels[x * 4]!;
+        if (red > 140) { weightedX += (x + .5) * red; weight += red; }
+      }
+      samples.push({center:(startTime + endTime) / 2,heard,marker:weight ? startTime + weightedX / weight / canvas.width * (endTime - startTime) : NaN});
       if (heard > start + distance + .3) break;
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
     }
@@ -282,8 +292,11 @@ for (const fraction of [.8, .2]) test(`timeline click on the ${fraction > .5 ? '
   expect(frames.at(-1)!.heard).toBeGreaterThan(startHeard + Math.abs(initialOffset));
   for (const frame of frames) {
     const elapsed = frame.heard - startHeard;
-    const expectedOffset = Math.sign(initialOffset) * Math.max(0, Math.abs(initialOffset) - elapsed);
-    expect(Math.abs(frame.heard - frame.center - expectedOffset), 'the playhead must return from either side at a steady rate tied to heard progress').toBeLessThan(.03);
+    if (Math.abs(elapsed - Math.abs(initialOffset)) < .1) continue;
+    const returningFromRight = initialOffset > 0 && elapsed < initialOffset;
+    const expectedCenter = returningFromRight ? (before.start + before.end) / 2 + elapsed : Math.max((before.start + before.end) / 2, frame.heard);
+    expect(Math.abs(frame.center - expectedCenter), 'the timeline must scroll at song speed while the clicked note returns').toBeLessThan(.03);
+    expect(Math.abs(frame.marker - (returningFromRight ? target : frame.heard)), 'the rendered line must stay attached to the clicked note until the center handoff').toBeLessThan(.04);
   }
   await expect(page.locator('#return-button')).toHaveAttribute('aria-pressed','true');
   await page.locator('#play-button').click();
