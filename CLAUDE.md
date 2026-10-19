@@ -6,6 +6,8 @@ This is the canonical agent/contributor guide. [AGENTS.md](AGENTS.md) is a relat
 
 Build a standalone browser player and arrangement analyser, with a C64-inspired presentation and readable modern interaction. The [playback adapter](docs/architecture/playback-adapter.md) owns the POC's small-shell decision and existing-engine integration; do not write an original SID emulator. Recent macOS/iOS Safari, MOS6581/MOS8580, one/two SID chips, correct output routing and useful inspection without annotations are product requirements; the plan orders their implementation.
 
+Use familiar, predictable player interactions so users can focus on musical exploration. Apply the [interaction principle](docs/design/web-player-and-analyser.md#interaction-principle) when convenience features conflict with direct manipulation or playback behavior.
+
 Crafter owns composition tools, musical knowledge, evidence and sample publication. Link pinned owners through [the integration guide](docs/integration/crafter-handoff.md); do not copy its study corpus or assume a sibling checkout exists. Keep browser adaptations here until actual reuse warrants extraction. Do not import Crafter's musical backlog or reopen accepted studies.
 
 ## Work across the two repositories
