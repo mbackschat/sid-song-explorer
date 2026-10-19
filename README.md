@@ -1,24 +1,17 @@
-<p align="center">
-  <img src="assets/branding/sid-song-explorer.svg" alt="SID Song Explorer — rainbow sound lens with C64 and SID lettering" width="144" height="144">
+<p>
+  <img src="assets/branding/sid-song-explorer.svg" alt="SID Song Explorer — rainbow sound lens with C64 and SID lettering" width="96" height="96">
 </p>
 
 # SID Song Explorer
 
-<h1 align="center">
-  <a href="https://mbackschat.github.io/sid-song-explorer/">▶ RUN IN YOUR BROWSER →</a>
-</h1>
-
-<p align="center">
-  <a href="https://mbackschat.github.io/sid-song-explorer/"><img alt="Run SID Song Explorer" src="https://img.shields.io/badge/run%20now-mbackschat.github.io%2Fsid--song--explorer-8055c9?style=for-the-badge&amp;labelColor=000000"></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/mbackschat/sid-song-crafter"><img src="https://raw.githubusercontent.com/mbackschat/sid-song-crafter/main/assets/branding/sid-song-crafter.svg" alt="SID Song Crafter" width="48" height="48"><br><strong>SID Song Crafter</strong></a> — arrange and export the music explored here.
-</p>
-
-Related: [Williams Sound Explorer and Designer](https://github.com/mbackschat/williams-sound-explorer) explores individual arcade sound programs.
-
 SID Song Explorer is a browser player and inspector for Commodore 64 SID music. It connects a heard passage to voice/register activity and source-backed explanations, using an existing SID emulator.
+
+[![Run in browser](https://img.shields.io/badge/Run%20in%20browser-8055c9?style=for-the-badge)](https://mbackschat.github.io/sid-song-explorer/)
+
+## Related projects
+
+- [<img src="https://raw.githubusercontent.com/mbackschat/sid-song-crafter/main/assets/branding/sid-song-crafter.svg" alt="" width="24" height="24"> **SID Song Crafter**](https://github.com/mbackschat/sid-song-crafter) — arrange and export the music explored here.
+- [**Williams Sound Explorer and Designer**](https://github.com/mbackschat/williams-sound-explorer) — explore and design arcade sound effects.
 
 ## Current state
 
