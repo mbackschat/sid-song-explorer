@@ -7,10 +7,11 @@
 SID Song Explorer is a browser player and inspector for Commodore 64 SID music. It connects a heard passage to voice/register activity and source-backed explanations, using an existing SID emulator.
 
 <p>
-  <a href="https://mbackschat.github.io/sid-song-explorer/"><img alt="Run in browser" src="https://img.shields.io/badge/Run%20in%20browser-8055c9?style=for-the-badge" align="middle"></a>
-  <a href="assets/screenshots/rambo-playing.png"><img src="assets/screenshots/rambo-playing.png" alt="Rambo loader playing in mono, with three active SID voice lanes and live register inspection" width="560" align="middle"></a>
+  <a href="https://mbackschat.github.io/sid-song-explorer/"><img alt="Run in browser" src="https://img.shields.io/badge/Run%20in%20browser-8055c9?style=for-the-badge"></a>
 </p>
-<p><sub>Rambo loader — live mono playback. Click the screenshot to enlarge.</sub></p>
+<p>
+  <a href="assets/screenshots/rambo-playing.png"><img src="assets/screenshots/rambo-playing.png" alt="Rambo loader playing in mono, with three active SID voice lanes and live register inspection" width="560"></a>
+</p>
 
 ## Related projects
 

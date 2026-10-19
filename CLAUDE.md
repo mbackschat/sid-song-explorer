@@ -76,6 +76,8 @@ Browser automation must be silent: use [the shared test fixture](tests/browser/f
 
 Use headless Google Chrome for the Chrome target and Playwright WebKit on macOS for automated Safari-engine checks. Linux WebKit is outside the supported matrix; do not spend compatibility work on that port. CI must preserve the browser/platform pairing. Keep real Safari/iOS and human listening claims separate without requiring browser-setting changes to hand off a POC.
 
+Keep all README content left-aligned, including images, buttons and captions; never center it. For README visual changes, show the rendered preview and wait for the user's review before committing or pushing.
+
 Keep README's implemented capabilities separate from product requirements, and retain an executable walkthrough. Update the owning validation record when the runtime, engine, browser or tested behavior changes; distinguish a build or automated WebKit result from real Safari sound and human acceptance.
 
 Use the selected sound-lens identity and its [owning assets](assets/branding/README.md); preserve the distinction from Crafter’s chip silhouette. Record new visual verdicts in that owner and avoid regenerating accepted geometry without a requested change.
