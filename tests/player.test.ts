@@ -178,6 +178,86 @@ test('prepared previews cover the moving visible right edge through the refresh 
   assert.equal(worker.requests.filter((request) => request.method === 'render').length, 0, 'observation refresh does not schedule audio');
 });
 
+test('timeline windows follow measured widths without changing transport or accepting invalid spans', async (t) => {
+  const {value, worker} = await loaded(t);
+  assert.equal(value.state.timelineWindowSeconds, 10);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const sameWindowRequests = worker.requests.length;
+  const sameWindowPreview = value.state.preview;
+  value.player.setTimelineWindow(10);
+  assert.equal(value.state.preview, sameWindowPreview);
+  assert.equal(worker.requests.length, sameWindowRequests);
+  const before = structuredClone(value.state);
+  for (const invalid of [0, -1, NaN, Infinity, '10', null]) {
+    assert.throws(() => value.player.setTimelineWindow(invalid as number), /finite|positive|window/i);
+    assert.deepEqual(value.state, before);
+    assert.equal(worker.requests.length, sameWindowRequests);
+  }
+  const seeking = value.player.seek(100);
+  worker.reply(worker.lastRequest('seek'), position(100));
+  await seeking;
+  worker.reply(worker.lastRequest('observe'), preview(95, 106));
+  await flushReplies();
+  const transport = worker.requests.filter((request) => request.method !== 'observe');
+  const playback = [value.state.position, value.state.renderedUntil, value.state.status, value.state.epoch];
+  for (const seconds of [5, 10, 20, 37.5, 800]) {
+    value.player.setTimelineWindow(seconds);
+    value.advance(250);
+    const request = worker.lastRequest('observe');
+    assert.deepEqual(request.payload, {
+      startSeconds: Math.max(0, 100 - seconds / 2),
+      endSeconds: Math.min(200, 100 + seconds / 2 + 1),
+    });
+    assert.equal(value.state.timelineWindowSeconds, seconds);
+    worker.reply(request, preview(request.payload.startSeconds as number, request.payload.endSeconds as number));
+    await flushReplies();
+    assert.deepEqual([value.state.position, value.state.renderedUntil, value.state.status, value.state.epoch], playback);
+    assert.deepEqual(worker.requests.filter((request) => request.method !== 'observe'), transport);
+  }
+});
+
+test('zoom keeps valid data while rejecting outdated responses and preserving the refresh throttle', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const accepted = value.state.preview;
+  value.advance(250);
+  const obsolete = worker.lastRequest('observe');
+  const requestCount = worker.requests.length;
+  value.player.setTimelineWindow(20);
+  value.player.setTimelineWindow(37.5);
+  assert.equal(value.state.preview, accepted, 'same-configuration data remains valid while the viewport changes');
+  assert.equal(worker.requests.length, requestCount, 'zoom cannot add another in-flight request');
+  worker.reply(obsolete, preview(0, 6));
+  await flushReplies();
+  assert.equal(value.state.preview, accepted, 'a response for an obsolete span cannot replace valid data');
+  assert.equal(worker.requests.length, requestCount, 'resizing does not reset the refresh throttle');
+  value.advance(249);
+  assert.equal(worker.requests.length, requestCount);
+  value.advance(1);
+  const current = worker.lastRequest('observe');
+  assert.deepEqual(current.payload, {startSeconds: 0, endSeconds: 19.75});
+  worker.reply(current, preview(0, 19.75));
+  await flushReplies();
+  assert.deepEqual(value.state.preview, preview(0, 19.75));
+});
+
+test('zooming during a pending seek preserves its transport generation and requested destination', async (t) => {
+  const {value, worker} = await loaded(t);
+  const oldPreview = worker.lastRequest('observe');
+  const seeking = value.player.seek(50);
+  value.player.setTimelineWindow(20);
+  worker.reply(oldPreview, preview(0, 6));
+  await flushReplies();
+  worker.reply(worker.lastRequest('seek'), position(50));
+  await seeking;
+  assert.equal(value.state.status, 'paused');
+  assert.equal(value.state.pendingOperation, null);
+  assert.equal(value.state.position, 50);
+  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 40, endSeconds: 61});
+});
+
 test('replaced, failed and disposed sessions cannot restore preview responses', async (t) => {
   const {value, worker} = await loaded(t);
   const stale = worker.lastRequest('observe');

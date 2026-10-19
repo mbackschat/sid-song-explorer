@@ -86,7 +86,7 @@ test('observations advertise only retained coverage and reject invalid or oversi
     assert.equal(retained.end, cached.cacheEndFrame / SAMPLE_RATE);
     assert.equal(cached.observe(0, retained.start), null);
     const before = [cached.positionFrame, cached.renderedFrame, cached.cacheBytes];
-    for (const [start, end] of [[-1, 1], [0, 0], [1, 0], [NaN, 1], [0, Infinity], [0, 11.001], [599, 601]]) {
+    for (const [start, end] of [[-1, 1], [0, 0], [1, 0], [NaN, 1], [0, Infinity], [0, 600.001], [599, 601]]) {
       assert.throws(() => cached.observe(start, end), /observ|range|seconds/i);
     }
     assert.deepEqual([cached.positionFrame, cached.renderedFrame, cached.cacheBytes], before);
@@ -114,7 +114,7 @@ test('dense observation responses crop coverage before omitted writes and preser
     assert.equal(observation.end, 0.20001);
     assert.equal(observation.dropped, 7);
     assert.ok(observation.writes.every((write) => write.timeSeconds < observation.end));
-    assert.ok(observation.frames.length <= 552);
+    assert.ok(observation.frames.length <= 1001);
     assert.equal(observation.frames.at(-1)!.time, observation.end);
     assert.equal(cached.renderedFrame, 11025, 'response cropping must not crop retained audio');
   } finally {
@@ -140,7 +140,7 @@ test('observation endpoint state survives a non-exact PCM-frame seconds round tr
   }
 });
 
-test('centered observations accept floating-point window boundaries without relaxing the range cap', async () => {
+test('centered observations accept floating-point window boundaries within the supported domain', async () => {
   const cached = await CachedSidSession.create();
   try {
     await cached.load(sample(), options);
@@ -157,15 +157,15 @@ test('centered observations accept floating-point window boundaries without rela
       const observation = cached.observe(start, end)!;
       assert.equal(observation.start, start);
       assert.equal(observation.end, end);
-      assert.ok(observation.frames.length <= 552);
-      assert.throws(() => cached.observe(start, start + 11.001), /range|seconds/i);
+      assert.ok(observation.frames.length <= 1001);
+      assert.throws(() => cached.observe(start, 600.001), /range|seconds/i);
     }
   } finally {
     cached.dispose();
   }
 });
 
-test('eleven-second previews copy prepared observations without extra execution or retained storage', async (context) => {
+test('variable-width previews copy bounded prepared observations without extra execution or retained storage', async (context) => {
   const { cached, oracle } = await loaded();
   const originalRender = SidSession.prototype.render;
   const originalSeek = SidSession.prototype.seek;
@@ -173,35 +173,42 @@ test('eleven-second previews copy prepared observations without extra execution 
     assert.equal(cached.maxCacheBytes, 32 * 1024 * 1024);
     SidSession.prototype.render = () => { throw new Error('a cold preview must not execute the producer'); };
     SidSession.prototype.seek = async () => { throw new Error('a cold preview must not seek the producer'); };
-    assert.equal(cached.observe(0, 11), null);
+    assert.equal(cached.observe(0, 600), null);
     SidSession.prototype.render = originalRender;
     SidSession.prototype.seek = originalSeek;
-    while (cached.renderedFrame < 12 * SAMPLE_RATE) cached.prefetch(11025);
-    const continuous = Array.from({length: 6}, () => oracle.render(2 * SAMPLE_RATE));
+    while (cached.renderedFrame < 32 * SAMPLE_RATE) cached.prefetch(11025);
+    const continuous = Array.from({length: 16}, () => oracle.render(2 * SAMPLE_RATE));
     const writes = continuous.flatMap((block) => block.writes);
     const before = [cached.positionFrame, cached.renderedFrame, cached.cacheStartFrame, cached.cacheEndFrame, cached.cacheBytes];
     SidSession.prototype.render = () => { throw new Error('preview padding must not execute the producer'); };
     SidSession.prototype.seek = async () => { throw new Error('preview padding must not seek the producer'); };
-    const started = performance.now();
-    const observation = cached.observe(0.173219, 11.173219)!;
-    const elapsed = performance.now() - started;
-    assert.equal(observation.start, 0.173219);
-    assert.equal(observation.end, 11.173219);
-    assert.ok(observation.frames.length <= 552);
-    assert.ok(observation.writes.length <= 20_000);
-    assert.deepEqual(observation.writes, writes.filter((write) => write.timeSeconds >= observation.start && write.timeSeconds < observation.end));
-    for (const frame of observation.frames) {
-      const registers = Array<number>(32).fill(0);
-      for (const write of writes) {
-        if (write.timeSeconds >= frame.time) break;
-        registers[write.address] = write.value;
+    for (const seconds of [6, 11, 21, 30]) {
+      const started = performance.now();
+      const observation = cached.observe(0.173219, 0.173219 + seconds)!;
+      const elapsed = performance.now() - started;
+      assert.equal(observation.start, 0.173219);
+      assert.equal(observation.end, 0.173219 + seconds);
+      assert.ok(observation.frames.length <= 1001);
+      assert.ok(observation.writes.length <= 20_000);
+      assert.deepEqual(observation.writes, writes.filter((write) => write.timeSeconds >= observation.start && write.timeSeconds < observation.end));
+      for (const frame of observation.frames) {
+        const registers = Array<number>(32).fill(0);
+        for (const write of writes) {
+          if (write.timeSeconds >= frame.time) break;
+          registers[write.address] = write.value;
+        }
+        assert.deepEqual(frame.registers, registers);
       }
-      assert.deepEqual(frame.registers, registers);
+      assert.equal('pcm' in observation, false);
+      assert.deepEqual([cached.positionFrame, cached.renderedFrame, cached.cacheStartFrame, cached.cacheEndFrame, cached.cacheBytes], before);
+      context.diagnostic(`${seconds}-second preview=${elapsed.toFixed(3)}ms; writes=${observation.writes.length}; frames=${observation.frames.length}; response JSON=${Buffer.byteLength(JSON.stringify(observation))} bytes; retained cache=${cached.cacheBytes} bytes`);
     }
-    assert.equal('pcm' in observation, false);
+    const partial = cached.observe(0, 600)!;
+    assert.equal(partial.start, 0);
+    assert.equal(partial.end, 32);
+    assert.ok(partial.frames.length <= 1001);
     assert.deepEqual([cached.positionFrame, cached.renderedFrame, cached.cacheStartFrame, cached.cacheEndFrame, cached.cacheBytes], before);
-    assert.throws(() => cached.observe(0, 11.001), /range|seconds/i);
-    context.diagnostic(`11-second preview=${elapsed.toFixed(3)}ms; writes=${observation.writes.length}; frames=${observation.frames.length}; response JSON=${Buffer.byteLength(JSON.stringify(observation))} bytes; retained cache=${cached.cacheBytes} bytes`);
+    assert.throws(() => cached.observe(0, 600.001), /range|seconds/i);
     SidSession.prototype.render = originalRender;
     SidSession.prototype.seek = originalSeek;
     for (const block of continuous) sameRender(cached.render(2 * SAMPLE_RATE), block);

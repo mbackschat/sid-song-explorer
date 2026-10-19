@@ -18,6 +18,7 @@ type HeldHistory = DisplayedObservation & {
 const COLORS = ['#6ee0de', '#f3c681', '#f493b5'];
 const MAX_FILE_BYTES = 65_662;
 const MAX_SEEK_SECONDS = 600;
+const TIMELINE_DENSITIES = [32, 64, 128] as const;
 const hex = (value: number, width = 2) => value.toString(16).toUpperCase().padStart(width, '0');
 const time = (seconds: number, precise = false) => {
   const safe = Math.abs(seconds);
@@ -52,11 +53,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
         </section>
         <div id="status-message" class="status-line" role="status" aria-live="polite">Choose the published sample or open a local file.</div>
         <div class="inspection-grid">
-          <section class="panel" aria-labelledby="timeline-title"><div class="panel-header"><div><h2 id="timeline-title">Voice activity</h2><small id="timeline-view-note">Fixed ${FOLLOW_WINDOW_SECONDS}-second window</small></div><div class="follow-controls"><div class="timeline-modes" role="group" aria-label="Timeline view"><button id="timeline-scroll" class="small" aria-pressed="true" title="Center heard playback with five seconds of past and upcoming activity">Scroll</button><button id="timeline-fit" class="small" aria-pressed="false" title="Fit all retained activity into the chart">Fit history</button></div><button id="follow-button" class="small quiet" title="Hold the current moment in the Sound inspector">Hold</button><button id="return-button" class="small" hidden>Resume live</button></div></div>
+          <section class="panel" aria-labelledby="timeline-title"><div class="panel-header"><div><h2 id="timeline-title">Voice activity</h2><small id="timeline-view-note">Centered on heard playback</small></div><div class="follow-controls"><div class="timeline-modes" role="group" aria-label="Timeline view"><button id="timeline-scroll" class="small" aria-pressed="true" title="Center heard playback with equal past and upcoming space">Scroll</button><button id="timeline-fit" class="small" aria-pressed="false" title="Fit all retained activity into the chart">Fit history</button></div><div id="timeline-zoom" class="timeline-zoom" role="group" aria-label="Timeline zoom"><button id="timeline-zoom-out" class="small" aria-label="Zoom out" title="Zoom out: show twice as much time">−</button><span id="timeline-scale" class="mono"></span><button id="timeline-zoom-in" class="small" aria-label="Zoom in" title="Zoom in: show twice the detail">+</button></div><button id="follow-button" class="small quiet" title="Hold the current moment in the Sound inspector">Hold</button><button id="return-button" class="small" hidden>Resume live</button></div></div>
             <div id="history-summary" class="history-summary"><span id="history-description">No retained observations yet.</span> <span id="trace-warning" role="status" hidden></span> <a id="view-inspector" href="#inspector-title" hidden>View inspector →</a></div>
             <div class="lane-list"><div id="timeline-direction" class="timeline-direction"><span>Past</span><span>Upcoming · prepared</span></div>${COLORS.map((color, voice) => `<div class="voice-lane" style="--voice:${color}"><div class="voice-label"><strong>Voice ${voice + 1}</strong><small id="lane-wave-${voice}">No observation</small></div><canvas id="voice-lane-${voice}" class="lane-plot" tabindex="0" role="slider" aria-label="Select inspection time for voice ${voice + 1}" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div>`).join('')}
               <div class="voice-lane filter-lane" style="--voice:#b2a1ff"><div class="voice-label"><strong>Shared filter</strong><small>Cutoff register</small></div><canvas id="filter-lane" class="lane-plot" tabindex="0" role="slider" aria-label="Select shared filter inspection time" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div><div class="timeline-key mono"><span id="timeline-start">0:00</span><span id="timeline-cursor">Heard playhead</span><span id="timeline-end">0:30</span></div>
-            </div><p id="timeline-availability" class="timeline-availability"></p><p class="timeline-help">Scroll shows five seconds before and after heard playback. Shaded regions have no available observations. Fit history shows retained heard activity. Click a lane to freeze its register settings in the Sound inspector while music continues. Use the playback slider above to seek. Arrow keys move the inspection cursor. A line shows register frequency, not loudness; gate clear can still release sound.</p>
+            </div><p id="timeline-availability" class="timeline-availability"></p><p class="timeline-help">Scroll keeps heard playback centered. Zoom changes detail; wider charts show more time at the same zoom. Shaded regions have no available observations. Fit history shows retained heard activity. Click a lane to freeze its register settings in the Sound inspector while music continues. Use the playback slider above to seek. Arrow keys move the inspection cursor. A line shows register frequency, not loudness; gate clear can still release sound.</p>
             <div class="mix-section"><div class="mix-heading"><strong>Listen by voice</strong><button id="restore-button" class="small quiet" disabled>Restore full mix</button></div><div id="mix-controls" class="mix-buttons" aria-busy="false">${COLORS.map((color, voice) => `<div class="voice-controls" style="--voice:${color}"><span>V${voice + 1}</span><button id="mute-${voice}" aria-label="Mute voice ${voice + 1}" aria-pressed="false" disabled>Mute</button><button id="solo-${voice}" aria-label="Solo voice ${voice + 1}" aria-pressed="false" disabled>Solo</button></div>`).join('')}</div><p id="voice-mix-status" class="intervention-note" role="status" aria-live="polite" aria-atomic="true"></p></div>
             <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="0" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="8" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restarts may briefly pause; playback is not gapless.</span></div>
           </section>
@@ -94,6 +95,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let state: PlayerState | null = null;
   let held: HeldHistory | null = null;
   let timelineView: 'scroll' | 'fit' = 'scroll';
+  let timelineZoom = 1;
+  let timelineSpan = FOLLOW_WINDOW_SECONDS;
   let cursor = 0;
   let selectedEnd: number | null = null;
   let selectedVoice = 0;
@@ -318,12 +321,18 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     if (mode === timelineView) return;
     timelineView = mode;
     if (held && mode === 'scroll') {
-      const window = followingWindow(cursor);
+      const window = followingWindow(cursor, timelineSpan);
       held.plotStart = window.start;
       held.plotEnd = window.end;
     }
     draw();
   });
+  for (const [direction, step] of [['out', -1], ['in', 1]] as const) {
+    button(`timeline-zoom-${direction}`).addEventListener('click', () => {
+      timelineZoom = Math.max(0, Math.min(TIMELINE_DENSITIES.length - 1, timelineZoom + step));
+      draw();
+    });
+  }
   for (let voice = 0; voice < 3; voice++) {
     button(`inspect-${voice}`).addEventListener('click', () => { selectedVoice = voice; selectedFilter = false; draw(); });
     button(`mute-${voice}`).addEventListener('click', () => { void run(async () => {
@@ -682,19 +691,33 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     button('loop-button').setAttribute('aria-pressed', String(Boolean(state?.loop)));
     setText('loop-button', state?.loop ? 'Loop on' : 'Loop A–B');
     setText('loop-summary', state?.loop ? `Looping ${time(state.loop.start, true)}–${time(state.loop.end, true)} · restart may briefly pause; not gapless.` : 'Set A before B. Loop restarts may briefly pause; playback is not gapless.');
+    const measuredSpan = Math.max(1, el<HTMLCanvasElement>('voice-lane-0').clientWidth) / TIMELINE_DENSITIES[timelineZoom]!;
+    if (timelineSpan !== measuredSpan) {
+      timelineSpan = measuredSpan;
+      if (held) {
+        const window = followingWindow(cursor, timelineSpan);
+        held.plotStart = window.start;
+        held.plotEnd = window.end;
+      }
+    }
+    if (state?.timelineWindowSeconds !== timelineSpan) controls.setTimelineWindow(timelineSpan);
     const observations = held ? timelineView === 'fit' ? held.history : held : liveObservations();
     const {frames, writes, start: historyStart, end: observedUntil} = observations;
     const heardUntil = held?.heardUntil ?? position;
     const chartEnd = timelineView === 'fit' ? Math.min(observedUntil, heardUntil) : observedUntil;
     const window = timelineView === 'fit'
       ? fittedWindow(historyStart, chartEnd, held ? {start: cursor, end: selectedEnd ?? cursor} : undefined)
-      : held ? {start: held.plotStart, end: held.plotEnd} : followingWindow(position);
+      : held ? {start: held.plotStart, end: held.plotEnd} : followingWindow(position, timelineSpan);
     plotStart = window.start;
     plotEnd = window.end;
     button('timeline-scroll').setAttribute('aria-pressed', String(timelineView === 'scroll'));
     button('timeline-fit').setAttribute('aria-pressed', String(timelineView === 'fit'));
     el('timeline-direction').hidden = timelineView !== 'scroll';
-    setText('timeline-view-note', timelineView === 'scroll' ? '5 s past · 5 s upcoming' : 'All retained heard history');
+    setText('timeline-view-note', timelineView === 'scroll' ? `${Number((timelineSpan / 2).toFixed(1))} s past · ${Number((timelineSpan / 2).toFixed(1))} s upcoming` : 'All retained heard history');
+    el('timeline-zoom').hidden = timelineView !== 'scroll';
+    button('timeline-zoom-out').disabled = timelineZoom === 0;
+    button('timeline-zoom-in').disabled = timelineZoom === TIMELINE_DENSITIES.length - 1;
+    setText('timeline-scale', `${timelineSpan.toFixed(1)} s`);
     const plotFrames = visibleTimelineFrames(frames, Math.max(plotStart, historyStart), Math.min(plotEnd, chartEnd));
     const dropped = held?.dropped ?? Math.max(observations.dropped, state?.dropped ?? 0);
     el('history-summary').title = `${held ? 'HELD COPY' : timelineView === 'scroll' ? 'PREPARED OBSERVATIONS' : 'HEARD HISTORY'} ${time(historyStart, true)}–${time(observedUntil, true)} · ${frames.length} sampled frames · ${dropped} dropped writes · epoch ${held?.epoch ?? state?.epoch ?? 0}`;

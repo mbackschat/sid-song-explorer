@@ -35,9 +35,9 @@ export function validateLoop(loop: {start: number; end: number} | null, duration
 
 export const FOLLOW_WINDOW_SECONDS = 10;
 
-export function followingWindow(position: number) {
-  const start = position - FOLLOW_WINDOW_SECONDS / 2;
-  return {start, end: start + FOLLOW_WINDOW_SECONDS};
+export function followingWindow(position: number, seconds = FOLLOW_WINDOW_SECONDS) {
+  const start = position - seconds / 2;
+  return {start, end: start + seconds};
 }
 
 export function visibleTimelineFrames<T extends {time: number}>(frames: readonly T[], start: number, end: number): T[] {

@@ -85,7 +85,7 @@ test('a short evidence annotation plays useful context while preserving its exac
   await page.screenshot({path:`build/poc/${test.info().project.name}-exploring.png`,fullPage:true});
 });
 
-test('voice activity follows playback at a fixed scale and freezes its held window', async ({page}) => {
+test('voice activity follows playback at a fixed density and freezes its held window', async ({page}) => {
   await page.goto('/');
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
@@ -96,10 +96,10 @@ test('voice activity follows playback at a fixed scale and freezes its held wind
   const range = () => lane.evaluate(element => ({start:Number(element.getAttribute('aria-valuemin')),end:Number(element.getAttribute('aria-valuemax'))}));
   await expect.poll(async () => (await range()).start).toBeGreaterThan(20);
   const first = await range();
-  expect(first.end - first.start).toBeCloseTo(10, 2);
+  expect(first.end - first.start).toBeCloseTo(await lane.evaluate(element => element.clientWidth / 64), 1);
   await expect.poll(async () => (await range()).start).toBeGreaterThan(first.start + 1);
   const moved = await range();
-  expect(moved.end - moved.start).toBeCloseTo(10, 2);
+  expect(moved.end - moved.start).toBeCloseTo(await lane.evaluate(element => element.clientWidth / 64), 1);
   await page.locator('#follow-button').click();
   const heldRange = await range();
   const heard = await page.locator('#heard-time').textContent();
@@ -129,7 +129,7 @@ test('timeline switches between scrolling and fitted history without changing pl
   const cursor = await page.locator('#inspection-time').textContent();
   await page.locator('#timeline-scroll').click();
   const scrolled = await range();
-  expect(scrolled.end - scrolled.start).toBeCloseTo(10, 2);
+  expect(scrolled.end - scrolled.start).toBeCloseTo(await lane.evaluate(element => element.clientWidth / 64), 1);
   expect(scrolled.start).toBeLessThan(30);
   await expect(page.locator('#inspection-time')).toHaveText(cursor!);
   await expect(page.locator('#return-button')).toBeVisible();

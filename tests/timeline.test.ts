@@ -41,6 +41,19 @@ test('the following window centers heard time across startup, ending and backwar
   }
 });
 
+test('timeline density preserves time scale across widths and zoom levels', () => {
+  for (const pixelsPerSecond of [32, 64, 128]) {
+    for (const width of [240, 640, 1280]) {
+      const span = width / pixelsPerSecond;
+      const window = followingWindow(30, span);
+      assert.equal(window.end - window.start, span);
+      assert.equal((window.start + window.end) / 2, 30);
+      const doubled = followingWindow(30, width * 2 / pixelsPerSecond);
+      assert.equal(doubled.end - doubled.start, span * 2);
+    }
+  }
+});
+
 test('visible drawing retains its boundary state without losing resolution to older history', () => {
   const recent = [{time: 19, value: 1}, {time: 22, value: 2}, {time: 26, value: 3}, {time: 31, value: 4}];
   const older = Array.from({length: 1500}, (_, index) => ({time: index / 100, value: 0}));

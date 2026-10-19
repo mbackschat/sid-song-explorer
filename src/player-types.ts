@@ -42,6 +42,7 @@ export interface PlayerState {
   pendingOperation: 'seek' | 'voice-mix' | null;
   preparedRange: {start: number; end: number} | null;
   preview: TimelineObservation | null;
+  timelineWindowSeconds: number;
   renderedUntil: number;
   duration: number | null;
   error: string | null;
@@ -66,6 +67,7 @@ export interface PlayerControls {
   seek(seconds: number): Promise<void>;
   setMuted(mask: boolean[]): Promise<void>;
   setLoop(loop: {start: number; end: number} | null): Promise<void>;
+  setTimelineWindow(seconds: number): void;
   subscribe(listener: (state: PlayerState) => void): () => void;
   dispose(): void;
 }

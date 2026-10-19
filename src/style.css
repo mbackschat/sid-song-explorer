@@ -170,7 +170,9 @@ audio { display: block; width: 100%; height: 36px; color-scheme: dark; }
 @media (max-width: 740px) { .library-load { margin: 7px 0 0; font-size: 10px; } }
 
 .timeline-modes { display: flex; gap: 3px; }
-.follow-controls { flex-shrink: 0; }
+.follow-controls { flex-wrap: wrap; justify-content: flex-end; }
+.timeline-zoom { display: flex; align-items: center; gap: 4px; }
+#timeline-scale { min-width: 44px; text-align: center; font-size: 11px; }
 .follow-controls button { white-space: nowrap; }
 [hidden] { display: none !important; }
 #trace-warning { color: #ffb6c4; font-weight: 600; }

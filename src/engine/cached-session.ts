@@ -10,7 +10,7 @@ const MAX_RENDER_FRAMES = SAMPLE_RATE * 2;
 const MAX_BLOCK_FRAMES = SAMPLE_RATE / 4;
 const MAX_BLOCKS = 4096;
 const OPERATION_BUDGET_MS = 15000;
-const MAX_OBSERVATION_SECONDS = 11;
+const MAX_OBSERVATION_INTERVALS = 1000;
 const MAX_OBSERVATION_WRITES = 20_000;
 const OBSERVATION_FRAME_SECONDS = 0.02;
 // SIDLite's PAL/NTSC clocks consume fewer than 25 scheduler cycles per sample.
@@ -168,8 +168,8 @@ export class CachedSidSession {
   observe(startSeconds: number, endSeconds: number): TimelineObservation | null {
     this.requireLoaded();
     if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds) || startSeconds < 0 ||
-      endSeconds > 600 || endSeconds <= startSeconds || endSeconds > startSeconds + MAX_OBSERVATION_SECONDS) {
-      throw new Error(`Observation range must be within 0–600 seconds and no longer than ${MAX_OBSERVATION_SECONDS} seconds`);
+      endSeconds > 600 || endSeconds <= startSeconds) {
+      throw new Error('Observation range must be within 0–600 seconds');
     }
     const start = Math.max(startSeconds, this.cacheStartFrame / SAMPLE_RATE);
     let end = Math.min(endSeconds, this.frontier / SAMPLE_RATE);
@@ -192,11 +192,9 @@ export class CachedSidSession {
     }
     if (start >= end) return null;
     while (writes.length && writes.at(-1)!.timeSeconds >= end) writes.pop();
-    const sampleTimes = [start];
-    for (let index = 1; start + index * OBSERVATION_FRAME_SECONDS < end; index++) {
-      sampleTimes.push(start + index * OBSERVATION_FRAME_SECONDS);
-    }
-    sampleTimes.push(end);
+    const intervals = Math.min(MAX_OBSERVATION_INTERVALS, Math.ceil((end - start) / OBSERVATION_FRAME_SECONDS));
+    const sampleTimes = Array.from({length: intervals + 1}, (_, index) =>
+      index === intervals ? end : start + (end - start) * index / intervals);
     const frames: TimelineObservation['frames'] = [];
     let sample = 0;
     let dropped = 0;

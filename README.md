@@ -29,7 +29,7 @@ The first mono proof of concept is complete, with passing engine and headless Ch
 - Open callable mono PSID files locally, with subtune, PAL/NTSC and MOS6581/MOS8580 controls; local files and their hashes stay on the device.
 - Play, pause, restart, seek quickly within the prepared audio range, with busy feedback for unprepared positions, and set A–B study loops.
 - Mute or solo the three physical SID voices, with the waveform-write intervention and shared hardware dependencies labelled. Changing voices pauses sound to prepare the mix; a spinner and explanation appear beside the controls. Uninterrupted switching is tracked as `VOICE-1` in [the post-POC plan](docs/PLAN.md#exit-the-poc-and-continue-production-work).
-- Switch voice activity between **Scroll** (five seconds of past and prepared upcoming activity on each side of the heard playhead) and **Fit history** (retained heard activity) in the graph header; select retained voice/register history while music continues, hold an inspection cursor, and return to following the heard playhead.
+- Switch voice activity between **Scroll** (equal past and prepared upcoming space around the heard playhead, with zoom in/out and more visible time on wider charts) and **Fit history** (retained heard activity) in the graph header; select retained voice/register history while music continues, hold an inspection cursor, and return to following the heard playhead.
 - Inspect frequency, waveform, gate, pulse width, ADSR settings, ring/sync, the shared filter and ordered writes, alongside PCM levels, waveform and spectrum.
 - Read three evidence-linked Rambo annotations with their exact evidence and listening scope.
 

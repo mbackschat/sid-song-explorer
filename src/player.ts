@@ -2,6 +2,8 @@ import type { CacheCoverage, EngineEvent, EngineReply } from './engine/protocol.
 import type { PlayerControls, PlayerState, Profile, TimelineObservation, TuneDetails, WriteObservation } from './player-types.ts';
 import { positionAt, trimHistory, validateLoop, type AudioSegment } from './timeline.ts';
 
+const TIMELINE_PREVIEW_MARGIN_SECONDS = 1;
+
 interface RenderBlock {
   pcm: Int16Array;
   startFrame: number;
@@ -79,6 +81,7 @@ export class ExplorerPlayer implements PlayerControls {
   private pumping = false;
   private previewPending = false;
   private previewRequestedAt = -Infinity;
+  private previewRevision = 0;
   private disposed = false;
   private wantsPlayback = false;
   private frame = 0;
@@ -87,7 +90,7 @@ export class ExplorerPlayer implements PlayerControls {
   private timer: ReturnType<typeof setInterval>;
   private animation = 0;
   private state: PlayerState = {
-    status: 'empty', position: 0, seekTarget: null, pendingOperation: null, preparedRange: null, preview: null, renderedUntil: 0, duration: null, error: null,
+    status: 'empty', position: 0, seekTarget: null, pendingOperation: null, preparedRange: null, preview: null, timelineWindowSeconds: 10, renderedUntil: 0, duration: null, error: null,
     info: null, muted: [false, false, false], loop: null, peakDb: -Infinity,
     rmsDb: -Infinity, spectrum: new Uint8Array(512), waveform: new Float32Array(1024),
     frames: [], writes: [], historyStart: 0, dropped: 0, underruns: 0, epoch: 0,
@@ -112,6 +115,7 @@ export class ExplorerPlayer implements PlayerControls {
   private emit() { for (const listener of this.listeners) listener(this.state); }
 
   private invalidatePreview() {
+    this.previewRevision++;
     this.state.preview = null;
     this.previewRequestedAt = -Infinity;
   }
@@ -119,20 +123,23 @@ export class ExplorerPlayer implements PlayerControls {
   private refreshPreview() {
     if (this.disposed || this.previewPending || this.pumping || !this.engine || !this.state.info ||
       !['ready', 'paused', 'playing', 'ended'].includes(this.state.status) || performance.now() - this.previewRequestedAt < 250) return;
-    const startSeconds = Math.max(0, this.state.position - 5);
+    const halfWindow = this.state.timelineWindowSeconds / 2;
+    const startSeconds = Math.max(0, this.state.position - halfWindow);
     // The extra second keeps the moving viewport covered between requests (tests/player.test.ts).
-    const endSeconds = Math.min(startSeconds + 11, this.state.position + 6, this.state.duration ?? 600, 600, this.state.loop?.end ?? Infinity);
+    const endSeconds = Math.min(startSeconds + this.state.timelineWindowSeconds + TIMELINE_PREVIEW_MARGIN_SECONDS,
+      this.state.position + halfWindow + TIMELINE_PREVIEW_MARGIN_SECONDS, this.state.duration ?? 600, 600, this.state.loop?.end ?? Infinity);
     if (startSeconds >= endSeconds) return;
     const engine = this.engine;
     const generation = this.generation;
+    const revision = this.previewRevision;
     this.previewPending = true;
     this.previewRequestedAt = performance.now();
     void engine.request<TimelineObservation | null>('observe', {startSeconds, endSeconds}).then(observation => {
-      if (generation !== this.generation || engine !== this.engine || this.disposed) return;
+      if (generation !== this.generation || revision !== this.previewRevision || engine !== this.engine || this.disposed) return;
       this.state.preview = observation;
       this.emit();
     }).catch(() => {
-      if (generation !== this.generation || engine !== this.engine || this.disposed) return;
+      if (generation !== this.generation || revision !== this.previewRevision || engine !== this.engine || this.disposed) return;
       this.state.preview = null;
       this.emit();
     }).finally(() => {
@@ -354,6 +361,15 @@ export class ExplorerPlayer implements PlayerControls {
       await this.seek(this.state.position);
     }
     this.emit();
+  }
+
+  setTimelineWindow(seconds: number) {
+    if (!Number.isFinite(seconds) || seconds <= 0) throw new Error('Timeline window must be finite and positive.');
+    if (seconds === this.state.timelineWindowSeconds) return;
+    this.state.timelineWindowSeconds = seconds;
+    this.previewRevision++;
+    this.emit();
+    this.refreshPreview();
   }
 
   private record(block: RenderBlock) {

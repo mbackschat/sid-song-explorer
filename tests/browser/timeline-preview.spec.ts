@@ -22,13 +22,56 @@ async function chart(page: Page) {
   }));
 }
 
+test('timeline zoom preserves density on resize and holds selected observations', async ({page}) => {
+  await openPaused(page);
+  await expect(page.getByRole('button', {name:'Zoom out', exact:true})).toBeVisible();
+  await page.locator('#seek-slider').fill('30');
+  await expect.poll(async () => (await chart(page)).cursor).toBe(30);
+  const lane = page.locator('#voice-lane-0');
+  const width = () => lane.evaluate(element => element.clientWidth);
+  const initial = await chart(page);
+  expect(initial.end - initial.start).toBeCloseTo(await width() / 64, 1);
+  await page.getByRole('button', {name:'Zoom out', exact:true}).click();
+  await expect.poll(async () => { const value = await chart(page); return value.end - value.start; }).toBeCloseTo(await width() / 32, 1);
+  await expect(page.getByRole('button', {name:'Zoom out', exact:true})).toBeDisabled();
+  await expect.poll(async () => { const value = await chart(page); return value.observedUntil - value.end; }).toBeGreaterThan(.5);
+  await page.setViewportSize({width:2200, height:1100});
+  await expect.poll(async () => { const value = await chart(page); return (value.end - value.start) / await width(); }).toBeCloseTo(1 / 32, 4);
+  expect((await chart(page)).cursor).toBe(30);
+  await page.setViewportSize({width:1440, height:1100});
+  await page.screenshot({path:`build/timeline-zoom/${test.info().project.name}-wide.png`, fullPage:true});
+  await page.getByRole('button', {name:'Zoom in', exact:true}).click();
+  await expect.poll(async () => { const value = await chart(page); return value.end - value.start; }).toBeCloseTo(await width() / 64, 1);
+  const box = (await lane.boundingBox())!;
+  await lane.click({position:{x:box.width * .65, y:20}});
+  await expect(page.locator('#reg-frequency')).not.toHaveText('—');
+  const selected = await chart(page);
+  const settings = await page.locator('#write-list').textContent();
+  await page.getByRole('button', {name:'Zoom in', exact:true}).click();
+  await expect(page.getByRole('button', {name:'Zoom in', exact:true})).toBeDisabled();
+  const detail = await chart(page);
+  expect(detail.end - detail.start).toBeCloseTo(await width() / 128, 1);
+  expect((detail.start + detail.end) / 2).toBeCloseTo(selected.cursor, 1);
+  await expect(page.locator('#write-list')).toHaveText(settings!);
+  await page.locator('#timeline-fit').click();
+  await expect(page.getByRole('group', {name:'Timeline zoom'})).toBeHidden();
+  await page.locator('#timeline-scroll').click();
+  await expect(page.getByRole('button', {name:'Zoom in', exact:true})).toBeDisabled();
+  await page.locator('#return-button').click();
+  await page.setViewportSize({width:390, height:844});
+  await expect.poll(async () => { const value = await chart(page); return (value.end - value.start) / await width(); }).toBeCloseTo(1 / 128, 4);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({path:`build/timeline-zoom/${test.info().project.name}-narrow.png`, fullPage:true});
+});
+
 test('prepared upcoming activity stays filled between refreshes during playback and after seeking', async ({page}) => {
   await openPaused(page);
   await expect.poll(() => page.locator('#render-lead').getAttribute('data-prepared-until').then(Number), {timeout:25000}).toBeGreaterThan(70);
   for (const target of [30, 60]) {
+    if (target === 60) await page.getByRole('button', {name:'Zoom out', exact:true}).click();
     await page.locator('#seek-slider').fill(String(target));
     await expect.poll(async () => (await chart(page)).cursor).toBeCloseTo(target, 2);
-    await expect.poll(async () => (await chart(page)).observedUntil).toBeGreaterThanOrEqual(target + 5);
+    await expect.poll(async () => { const value = await chart(page); return value.observedUntil - value.end; }).toBeGreaterThan(.5);
     await page.locator('#play-button').click();
     const coverage = await page.evaluate(async () => {
       const lane = document.querySelector<HTMLElement>('#voice-lane-0')!;
@@ -61,7 +104,7 @@ test('centered timeline shows actual upcoming activity and holds future inspecti
   await page.locator('#seek-slider').fill('30');
   await expect.poll(async () => (await chart(page)).observedUntil).toBeGreaterThanOrEqual(34.9);
   const view = await chart(page);
-  expect(view.end - view.start).toBeCloseTo(10, 2);
+  expect(view.end - view.start).toBeCloseTo(await page.locator('#voice-lane-0').evaluate(element => element.clientWidth / 64), 1);
   expect((view.cursor - view.start) / (view.end - view.start)).toBeCloseTo(.5, 3);
   expect(view.futureFrames).toBeGreaterThan(10);
   const futureStroke = await page.locator('#voice-lane-0').evaluate(element => {
@@ -119,7 +162,11 @@ test('centered timeline shades unavailable startup ending and loop regions and i
   await openPaused(page);
   await page.locator('#seek-slider').fill('0');
   await expect.poll(async () => (await chart(page)).observedUntil).toBeGreaterThanOrEqual(4.9);
-  expect(await chart(page)).toMatchObject({start:-5, end:5, cursor:0, observedStart:0});
+  const startup = await chart(page);
+  const halfSpan = await page.locator('#voice-lane-0').evaluate(element => element.clientWidth / 64 / 2);
+  expect(startup).toMatchObject({cursor:0, observedStart:0});
+  expect(startup.start).toBeCloseTo(-halfSpan, 1);
+  expect(startup.end).toBeCloseTo(halfSpan, 1);
   const lane = page.locator('#voice-lane-0');
   const box = (await lane.boundingBox())!;
   await lane.click({position:{x:box.width * .25, y:20}});
@@ -143,7 +190,7 @@ test('centered timeline shades unavailable startup ending and loop regions and i
   await page.locator('#seek-slider').fill('31');
   await expect.poll(async () => (await chart(page)).observedUntil).toBeCloseTo(32, 2);
   await expect(page.locator('#timeline-availability')).toContainText('Loop returns to 0:30.00 at 0:32.00');
-  expect((await chart(page)).end).toBe(36);
+  expect((await chart(page)).end).toBeCloseTo(31 + halfSpan, 1);
   await lane.focus();
   await lane.press('Shift+ArrowRight');
   await expect(page.locator('#reg-frequency')).toHaveText('—');
