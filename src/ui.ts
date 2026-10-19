@@ -38,7 +38,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     <div class="app-shell">
       <aside class="sidebar" aria-label="Music library">
         <section><div class="eyebrow">Your listening desk</div><div class="library-mark"><span class="sid-icon mono">SID</span><div><strong>Published samples</strong><small>Source-backed listening</small></div></div>
-          <label for="sample-select">Sample library</label><select id="sample-select" class="library-select"></select><button id="use-sample-button" class="small quiet library-load">Load selected sample →</button><p id="library-summary" class="library-summary"></p>
+          <label for="sample-select">Sample library</label><select id="sample-select" class="library-select"></select><button id="use-sample-button" class="small quiet library-load">Load selected sample →</button><p id="library-summary" class="library-summary"></p><details id="local-build-materials" class="local-materials"><summary>Local-build arrangements</summary><p>No audio download: build these locally using Crafter’s materials.</p><ul></ul></details>
         </section>
         <section class="local-section"><h2>Bring your own SID</h2><input id="local-file" class="file-input" type="file" accept=".sid,audio/prs.sid" /><label for="local-file" class="file-button">＋ Open local SID</label><p class="privacy-note">Stays on your device. No uploads, file-hash requests or metadata lookups. Mono PSID · max 65,662 bytes.</p></section>
         <div class="sidebar-footer"><span class="eyebrow">Made to explore</span><p>Three voices. One shared filter.<br />A whole world of sound.</p><p style="margin-top:12px"><a href="https://github.com/mbackschat/sid-song-explorer" target="_blank" rel="noreferrer">Project & source ↗</a></p></div>
@@ -126,7 +126,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     subtune: Number(select('subtune-select').value),
     ...(sourceMode === 'catalog' && chosenEntry && select('clock-select').value === chosenEntry.target.clock ? { durationSeconds: chosenEntry.durationSeconds } : {}),
   });
-  const hasMatchingAnalysis = () => Boolean(state?.info && !['error', 'loading'].includes(state.status) && loadedEntry && loadedProfile && loadedProfile.clock === loadedEntry.target.clock && loadedProfile.model === loadedEntry.target.model && loadedProfile.subtune === loadedEntry.target.subtune && loadedEntry.analysis.sidSha256 === loadedEntry.files.sid.sha256);
+  const hasMatchingAnalysis = () => Boolean(state?.info && !['error', 'loading'].includes(state.status) && loadedEntry && loadedEntry.analysis.annotations.length > 0 && loadedProfile && loadedProfile.clock === loadedEntry.target.clock && loadedProfile.model === loadedEntry.target.model && loadedProfile.subtune === loadedEntry.target.subtune && loadedEntry.analysis.sidSha256 === loadedEntry.files.sid.sha256);
   const setSubtunes = (count: number, selected: number) => {
     const target = select('subtune-select');
     target.replaceChildren();
@@ -374,6 +374,16 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     anchor.rel = 'noreferrer';
     return anchor;
   };
+  const materialsList = el('local-build-materials').querySelector('ul')!;
+  for (const material of catalog.materials) {
+    const item = document.createElement('li');
+    const anchor = link(material.title, material.sourceUrl);
+    anchor.title = material.description;
+    item.append(anchor);
+    materialsList.append(item);
+  }
+  el('local-build-materials').hidden = catalog.materials.length === 0;
+
   const renderEvidence = () => {
     const matches = hasMatchingAnalysis();
     const intervention = state?.muted.some(Boolean) ?? false;
@@ -423,6 +433,14 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     links.replaceChildren();
     if (loadedEntry) {
       links.append(link('Sample & attribution ↗', loadedEntry.rights.sourceUrl), link(loadedEntry.rights.license, loadedEntry.rights.licenseUrl), link('Corresponding source ↗', loadedEntry.rights.correspondingSourceUrl), link('Listening verdict ↗', loadedEntry.listening.sourceUrl), link('SID ↓', generated(loadedEntry.files.sid.filename)));
+      if (loadedEntry.files.notices) links.append(link('Sample player notices ↓', generated(loadedEntry.files.notices.filename)));
+      if (loadedEntry.stereo) {
+        links.append(link('Stereo SID ↓', loadedEntry.stereo.sidUrl), link('Stereo WAV ↗', loadedEntry.stereo.referenceUrl));
+        const scope = document.createElement('span');
+        scope.textContent = 'Live inspection uses the mono version. The stereo SID requires a two-SID player.';
+        scope.className = 'attribution';
+        links.append(scope);
+      }
       const attribution = document.createElement('span');
       attribution.textContent = loadedEntry.rights.attribution;
       attribution.className = 'attribution';

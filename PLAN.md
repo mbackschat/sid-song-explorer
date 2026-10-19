@@ -4,7 +4,7 @@ This file owns scope, priorities and completion. [The founding design](docs/desi
 
 ## Current status
 
-2026-10-18: the standalone repository, public source repository and [sound-lens identity](assets/branding/README.md) are established. The user authorized the first mono POC and required Explorer's implementation, experiments and retained decisions to live here. That POC is implemented, with passing engine and headless Chromium/WebKit interaction checks; real desktop Safari playback through the complete ending and the user's explanation-value judgment remain pending. No GitHub Pages deployment or milestone-1 completion is claimed.
+2026-10-18: the standalone repository, public source repository and [sound-lens identity](assets/branding/README.md) are established. The user authorized the first mono POC and required Explorer's implementation, experiments and retained decisions to live here. That POC is implemented, with passing engine and headless Chromium/WebKit interaction checks; real desktop Safari playback through the complete ending and the user's explanation-value judgment remain pending. The user subsequently authorized GitHub Pages publication and a catalog matching Crafter’s README, ahead of POC closure; that publication does not establish milestone-1 listening completion.
 
 | Stage | State | Completion gate |
 | --- | --- | --- |
@@ -22,7 +22,7 @@ Implemented scope comprises live mono playback, local callable PSID intake, mode
 
 The user requested faster seeking on 2026-10-18. The [seeking study](docs/research/seek-performance.md) owns the measured alternatives and correction of SIDLite PCM/trace clock drift. Bounded audio/observation caching and background preparation are implemented. Silent Chrome/WebKit checks measured 41–80 ms visible transport response for prepared forward/backward/repeated seeks; cold targets still require preparation and show busy feedback. The validation record owns full-song and regression evidence.
 
-The [interim POC catalog snapshot](docs/integration/poc-sources.md) pins cleared Rambo main-entry files and source-backed metadata at Crafter revision `3db086b6963676ef75f34d7f77c3b67232a777fb`. The parser and bounded preparation command are implemented, with tested hash verification and network preparation. The normal install/build/runtime has no sibling checkout dependency. `pnpm prepare:assets` also packages the adopted engine's notices and complete corresponding source. Sample acceptance remains scoped to the underlying characteristic phrase and natural ending; the new cold-start entrance is not separately accepted.
+The [interim catalog snapshot](docs/integration/poc-sources.md) pins the four cleared README download songs and source-backed metadata at Crafter revision `3db086b6963676ef75f34d7f77c3b67232a777fb`. The parser and bounded preparation command are implemented, with tested hash verification and network preparation. The normal install/build/runtime has no sibling checkout dependency. `pnpm prepare:assets` also packages the adopted engine's notices and complete corresponding source. Sample acceptance remains scoped to the underlying characteristic phrase and natural ending; the new cold-start entrance is not separately accepted.
 
 The [completion audit](docs/validation/mono-poc.md#completion-audit) on 2026-10-19 verified the public handoff and current automated evidence, restored an inline warning for dropped traces, and requested the remaining human review. No explanation-value acceptance has been recorded. The user subsequently reviewed the current app in Safari and reported that the Listen by voice interruption was still present; this is a rejected interaction, not successful listening acceptance.
 
@@ -41,6 +41,12 @@ The user directed on 2026-10-18 to use Playwright and headless validation as muc
 - Obtain the user's listening and explanation-value verdict with the matching generated reference available. Automated PCM output or WebKit tests do not supply that verdict.
 
 The [milestone-1 contract](docs/design/web-player-and-analyser.md#milestone-1-first-playable-inspection-with-one-mono-sample) remains the completion authority. Keep this case active until the relevant technical and human gates pass; a browser screenshot or short excerpt does not establish full-ending playback.
+
+## Public application and README-aligned catalog
+
+On 2026-10-19 the user prioritized publishing Explorer on GitHub Pages and mirroring Crafter’s README song list before POC closure. The [Application workflow](.github/workflows/app.yml) deploys the verified production artifact only after Chrome/Ubuntu and WebKit/macOS jobs pass. [The publication validation](docs/validation/mono-poc.md#github-pages-and-readme-catalog) owns hosted-route and catalog checks.
+
+The live mono catalog contains Rambo, Bach, Mozart and the original instrument mix, with separate stereo links. Moon River, Pink Panther, Axel F and Ghostbusters are materials-only entries; no uncleared audio is deployed. This bounded catalog expansion does not implement `CATALOG-1`, live stereo, or additional annotation packages. README links expose the live app and sibling SID project prominently; Explorer also links Williams Sound Explorer. Safari/listening acceptance remains scoped as above.
 
 ## Exit the POC and continue production work
 
@@ -61,8 +67,8 @@ The next delivery order is explicit. Address `VOICE-1` first after POC acceptanc
 
 Crafter still owns the future normalized catalog producer, its schema check and durable analysis-package generation. The manually assembled POC snapshot enables this authorized trial without declaring that producer complete or establishing a competing catalog authority. Replace it through an explicit producer/consumer contract and pin update when that integration is undertaken.
 
-Dual-SID remains behind milestone 1. Verify raw chip routing, both chip models, all six voice controls and seek continuation against continuous playback before accepting that engine contract. The complete [model/count and Safari gates](docs/design/web-player-and-analyser.md#first-step-and-milestones), including the bounded recent-iPhone check, remain required. Broader catalogs and deeper musical analysis stay unscheduled.
+Dual-SID remains behind milestone 1. Verify raw chip routing, both chip models, all six voice controls and seek continuation against continuous playback before accepting that engine contract. The complete [model/count and Safari gates](docs/design/web-player-and-analyser.md#first-step-and-milestones), including the bounded recent-iPhone check, remain required. Further catalog breadth and deeper musical analysis stay unscheduled; the explicitly authorized README-aligned public library is included.
 
 ## Excluded scope
 
-No composition editor, backend service, accounts, uploads, original emulator, automatic score recovery or musical-quality ranking. Crafter's study corpus and Git history stay there; the POC imports only the pinned metadata described above and retrieves cleared assets into ignored deployment output. ROMs and original reference binaries are excluded. GitHub Pages hosting remains a separate application task.
+No composition editor, backend service, accounts, uploads, original emulator, automatic score recovery or musical-quality ranking. Crafter's study corpus and Git history stay there; the POC imports only the pinned metadata described above and retrieves cleared assets into ignored deployment output. ROMs and original reference binaries are excluded. GitHub Pages hosting and the README-aligned catalog were explicitly authorized on 2026-10-19; other hosting services and further catalog breadth remain outside this task.

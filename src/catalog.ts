@@ -16,13 +16,21 @@ export type Annotation = {
   sourceUrl: string;
 };
 
+export type CatalogMaterial = {
+  id: string;
+  title: string;
+  description: string;
+  sourceUrl: string;
+};
+
 export type CatalogEntry = {
   id: string;
   title: string;
   description: string;
   durationSeconds: number;
-  files: { sid: CatalogFile; reference: CatalogFile; license: CatalogFile };
-  target: { clock: 'PAL'; model: 'MOS6581'; sidCount: 1; baseAddress: 54272; subtune: 1 };
+  files: { sid: CatalogFile; reference: CatalogFile; license: CatalogFile; notices?: CatalogFile };
+  stereo?: { sidUrl: string; referenceUrl: string };
+  target: { clock: 'PAL'; model: 'MOS6581' | 'MOS8580'; sidCount: 1; baseAddress: 54272; subtune: 1 };
   rights: { license: string; attribution: string; sourceUrl: string; licenseUrl: string; correspondingSourceUrl: string };
   listening: { status: string; scope: string; sourceUrl: string };
   analysis: {
@@ -39,6 +47,7 @@ export type Catalog = {
   schemaVersion: 1;
   source: { repository: string; revision: string };
   entries: CatalogEntry[];
+  materials: CatalogMaterial[];
 };
 
 export const MAX_ASSET_BYTES = 25 * 1024 * 1024;
@@ -47,10 +56,10 @@ function requireValue(condition: unknown, field: string): asserts condition {
   if (!condition) throw new Error(`Invalid catalog: ${field}`);
 }
 
-function record(value: unknown, keys: string[], field: string): Record<string, unknown> {
+function record(value: unknown, keys: string[], field: string, optionalKeys: string[] = []): Record<string, unknown> {
   requireValue(value !== null && typeof value === 'object' && !Array.isArray(value), field);
   const result = value as Record<string, unknown>;
-  requireValue(Object.keys(result).length === keys.length && keys.every((key) => Object.hasOwn(result, key)), `${field} fields`);
+  requireValue(keys.every((key) => Object.hasOwn(result, key)) && Object.keys(result).every((key) => keys.includes(key) || optionalKeys.includes(key)), `${field} fields`);
   return result;
 }
 
@@ -92,7 +101,7 @@ export function assetSourcePath(source: Catalog['source'], url: string): string 
 }
 
 export function parseCatalog(value: unknown): Catalog {
-  const catalog = record(value, ['schemaVersion', 'source', 'entries'], 'root');
+  const catalog = record(value, ['schemaVersion', 'source', 'entries'], 'root', ['materials']);
   requireValue(catalog.schemaVersion === 1, 'schemaVersion must be 1');
   const source = record(catalog.source, ['repository', 'revision'], 'source');
   requireValue(typeof source.repository === 'string' && /^https:\/\/github\.com\/[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/.test(source.repository), 'source repository');
@@ -102,14 +111,14 @@ export function parseCatalog(value: unknown): Catalog {
   const filenames = new Set<string>();
 
   for (const rawEntry of catalog.entries) {
-    const entry = record(rawEntry, ['id', 'title', 'description', 'durationSeconds', 'files', 'target', 'rights', 'listening', 'analysis'], 'entry');
+    const entry = record(rawEntry, ['id', 'title', 'description', 'durationSeconds', 'files', 'target', 'rights', 'listening', 'analysis'], 'entry', ['stereo']);
     identifier(entry.id, 'entry.id');
     requireValue(!entryIds.has(entry.id), 'duplicate entry id');
     entryIds.add(entry.id);
     text(entry.title, 'entry.title');
     text(entry.description, 'entry.description');
     requireValue(typeof entry.durationSeconds === 'number' && Number.isFinite(entry.durationSeconds) && entry.durationSeconds > 0, 'durationSeconds');
-    const files = record(entry.files, ['sid', 'reference', 'license'], 'files');
+    const files = record(entry.files, ['sid', 'reference', 'license'], 'files', ['notices']);
     for (const [kind, rawFile] of Object.entries(files)) {
       const file = record(rawFile, ['url', 'sha256', 'bytes', 'filename'], `files.${kind}`);
       httpsUrl(file.url, `files.${kind}.url`);
@@ -121,8 +130,16 @@ export function parseCatalog(value: unknown): Catalog {
       filenames.add(file.filename);
     }
 
+    if (Object.hasOwn(entry, 'stereo')) {
+      const stereo = record(entry.stereo, ['sidUrl', 'referenceUrl'], 'stereo');
+      for (const field of ['sidUrl', 'referenceUrl']) {
+        httpsUrl(stereo[field], `stereo.${field}`);
+        assetSourcePath(source as Catalog['source'], stereo[field]);
+      }
+    }
+
     const target = record(entry.target, ['clock', 'model', 'sidCount', 'baseAddress', 'subtune'], 'target');
-    requireValue(target.clock === 'PAL' && target.model === 'MOS6581' && target.sidCount === 1 && target.baseAddress === 54272 && target.subtune === 1, 'unsupported POC target');
+    requireValue(target.clock === 'PAL' && (target.model === 'MOS6581' || target.model === 'MOS8580') && target.sidCount === 1 && target.baseAddress === 54272 && target.subtune === 1, 'unsupported POC target');
     const rights = record(entry.rights, ['license', 'attribution', 'sourceUrl', 'licenseUrl', 'correspondingSourceUrl'], 'rights');
     text(rights.license, 'rights.license');
     text(rights.attribution, 'rights.attribution');
@@ -152,5 +169,21 @@ export function parseCatalog(value: unknown): Catalog {
       httpsUrl(annotation.sourceUrl, 'annotation.sourceUrl');
     }
   }
-  return value as Catalog;
+  const materials = Object.hasOwn(catalog, 'materials') ? catalog.materials : [];
+  requireValue(Array.isArray(materials), 'materials');
+  const materialIds = new Set(entryIds);
+  for (const rawMaterial of materials) {
+    const material = record(rawMaterial, ['id', 'title', 'description', 'sourceUrl'], 'material');
+    identifier(material.id, 'material.id');
+    requireValue(!materialIds.has(material.id), 'duplicate material id');
+    materialIds.add(material.id);
+    text(material.title, 'material.title');
+    text(material.description, 'material.description');
+    httpsUrl(material.sourceUrl, 'material.sourceUrl');
+    const prefix = `${source.repository}/blob/${source.revision}/`;
+    requireValue(material.sourceUrl.startsWith(prefix), 'material source URL must use the pinned repository revision');
+    const documentPath = material.sourceUrl.slice(prefix.length).split('#')[0]!;
+    requireValue(/^[A-Za-z0-9_.\/-]+$/.test(documentPath) && documentPath.split('/').every((part) => part && part !== '.' && part !== '..'), 'material source path');
+  }
+  return { ...catalog, materials } as Catalog;
 }

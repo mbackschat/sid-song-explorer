@@ -63,7 +63,11 @@
             "title": "Restored main entry",
             "description": "Entry time zero corresponds to source play call 1586. The computed score and sound-program state are retained; SID envelopes, oscillators and filter history start fresh. The package records the lead starting on the next frame. This is a newly initialized performance, not a crop of the complete WAV.",
             "evidenceLevel": "derived",
-            "voices": [1, 2, 3],
+            "voices": [
+              1,
+              2,
+              3
+            ],
             "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-loader/README.md#main-music-demo-2026-10-16"
           },
           {
@@ -73,7 +77,11 @@
             "title": "The score streams return",
             "description": "Source calls 10544, 10559 and 10560 end the score streams for physical voices 2, 3 and 1. Returning from the score clears its active bit; each voice's separate sound lifetime continues to be processed. Times are rebased from source call 1586 at the declared PAL cadence.",
             "evidenceLevel": "derived",
-            "voices": [1, 2, 3],
+            "voices": [
+              1,
+              2,
+              3
+            ],
             "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/docs/research/composition/rambo-preparation.md#finite-traversal-and-natural-stop"
           },
           {
@@ -83,11 +91,234 @@
             "title": "Sound processing continues after the score",
             "description": "Final register stores for physical voices 1, 2 and 3 occur at source calls 10660, 10799 and 10814; the source stops producing SID stores from call 10815. The lifetime path can continue pitch and pulse motion after score return. These execution facts do not measure the audible release or prove an isolated stem.",
             "evidenceLevel": "derived",
-            "voices": [1, 2, 3],
+            "voices": [
+              1,
+              2,
+              3
+            ],
             "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/docs/research/composition/rambo-preparation.md#ongoing-sound-lifetime-and-programmed-motion"
           }
         ]
+      },
+      "stereo": {
+        "sidUrl": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-stereo/rambo-stereo-main.sid",
+        "referenceUrl": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-stereo/rambo-stereo-main.wav"
       }
+    },
+    {
+      "id": "bach-toccata",
+      "title": "Bach Toccata — complete Toccata section",
+      "description": "J. S. Bach’s BWV 565 Toccata, reduced to three SID voices with moving pulse instruments and driven organ phrasing; ends before the Fugue.",
+      "durationSeconds": 88.12292517006803,
+      "files": {
+        "sid": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/bach-toccata/bach-toccata.sid",
+          "sha256": "2578a1b96eb0338a50c6b926f60c806f79e9567b8a933274763d46fb0f17e761",
+          "bytes": 8898,
+          "filename": "bach-toccata.sid"
+        },
+        "reference": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/bach-toccata/bach-toccata.wav",
+          "sha256": "86e10f2cfe1341eb60d27f03e071dffb34181666bd605353378d5b48e0523b89",
+          "bytes": 7772486,
+          "filename": "bach-toccata.wav"
+        },
+        "license": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/LICENSE",
+          "sha256": "11890fae1065b64e4f3a65e82ac5c20f29407325a1ed5b48ad7c252b8acec062",
+          "bytes": 1073,
+          "filename": "bach-toccata-LICENSE.txt"
+        },
+        "notices": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/THIRD_PARTY_NOTICES.md",
+          "sha256": "ba3e3c7edfc5b6d5ee1245f870211805427f8cbafbe20babbd4a9dc887d4816a",
+          "bytes": 16043,
+          "filename": "bach-toccata-THIRD-PARTY-NOTICES.md"
+        }
+      },
+      "stereo": {
+        "sidUrl": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/bach-toccata/bach-toccata-stereo.sid",
+        "referenceUrl": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/bach-toccata/bach-toccata-stereo.wav"
+      },
+      "target": {
+        "clock": "PAL",
+        "model": "MOS8580",
+        "sidCount": 1,
+        "baseAddress": 54272,
+        "subtune": 1
+      },
+      "rights": {
+        "license": "MIT; separate SID-Wizard player declaration",
+        "attribution": "J. S. Bach, BWV 565, public-domain composition. Anonymous Mutopia 1780 typesetting from Bach-Gesellschaft Ausgabe (1867), dedicated to the public domain. Original SID arrangement, patches and generated performance: SID Song Crafter, Copyright (c) 2026 Martin Backschat, MIT to the extent the project holds rights. Embedded SID-Wizard 1.97 player by Hermit Software / Mihaly Horvath, with help from Soci of Singular Crew, retains the upstream WTF-licensed declaration reproduced in the accompanying third-party notices; no formal SPDX identifier is inferred.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/bach-toccata/README.md",
+        "licenseUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/LICENSE",
+        "correspondingSourceUrl": "https://github.com/mbackschat/sid-song-crafter/archive/3db086b6963676ef75f34d7f77c3b67232a777fb.tar.gz"
+      },
+      "listening": {
+        "status": "Accepted complete mono interpretation",
+        "scope": "Accepted on 2026-10-14: source quarter positions 0–118, measures 1–29 and measure 30 beats 1–2, ending before the Fugue. The 88.12292517006803-second file includes release and verification silence. The WAV is the retained generated SID performance, not an organ recording.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/bach-toccata/manifest.json"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "sidSha256": "2578a1b96eb0338a50c6b926f60c806f79e9567b8a933274763d46fb0f17e761",
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": []
+      }
+    },
+    {
+      "id": "mozart-minuet",
+      "title": "Mozart Minuet and Trio — K. 525, movement III",
+      "description": "Complete Menuetto and Trio from Eine kleine Nachtmusik: a lively PAL three-voice reduction retaining the written repeats and Menuetto return.",
+      "durationSeconds": 146.37780045351474,
+      "files": {
+        "sid": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/mozart-minuet/mozart-minuet-mono.sid",
+          "sha256": "d86258302ae42fbed806103892439eea307a7cad30dd47181d065aa3bfc41bb6",
+          "bytes": 6639,
+          "filename": "mozart-minuet-mono.sid"
+        },
+        "reference": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/mozart-minuet/mozart-minuet-mono.wav",
+          "sha256": "2809f404df4361177b62467103f2d1bc6a9c859425792a75a50564788e7359bf",
+          "bytes": 12910566,
+          "filename": "mozart-minuet-mono.wav"
+        },
+        "license": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/LICENSE",
+          "sha256": "11890fae1065b64e4f3a65e82ac5c20f29407325a1ed5b48ad7c252b8acec062",
+          "bytes": 1073,
+          "filename": "mozart-minuet-LICENSE.txt"
+        },
+        "notices": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/THIRD_PARTY_NOTICES.md",
+          "sha256": "ba3e3c7edfc5b6d5ee1245f870211805427f8cbafbe20babbd4a9dc887d4816a",
+          "bytes": 16043,
+          "filename": "mozart-minuet-THIRD-PARTY-NOTICES.md"
+        }
+      },
+      "stereo": {
+        "sidUrl": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/mozart-minuet/mozart-minuet-stereo.sid",
+        "referenceUrl": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/mozart-minuet/mozart-minuet-stereo.wav"
+      },
+      "target": {
+        "clock": "PAL",
+        "model": "MOS8580",
+        "sidCount": 1,
+        "baseAddress": 54272,
+        "subtune": 1
+      },
+      "rights": {
+        "license": "MIT; separate SID-Wizard player declaration",
+        "attribution": "W. A. Mozart, Eine kleine Nachtmusik, K. 525, movement III, public-domain composition. Mike Blackstock’s Mutopia 2230 typesetting from Breitkopf & Härtel (1883), dedicated to the public domain. Project arrangement, configuration and tools: Copyright (c) 2026 Martin Backschat, MIT to the extent the project holds rights. Embedded SID-Wizard 1.97 player by Hermit Software / Mihaly Horvath, with help from Soci of Singular Crew, retains the upstream WTF-licensed declaration reproduced in the accompanying third-party notices; no formal SPDX identifier is inferred.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/mozart-minuet/README.md",
+        "licenseUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/LICENSE",
+        "correspondingSourceUrl": "https://github.com/mbackschat/sid-song-crafter/archive/3db086b6963676ef75f34d7f77c3b67232a777fb.tar.gz"
+      },
+      "listening": {
+        "status": "Accepted complete PAL mono rendition and ending",
+        "scope": "Complete PAL MOS8580 single-SID and dual-SID performances, stereo Trio richness and space, and ending accepted. NTSC has technical validation only. The matching WAV is the accepted complete mono SID render, not an orchestral recording.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/mozart-minuet/manifest.json"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "sidSha256": "d86258302ae42fbed806103892439eea307a7cad30dd47181d065aa3bfc41bb6",
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": []
+      }
+    },
+    {
+      "id": "instrument-mix",
+      "title": "Original instrument mix — three-part demo",
+      "description": "Original 10-second SID Song Crafter phrase combining a moving-pulse lead, pluck and bass; a short three-voice instrument demonstration.",
+      "durationSeconds": 10.0,
+      "files": {
+        "sid": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/instrument-mix/instrument-mix.sid",
+          "sha256": "911ea1f5f780de971ceb28dbbe7fcafaa27dc680d1182bfa367c78ff28454bc1",
+          "bytes": 3365,
+          "filename": "instrument-mix.sid"
+        },
+        "reference": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/instrument-mix/instrument-mix.wav",
+          "sha256": "730940dae1ebdd0d722f0f14b0031390058de2b499e1d848306b1ae161fb8f48",
+          "bytes": 882044,
+          "filename": "instrument-mix.wav"
+        },
+        "license": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/LICENSE",
+          "sha256": "11890fae1065b64e4f3a65e82ac5c20f29407325a1ed5b48ad7c252b8acec062",
+          "bytes": 1073,
+          "filename": "instrument-mix-LICENSE.txt"
+        },
+        "notices": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/THIRD_PARTY_NOTICES.md",
+          "sha256": "ba3e3c7edfc5b6d5ee1245f870211805427f8cbafbe20babbd4a9dc887d4816a",
+          "bytes": 16043,
+          "filename": "instrument-mix-THIRD-PARTY-NOTICES.md"
+        }
+      },
+      "stereo": {
+        "sidUrl": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/instrument-mix/instrument-mix-stereo.sid",
+        "referenceUrl": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/instrument-mix/instrument-mix-stereo.wav"
+      },
+      "target": {
+        "clock": "PAL",
+        "model": "MOS8580",
+        "sidCount": 1,
+        "baseAddress": 54272,
+        "subtune": 1
+      },
+      "rights": {
+        "license": "MIT; separate SID-Wizard player declaration",
+        "attribution": "Original SID Song Crafter short phrase and patches, designed 2026-10-12; no example instrument or tune bytes copied. Copyright (c) 2026 Martin Backschat, MIT to the extent the project holds rights. Embedded SID-Wizard 1.97 player by Hermit Software / Mihaly Horvath, with help from Soci of Singular Crew, retains the upstream WTF-licensed declaration reproduced in the accompanying third-party notices; no formal SPDX identifier is inferred.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/instrument-mix/README.md",
+        "licenseUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/LICENSE",
+        "correspondingSourceUrl": "https://github.com/mbackschat/sid-song-crafter/archive/3db086b6963676ef75f34d7f77c3b67232a777fb.tar.gz"
+      },
+      "listening": {
+        "status": "Initial mix-level acceptance",
+        "scope": "On 2026-10-12 the listener said “mix sounds ok” for the candidate three-voice mix. No hardware, editor/export or individual-instrument acceptance is inferred. The matching WAV is the generated mono SID performance.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/instrument-mix/manifest.json"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "sidSha256": "911ea1f5f780de971ceb28dbbe7fcafaa27dc680d1182bfa367c78ff28454bc1",
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": []
+      }
+    }
+  ],
+  "materials": [
+    {
+      "id": "moon-river",
+      "title": "Moon River",
+      "description": "Local mono/stereo builds; accepted first statement and stereo placement/balance. SID/WAV redistribution rights remain unresolved.",
+      "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/moon-river/README.md"
+    },
+    {
+      "id": "pink-panther",
+      "title": "Pink Panther",
+      "description": "Local mono/stereo builds; accepted complete arrangement and stereo placement/balance. SID/WAV redistribution rights remain unresolved.",
+      "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/pink-panther/README.md"
+    },
+    {
+      "id": "axel-f",
+      "title": "Axel F",
+      "description": "Local mono build; accepted complete performance with the selected shorter ending. No completed stereo rendition; SID/WAV redistribution rights remain unresolved.",
+      "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/songs/axel-f/README.md"
+    },
+    {
+      "id": "ghostbusters",
+      "title": "Ghostbusters",
+      "description": "Local native title with speech and selected stereo version; the stereo accompaniment reservation remains. SID/WAV redistribution rights remain unresolved.",
+      "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/songs/studies/ghostbusters-stereo/README.md"
     }
   ]
 }

@@ -12,10 +12,15 @@ const snapshot = JSON.parse(await readFile(new URL('../config/catalog.json', imp
 const clone = () => structuredClone(snapshot);
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
-test('the POC pins the cleared mono main-entry files and scoped listening verdict', () => {
+test('the snapshot pins all four cleared mono downloads and preserves scoped listening verdicts', () => {
   const catalog = parseCatalog(snapshot);
   assert.equal(catalog.source.revision, '3db086b6963676ef75f34d7f77c3b67232a777fb');
-  assert.equal(catalog.entries.length, 1);
+  assert.deepEqual(catalog.entries.map((entry) => entry.id), ['rambo-loader-main', 'bach-toccata', 'mozart-minuet', 'instrument-mix']);
+  assert.deepEqual(catalog.entries.map((entry) => entry.target.model), ['MOS6581', 'MOS8580', 'MOS8580', 'MOS8580']);
+  assert.deepEqual(catalog.entries.map((entry) => entry.durationSeconds), [193.35884353741497, 88.12292517006803, 146.37780045351474, 10]);
+  assert.deepEqual(catalog.materials.map((material) => material.id), ['moon-river', 'pink-panther', 'axel-f', 'ghostbusters']);
+  assert.ok(catalog.entries.every((entry) => entry.stereo));
+  assert.ok(catalog.entries.slice(1).every((entry) => entry.analysis.annotations.length === 0 && entry.files.notices));
   const entry = catalog.entries[0];
   assert.equal(entry.id, 'rambo-loader-main');
   assert.equal(entry.files.sid.sha256, '99c61d30de4a27e800d185709192de0af92e6d1f2b2350ff8b80f47d8dc4a8cc');
@@ -27,12 +32,47 @@ test('the POC pins the cleared mono main-entry files and scoped listening verdic
   assert.ok(entry.analysis.annotations.every((annotation) => annotation.voices.every((voice) => voice >= 1 && voice <= 3)));
 });
 
+test('schema 1 keeps the original mono-only snapshot compatible with optional additions', () => {
+  const legacy = clone();
+  delete legacy.materials;
+  legacy.entries = [legacy.entries[0]];
+  delete legacy.entries[0].stereo;
+  const catalog = parseCatalog(legacy);
+  assert.deepEqual(catalog.materials, []);
+  assert.equal(catalog.entries[0].stereo, undefined);
+  assert.equal(Object.hasOwn(legacy, 'materials'), false);
+});
+
+test('rejects unsafe, unpinned or ambiguous stereo and materials metadata', () => {
+  const mutations = [
+    (value: any) => { value.entries[0].stereo.extra = true; },
+    (value: any) => { value.entries[0].stereo.sidUrl = 'http://example.com/stereo.sid'; },
+    (value: any) => { value.entries[0].stereo.sidUrl = value.entries[0].stereo.sidUrl.replace(value.source.revision, 'main'); },
+    (value: any) => { value.entries[0].stereo.referenceUrl = 'https://example.com/stereo.wav'; },
+    (value: any) => { value.materials = {}; },
+    (value: any) => { value.materials[0].sourceUrl = value.materials[0].sourceUrl.replace(value.source.revision, 'main'); },
+    (value: any) => { value.materials[0].sourceUrl = 'https://example.com/README.md'; },
+    (value: any) => { value.materials[0].description = ''; },
+    (value: any) => { value.materials[0].audioUrl = 'https://example.com/uncleared.wav'; },
+    (value: any) => { value.materials[0].id = value.entries[0].id; },
+    (value: any) => { value.materials.push(structuredClone(value.materials[0])); },
+    (value: any) => { value.entries[1].files.notices.sha256 = 'not-a-hash'; },
+    (value: any) => { value.entries[1].files.notices.filename = '../notices'; },
+  ];
+  for (const mutate of mutations) {
+    const value = clone();
+    mutate(value);
+    assert.throws(() => parseCatalog(value), /catalog/i);
+  }
+});
+
 test('rejects incompatible or undeclared contracts', () => {
   const mutations = [
     (value: any) => { value.schemaVersion = 2; },
     (value: any) => { value.extra = true; },
     (value: any) => { value.entries[0].target.clock = 'NTSC'; },
     (value: any) => { value.entries[0].target.sidCount = 2; },
+    (value: any) => { value.entries[0].target.model = 'MOS9999'; },
     (value: any) => { value.entries[0].analysis.subtune = 2; },
     (value: any) => { value.entries[0].analysis.sidSha256 = '0'.repeat(64); },
     (value: any) => { value.entries[0].durationSeconds = Infinity; },
@@ -69,10 +109,11 @@ test('rejects unsafe files, moving source pins, duplicate identities and invalid
   }
 });
 
-async function fixture() {
+async function fixture(entryId = 'rambo-loader-main') {
   await mkdir(path.join(root, 'build'), { recursive: true });
   const directory = await mkdtemp(path.join(root, 'build/catalog-test-'));
   const catalog = clone();
+  catalog.entries = [catalog.entries.find((entry: any) => entry.id === entryId)];
   const data = new Map<string, Uint8Array>();
   for (const [kind, file] of Object.entries(catalog.entries[0].files) as [string, any][]) {
     const bytes = Buffer.from(`verified ${kind} fixture`);
@@ -129,6 +170,26 @@ test('downloads pinned bytes with a cancellation deadline and verifies each dige
     const result = await prepareSamples(value.catalog, { outputDirectory: value.outputDirectory, fetcher });
     assert.equal(requests.length, 3);
     assert.ok(result.every((file) => file.status === 'written'));
+  } finally {
+    await rm(value.directory, { recursive: true, force: true });
+  }
+});
+
+test('prepares the SID-Wizard license and player notices without fetching stereo or materials links', async () => {
+  const value = await fixture('bach-toccata');
+  const requests: string[] = [];
+  try {
+    const result = await prepareSamples(value.catalog, {
+      outputDirectory: value.outputDirectory,
+      fetcher: async (input) => {
+        requests.push(String(input));
+        return new Response(new Uint8Array(value.data.get(String(input)) ?? []));
+      },
+    });
+    assert.equal(result.length, 4);
+    assert.deepEqual(requests, Object.values(value.catalog.entries[0].files).map((file) => file.url));
+    const notices = value.catalog.entries[0].files.notices!;
+    assert.equal(sha256(await readFile(path.join(value.outputDirectory, notices.filename))), notices.sha256);
   } finally {
     await rm(value.directory, { recursive: true, force: true });
   }

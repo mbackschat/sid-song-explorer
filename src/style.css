@@ -181,3 +181,9 @@ button.seeking::before, #voice-mix-status.preparing::before { margin-right: 8px;
 @media (prefers-reduced-motion: reduce) { .status-line.seeking::before, button.seeking::before, #voice-mix-status.preparing::before { animation: none; } }
 
 #voice-mix-status.preparing { color: #e2d5ff; }
+
+.local-materials { margin-top: 16px; font-size: 11px; line-height: 1.6; color: #a9b2cd; }
+.local-materials summary { cursor: pointer; color: #d5c4ff; }
+.local-materials p { margin: 8px 0; }
+.local-materials ul { padding-left: 16px; }
+.local-materials li { margin: 5px 0; }

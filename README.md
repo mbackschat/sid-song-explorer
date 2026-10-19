@@ -4,17 +4,32 @@
 
 # SID Song Explorer
 
+<h1 align="center">
+  <a href="https://mbackschat.github.io/sid-song-explorer/">▶ RUN IN YOUR BROWSER →</a>
+</h1>
+
+<p align="center">
+  <a href="https://mbackschat.github.io/sid-song-explorer/"><img alt="Run SID Song Explorer" src="https://img.shields.io/badge/run%20now-mbackschat.github.io%2Fsid--song--explorer-8055c9?style=for-the-badge&amp;labelColor=000000"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/mbackschat/sid-song-crafter"><img src="https://raw.githubusercontent.com/mbackschat/sid-song-crafter/main/assets/branding/sid-song-crafter.svg" alt="SID Song Crafter" width="48" height="48"><br><strong>SID Song Crafter</strong></a> — arrange and export the music explored here.
+</p>
+
+Related: [Williams Sound Explorer and Designer](https://github.com/mbackschat/williams-sound-explorer) explores individual arcade sound programs.
+
 SID Song Explorer is a browser player and inspector for Commodore 64 SID music. It connects a heard passage to voice/register activity and source-backed explanations, using an existing SID emulator.
 
 ## Current state
 
-The first mono proof of concept is implemented, with passing engine and headless Chromium/WebKit interaction checks. It uses a small TypeScript/Vite application over `libsidplayfp-wasm` 1.1.0's SIDLite engine. Real desktop Safari playback through the complete ending and the user's judgment of the explanations remain pending; milestone 1 is not complete. [The plan](PLAN.md) owns status, and [the validation record](docs/validation/mono-poc.md) separates checks from remaining listening and browser gates. No hosted deployment is included.
+The first mono proof of concept is implemented, with passing engine and headless Chromium/WebKit interaction checks. It uses a small TypeScript/Vite application over `libsidplayfp-wasm` 1.1.0's SIDLite engine. Real desktop Safari playback through the complete ending and the user's judgment of the explanations remain pending; milestone 1 is not complete. [The plan](PLAN.md) owns status, and [the validation record](docs/validation/mono-poc.md) separates checks from remaining listening and browser gates. The app is hosted on GitHub Pages; local files remain on your device.
 
 [View the live interface](assets/screenshots/mono-poc.png), captured by the silent headless WebKit test.
 
 ## Implemented POC capabilities
 
-- Load the published Rambo loader main-music reconstruction from pinned, hash-verified files, with its matching generated WAV, attribution, license and source links.
+- Play the four public mono samples linked in Crafter’s README: Rambo loader main music, Bach Toccata, Mozart Minuet and Trio, and the original instrument mix. Each uses pinned, hash-verified files with its matching WAV, attribution, license and source links.
+- Follow stereo SID/WAV links for each published song. Live playback/inspection remains mono. Moon River, Pink Panther, Axel F and Ghostbusters appear separately as local-build materials, without unpublished audio.
 - Open callable mono PSID files locally, with subtune, PAL/NTSC and MOS6581/MOS8580 controls; local files and their hashes stay on the device.
 - Play, pause, restart, seek quickly within the prepared audio range, with busy feedback for unprepared positions, and set A–B study loops.
 - Mute or solo the three physical SID voices, with the waveform-write intervention and shared hardware dependencies labelled. Changing voices pauses sound to prepare the mix; a spinner and explanation appear beside the controls. Uninterrupted switching is tracked as `VOICE-1` in [the post-POC plan](PLAN.md#exit-the-poc-and-continue-production-work).
@@ -23,6 +38,12 @@ The first mono proof of concept is implemented, with passing engine and headless
 - Read three evidence-linked Rambo annotations with their exact evidence and listening scope.
 
 The POC accepts a bounded callable mono PSID subset; RSID, ROM/interrupt-driven profiles and additional SID chips are outside it. Seeking and loop continuation require the validation described in [the playback adapter](docs/architecture/playback-adapter.md); a state-restored loop does not promise a seamless audio splice. Dual-SID routing, the full model/count matrix and recent-iPhone compatibility remain product requirements for later gates in [the founding design](docs/design/web-player-and-analyser.md).
+
+## Published library
+
+The [live app](https://mbackschat.github.io/sid-song-explorer/) mirrors [Crafter’s downloadable samples](https://github.com/mbackschat/sid-song-crafter#downloads). Rambo remains the initial selection and carries three source-linked annotations; the other songs use generic live register inspection. Stereo files open separately for use in a compatible player. The [pinned catalog](config/catalog.json) records the precise files and provenance; [source preparation](docs/integration/poc-sources.md) explains updates.
+
+The [Application workflow](.github/workflows/app.yml) deploys `main` only after both supported browser/platform jobs pass. It builds and uploads the cleared assets, license notices and corresponding engine source. [Publication checks](docs/validation/mono-poc.md#github-pages-and-readme-catalog) cover the hosted app separately from local tests.
 
 ## Set up and validate
 

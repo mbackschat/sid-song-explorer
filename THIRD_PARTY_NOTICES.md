@@ -1,6 +1,6 @@
 # Third-party and transferred-material notices
 
-Original SID Song Explorer work is GPL-3.0-or-later; see [LICENSE](LICENSE). The mono POC adopts the engine and cleared sample below. Their applicable terms remain separate from the app's license. ROMs and original reference SID binaries are excluded.
+Original SID Song Explorer work is GPL-3.0-or-later; see [LICENSE](LICENSE). The mono player adopts the engine and cleared samples below. Their applicable terms remain separate from the app's license. ROMs and original reference SID binaries are excluded.
 
 ## libsidplayfp-wasm 1.1.0 / SIDLite
 
@@ -24,6 +24,12 @@ The catalog's **Rambo loader — main music** is a cleared independent reconstru
 **Modified version:** SID Song Crafter's independent symbolic score and computed C64 player, packaged 2026-10-15, with the main-entry modification dated 2026-10-16. The combined score, SID and generated WAV are under GPL version 3, without warranty; separately used independently authored tools retain their MIT license. Preserve the attribution, modification notice and sample license, including the prepared `rambo-loader-LICENSE.txt`. The UI supplies attribution, license, listening-scope and corresponding-source links.
 
 The [pinned catalog](config/catalog.json) identifies the exact SID/WAV/license bytes. The [sample source record](docs/integration/poc-sources.md) owns their full provenance, rights basis and evidence limits, with a direct [complete corresponding-source archive](https://github.com/mbackschat/sid-song-crafter/archive/3db086b6963676ef75f34d7f77c3b67232a777fb.tar.gz) and [reproduction instructions](https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-loader/README.md). The matching WAV is a generated reconstruction render, not an original recording. Preparation downloads these cleared outputs only into ignored `public/generated/`; source control does not contain the music binaries.
+
+## Bach, Mozart and the original instrument mix
+
+The public Bach Toccata and Mozart Minuet and Trio packages use public-domain compositions/source editions, with Crafter’s arrangements and tools under MIT. The instrument mix uses project-authored notes and instruments under MIT. Their SID-Wizard players retain the separate terms recorded in [Crafter’s pinned notices](https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/THIRD_PARTY_NOTICES.md). Each deployed package includes its exact MIT license and those player notices, linked from the application. [The catalog source record](docs/integration/poc-sources.md) identifies the owning manifests, declared hardware, exact SID/WAV hashes and listening scope. Stereo variants are linked to Crafter’s published files; the live engine remains mono.
+
+Local-build material links do not distribute their score/audio binaries or change their publication status.
 
 ## SID Song Crafter documentation
 

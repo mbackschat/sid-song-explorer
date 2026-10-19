@@ -2,8 +2,13 @@ name: Application
 on:
   push:
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+  pages: read
+concurrency:
+  group: application-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   check:
     name: ${{ matrix.browser }} / ${{ matrix.os }}
@@ -37,8 +42,29 @@ jobs:
       - run: pnpm exec playwright install --with-deps ${{ matrix.install }}
       - run: pnpm test:browser --project ${{ matrix.browser }}
         timeout-minutes: 3
+      - uses: actions/configure-pages@v5
+        if: matrix.browser == 'chrome' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      - uses: actions/upload-pages-artifact@v3
+        if: matrix.browser == 'chrome' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          path: dist
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: browser-failures-${{ matrix.browser }}-${{ matrix.os }}
           path: test-results/
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
