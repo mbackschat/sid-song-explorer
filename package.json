@@ -15,6 +15,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --experimental-strip-types --test --test-concurrency=1 tests/*.test.ts",
     "test:browser": "playwright test",
+    "screenshot:readme": "pnpm prepare:assets && pnpm build && EXPLORER_README_CAPTURE=1 playwright test tests/browser/readme-capture.spec.ts --project chrome && cp build/screenshots/chrome/rambo-playing.png assets/screenshots/rambo-playing.png",
     "prepare:assets": "pnpm prepare:samples && node --experimental-strip-types scripts/prepare-runtime.ts",
     "test:full": "EXPLORER_FULL_SONG=1 playwright test --project webkit --grep uninterrupted"
   },

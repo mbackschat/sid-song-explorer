@@ -65,6 +65,7 @@ The application uses TypeScript 5.9.3, Vite 7.3.1 and `libsidplayfp-wasm` 1.1.0/
 | Check focused software behavior | `pnpm test` | Catalog, engine and timeline guards; no human listening verdict. |
 | Build the application | `pnpm build` | Type checking and production output in `dist/`; prepare assets first. |
 | Check browser behavior | `pnpm test:browser` | Chrome and macOS WebKit checks after browser installation; not real Safari acceptance. |
+| Refresh the README screenshot | `pnpm screenshot:readme` | Build and verify live Rambo playback, then publish the silent Chrome capture; [capture contract](docs/validation/screenshots.md). |
 | Check documentation | `python3 scripts/check-docs.py` | Local Markdown targets and heading fragments; external availability excluded. |
 | Check patch whitespace | `git diff --check` | Whitespace errors in current changes. |
 | Rebuild logo exports | `python3 scripts/render-branding.py` | Raster assets from the selected vector masters; optional tools and visual checks in the [branding guide](assets/branding/README.md). |

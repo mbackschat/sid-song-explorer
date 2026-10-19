@@ -6,7 +6,11 @@
 
 SID Song Explorer is a browser player and inspector for Commodore 64 SID music. It connects a heard passage to voice/register activity and source-backed explanations, using an existing SID emulator.
 
-[![Run in browser](https://img.shields.io/badge/Run%20in%20browser-8055c9?style=for-the-badge)](https://mbackschat.github.io/sid-song-explorer/)
+<p>
+  <a href="https://mbackschat.github.io/sid-song-explorer/"><img alt="Run in browser" src="https://img.shields.io/badge/Run%20in%20browser-8055c9?style=for-the-badge" align="middle"></a>
+  <a href="assets/screenshots/rambo-playing.png"><img src="assets/screenshots/rambo-playing.png" alt="Rambo loader playing in mono, with three active SID voice lanes and live register inspection" width="560" align="middle"></a>
+</p>
+<p><sub>Rambo loader — live mono playback. Click the screenshot to enlarge.</sub></p>
 
 ## Related projects
 
@@ -16,8 +20,6 @@ SID Song Explorer is a browser player and inspector for Commodore 64 SID music. 
 ## Current state
 
 The first mono proof of concept is implemented, with passing engine and headless Chromium/WebKit interaction checks. It uses a small TypeScript/Vite application over `libsidplayfp-wasm` 1.1.0's SIDLite engine. Real desktop Safari playback through the complete ending and the user's judgment of the explanations remain pending; milestone 1 is not complete. [The plan](docs/PLAN.md) owns status, and [the validation record](docs/validation/mono-poc.md) separates checks from remaining listening and browser gates. The app is hosted on GitHub Pages; local files remain on your device.
-
-[View the live interface](assets/screenshots/mono-poc.png), captured by the silent headless WebKit test.
 
 ## Implemented POC capabilities
 
@@ -88,6 +90,7 @@ Both repositories can be worked on together in one agent session, with coordinat
 - [Founding design](docs/design/web-player-and-analyser.md): product contracts and verification gates.
 - [Application research](docs/research/web-music-explorers.md): dated comparisons and reuse alternatives.
 - [Contributor guide](CLAUDE.md): development conventions and validation.
+- [Screenshot harness](docs/validation/screenshots.md): reproduce and refresh the live Rambo README image.
 - [Branding](assets/branding/README.md): selected logo, exports and reproduction.
 - [Documentation index](docs/README.md): navigation.
 
