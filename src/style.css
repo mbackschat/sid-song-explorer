@@ -89,6 +89,8 @@ h3 { font-size: 14px; font-weight: 650; }
 .follow-controls button { font-size: 11px; }
 .history-summary { padding: 11px 17px; font-size: 10px; color: #9aa6c4; line-height: 1.6; background: #101525; }
 .lane-list { padding: 7px 16px 0; }
+.chip-heading { padding: 9px 0 6px; color: #c0b4dc; font-size: 11px; font-weight: 600; }
+.chip-lanes + .chip-lanes .chip-heading { border-top: 1px solid #45516e; margin-top: 8px; }
 .timeline-direction { display: grid; grid-template-columns: 1fr 1fr; padding: 0 0 7px 92px; font-size: 10px; color: #9aa6c4; }
 .timeline-direction span:last-child { text-align: right; }
 @media (max-width: 740px) { .timeline-direction { padding-left: 70px; } }
@@ -111,8 +113,8 @@ h3 { font-size: 14px; font-weight: 650; }
 .inspection-time { font-size: 12px; color: #c6b4ff; }
 .inspector-body { padding: 15px 17px; }
 .inspector-note { font-size: 11px; line-height: 1.6; color: #a5b0cc; margin-bottom: 14px; }
-.voice-tabs { display: flex; gap: 6px; margin-bottom: 15px; }
-.voice-tabs button { flex: 1; font-size: 11px; min-height: 32px; padding: 6px; }
+.voice-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 15px; }
+.voice-tabs button { font-size: 11px; min-height: 32px; padding: 6px; }
 .register-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 10px; }
 .register-grid dt { color: #9aa7c7; font-size: 10px; margin-bottom: 5px; }
 .register-grid dd { margin: 0; font-size: 12px; color: #e1e6f8; font-family: 'Space Mono', monospace; }
@@ -134,6 +136,7 @@ h3 { font-size: 14px; font-weight: 650; }
 .evidence-tag.verified { color: #83d0bd; }
 .evidence-tag.derived { color: #e2bf83; }
 .audio-body { padding: 15px 17px; }
+.audio-monitor { grid-column: 1 / -1; color: #a4b0cd; font-size: 11px; margin-bottom: 10px; }
 .meter-label { display: flex; justify-content: space-between; font-size: 10px; color: #a4b0cd; margin-bottom: 8px; }
 .meter-track { height: 7px; border-radius: 2px; background: #0b1120; overflow: hidden; margin-bottom: 12px; }
 .meter-level { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #6abfc0 0%, #8be4cc 75%, #efbf78 90%, #fc8c96 100%); transition: width .08s linear; }

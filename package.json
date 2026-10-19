@@ -10,6 +10,7 @@
   },
   "scripts": {
     "prepare:samples": "node --experimental-strip-types scripts/prepare-samples.ts",
+    "prepare:engine": "python3 scripts/experiments/stereo/run.py prepare && python3 scripts/experiments/stereo/run.py red && python3 scripts/experiments/stereo/run.py toolchain && python3 scripts/experiments/stereo/run.py build && python3 scripts/experiments/stereo/run.py verify",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",

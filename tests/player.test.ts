@@ -37,7 +37,7 @@ class FakeWorker {
 const profile = {clock: 'PAL', model: 'MOS6581', subtune: 1, durationSeconds: 200} as const;
 const details: TuneDetails = {
   title: 'Transport fixture', author: '', released: '', songs: 1, subtune: 1,
-  clock: 'PAL', model: 'MOS6581', installedSids: 1, sampleRate: 44100,
+  clock: 'PAL', model: 'MOS6581', installedSids: 1, channels: 1, sidChipBases: [0xd400], sampleRate: 44100,
   registers: Array<number>(32).fill(0),
 };
 const position = (seconds: number) => ({frame: Math.floor(seconds * 44100), registers: details.registers.slice()});
@@ -683,4 +683,54 @@ test('a rejected mute leaves the next accepted mix coverage synchronized with it
   assert.deepEqual(value.state.preparedRange, {start: 0, end: 30});
   worker.coverage(rejectedRequest.cacheEpoch!, 180);
   assert.deepEqual(value.state.preparedRange, {start: 0, end: 30});
+});
+
+
+test('dual-SID load exposes six controls and delivers each interleaved chip to its own Web Audio channel', async (t) => {
+  const value = fixture(t);
+  const created: {channels: Float32Array[]; rate: number}[] = [];
+  const starts: number[] = [];
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'AudioContext');
+  class AudioContextFixture {
+    currentTime = 0;
+    destination = {};
+    async resume() {}
+    async close() {}
+    createAnalyser() { return {connect() {}, getByteFrequencyData() {}, getFloatTimeDomainData() {}}; }
+    createBuffer(channels: number, frames: number, rate: number) {
+      const buffer = {channels: Array.from({length: channels}, () => new Float32Array(frames)), rate};
+      created.push(buffer);
+      return {getChannelData: (channel: number) => buffer.channels[channel]};
+    }
+    createBufferSource() { return {connect() {}, disconnect() {}, stop() {}, start: (time: number) => starts.push(time)}; }
+  }
+  Object.defineProperty(globalThis, 'AudioContext', {configurable: true, value: AudioContextFixture});
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, 'AudioContext', original);
+    else Reflect.deleteProperty(globalThis, 'AudioContext');
+  });
+  const loading = value.player.load(new Uint8Array([0]), {...profile, durationSeconds: 4096 / 44100});
+  const worker = FakeWorker.instances.at(-1)!;
+  worker.reply(worker.lastRequest('load'), {...details, installedSids: 2, channels: 2, sidChipBases: [0xd400, 0xd420], registers: Array(64).fill(0)});
+  await loading;
+  assert.deepEqual(value.state.muted, Array(6).fill(false));
+  await assert.rejects(value.player.setMuted([false, false, false]), /six|6/);
+  const playing = value.player.play();
+  await flushReplies();
+  const pcm = Int16Array.from({length: 8192}, (_, index) => index % 2 ? -16384 : 8192);
+  worker.reply(worker.lastRequest('render'), {pcm, startFrame: 0, endFrame: 4096, dropped: 0,
+    registers: Array(64).fill(0), writes: [
+      {timeSeconds: 0.021, cyclePhi1: 100, sidNumber: 0, address: 4, value: 17},
+      {timeSeconds: 0.042, cyclePhi1: 200, sidNumber: 1, address: 4, value: 33},
+    ]});
+  await playing;
+  assert.equal(created.length, 1);
+  assert.equal(created[0].rate, 44100);
+  assert.deepEqual(created[0].channels.map(channel => channel.length), [4096, 4096]);
+  assert.ok(created[0].channels[0].every(sample => sample === 0.25));
+  assert.ok(created[0].channels[1].every(sample => sample === -0.5));
+  assert.deepEqual(starts, [0.06]);
+  assert.equal(value.state.renderedUntil, 4096 / 44100);
+  assert.equal(value.state.frames.at(-1)!.registers[4], 17);
+  assert.equal(value.state.frames.at(-1)!.registers[36], 33);
 });

@@ -10,7 +10,7 @@ for (const [id, title, model] of [
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto('./');
-    await expect(page.locator('#sample-select option')).toHaveCount(4);
+    await expect(page.locator('#sample-select option')).toHaveCount(6);
     await page.locator('#sample-select').selectOption(id);
     await expect(page.locator('#model-select')).toHaveValue(model);
     await page.locator('#load-button').click();

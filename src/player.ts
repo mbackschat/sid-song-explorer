@@ -259,6 +259,7 @@ export class ExplorerPlayer implements PlayerControls {
       const info = await engine.request<TuneDetails>('load', {bytes, options: profile, durationSeconds:profile.durationSeconds});
       if (generation !== this.generation) return;
       this.state.info = info;
+      this.state.muted = Array<boolean>(info.installedSids * 3).fill(false);
       this.clearHistory(info.registers);
       this.state.status = 'ready';
       this.emit();
@@ -338,8 +339,9 @@ export class ExplorerPlayer implements PlayerControls {
   }
 
   async setMuted(mask: boolean[]) {
-    if (mask.length !== 3 || mask.some(value => typeof value !== 'boolean')) throw new Error('There are exactly three voice mute controls.');
     if (!this.engine || !this.state.info) throw new Error('Load a SID file first.');
+    const voices = this.state.info.installedSids * 3;
+    if (mask.length !== voices || mask.some(value => typeof value !== 'boolean')) throw new Error(`There are exactly ${voices} voice mute controls.`);
     this.state.muted = mask.slice();
     this.updateHeardState();
     const position = this.state.seekTarget ?? this.state.position;
@@ -406,9 +408,9 @@ export class ExplorerPlayer implements PlayerControls {
     this.state.dropped += block.dropped;
     this.state.writes.push(...block.writes);
     for (const write of block.writes) {
-      if (write.sidNumber !== 0) continue;
-      const register = write.address >= 0xd400 ? write.address - 0xd400 : write.address;
-      if (register >= 0 && register < 32) this.registers[register] = write.value;
+      const base = this.state.info!.sidChipBases[write.sidNumber];
+      const register = write.address >= 0xd400 ? write.address - base : write.address;
+      if (base !== undefined && register >= 0 && register < 32) this.registers[write.sidNumber * 32 + register] = write.value;
       const last = this.state.frames.at(-1);
       if (!last || write.timeSeconds - last.time >= 0.02) {
         this.state.frames.push({time: write.timeSeconds, registers: this.registers.slice()});
@@ -433,12 +435,16 @@ export class ExplorerPlayer implements PlayerControls {
         }
         const block = await this.engine.request<RenderBlock>('render', {frames: Math.min(4096, remaining)});
         if (generation !== this.generation) return;
-        if (block.pcm.length === 0) throw new Error('The emulator returned no audio. This file may need unsupported ROMs or a different profile.');
+        const channels = this.state.info!.channels;
+        const frames = block.endFrame - block.startFrame;
+        if (frames < 1 || block.pcm.length !== frames * channels) throw new Error('The emulator returned an invalid audio block.');
         this.frame = block.endFrame;
         this.record(block);
-        const buffer = this.context.createBuffer(1, block.pcm.length, 44100);
-        const samples = buffer.getChannelData(0);
-        for (let index = 0; index < samples.length; index++) samples[index] = block.pcm[index] / 32768;
+        const buffer = this.context.createBuffer(channels, frames, 44100);
+        for (let channel = 0; channel < channels; channel++) {
+          const samples = buffer.getChannelData(channel);
+          for (let frame = 0; frame < frames; frame++) samples[frame] = block.pcm[frame * channels + channel] / 32768;
+        }
         const source = this.context.createBufferSource();
         source.buffer = buffer;
         source.connect(this.analyser);
@@ -448,7 +454,7 @@ export class ExplorerPlayer implements PlayerControls {
           this.nextStart = this.context.currentTime + 0.03;
         }
         const contextStart = this.nextStart;
-        const contextEnd = contextStart + block.pcm.length / 44100;
+        const contextEnd = contextStart + frames / 44100;
         source.start(contextStart);
         this.segments.push({source, contextStart, contextEnd, mediaStart: block.startFrame / 44100, mediaEnd: block.endFrame / 44100});
         this.nextStart = contextEnd;

@@ -1,4 +1,5 @@
 import {test, expect} from './fixtures.ts';
+import {holdWorkerRequest} from './worker-control.ts';
 
 test('trace loss remains attached to held inspection while a newer chart is browsed', async ({page}) => {
   await page.addInitScript(() => {
@@ -26,10 +27,16 @@ test('trace loss remains attached to held inspection while a newer chart is brow
   await page.locator('#follow-button').click();
   const selected = await page.locator('#inspection-time').textContent();
   const writes = await page.locator('#write-list').textContent();
-  await page.locator('#seek-slider').fill('10');
-  await expect(page.locator('#play-status')).toHaveText('Live SID');
-  await expect(page.locator('#trace-warning')).toContainText('7 dropped writes');
   const scrollbar = page.getByRole('scrollbar', {name:'Browse timeline'});
+  const releaseSeek = await holdWorkerRequest(page, 'seek');
+  await page.locator('#seek-slider').fill('10');
+  await expect(page.locator('#play-status')).toHaveText('Seeking…');
+  await expect(scrollbar).toHaveAttribute('aria-disabled', 'true');
+  await releaseSeek();
+  await expect(page.locator('#play-status')).toHaveText('Live SID');
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(10);
+  await expect(scrollbar).toHaveAttribute('aria-disabled', 'false');
+  await expect(page.locator('#trace-warning')).toContainText('7 dropped writes');
   await scrollbar.focus();
   await scrollbar.press('PageDown');
   await expect(page.locator('#history-summary')).toHaveAttribute('title', /PREPARED OBSERVATIONS.*0 dropped writes/);

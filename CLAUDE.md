@@ -57,12 +57,13 @@ Original work is GPL-3.0-or-later; retain MIT notices for transferred documentat
 
 ## Commands and validation
 
-The application uses TypeScript 5.9.3, Vite 7.3.1 and `libsidplayfp-wasm` 1.1.0/SIDLite. [The architecture record](docs/architecture/playback-adapter.md) owns the choice and [the mono validation record](docs/validation/mono-poc.md) owns evidence and outstanding gates. Documentation checks additionally require Git and Python 3.10 or newer.
+The application uses TypeScript 5.9.3, Vite 7.3.1 and `libsidplayfp-wasm` 1.1.0/SIDLite. [The architecture record](docs/architecture/playback-adapter.md) owns the choice and [the mono validation record](docs/validation/mono-poc.md) and [dual-SID validation](docs/validation/stereo.md) own their separate evidence and gates. Documentation checks additionally require Git and Python 3.10 or newer. Building the modified raw-chip engine requires Docker and Python 3.12 or newer; CI builds it once on Linux and shares the verified artifact with both browser/platform jobs.
 
 | Task | Command | Evidence |
 | --- | --- | --- |
 | Install pinned dependencies | `pnpm install --frozen-lockfile` | Standalone lockfile installation; no sibling source dependency. |
-| Prepare deployment assets | `pnpm prepare:assets` | Verified sample files and copied engine license/notices/modifications/complete source in ignored `public/generated/`. |
+| Build the raw-chip engine | `pnpm prepare:engine` | Pinned source build and real-WASM raw routing/mono equality gate; bounded stages and retained logs in ignored `build/stereo-gate/`. |
+| Prepare deployment assets | `pnpm prepare:assets` | Verified sample files and verified custom engine/runtime/license/notices/modifications/complete source in ignored `public/generated/`. |
 | Start development | `pnpm dev` | Local Vite application; playback requires user interaction. |
 | Check focused software behavior | `pnpm test` | Catalog, engine and timeline guards; no human listening verdict. |
 | Build the application | `pnpm build` | Type checking and production output in `dist/`; prepare assets first. |

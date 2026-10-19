@@ -1,13 +1,13 @@
 import type { Catalog } from './catalog.ts';
 import type { PlayerControls, PlayerState, Profile, RegisterFrame, WriteObservation, TimelineObservation } from './player-types.ts';
-import { FOLLOW_WINDOW_SECONDS, followingWindow, fittedWindow, visibleTimelineFrames, observationRegistersAt } from './timeline.ts';
+import { FOLLOW_WINDOW_SECONDS, followingWindow, fittedWindow, visibleTimelineFrames, observationRegistersAt, composeTimelineObservations } from './timeline.ts';
+import type { DisplayedObservation } from './timeline.ts';
 import {timelineScrollbarGeometry, timelineViewportStart} from './timeline-scrollbar.ts';
 import logoUrl from '../assets/branding/sid-song-explorer.svg?url';
 import './style.css';
 
 type Entry = Catalog['entries'][number];
 type Annotation = Entry['analysis']['annotations'][number];
-type DisplayedObservation = TimelineObservation & {endInclusive: boolean};
 type HeldHistory = DisplayedObservation & {
   history: DisplayedObservation;
   epoch: number;
@@ -17,6 +17,10 @@ type HeldHistory = DisplayedObservation & {
   plotEnd: number;
 };
 const COLORS = ['#6ee0de', '#f3c681', '#f493b5'];
+const VOICES = [0, 1, 2, 3, 4, 5] as const;
+const CHIPS = [0, 1] as const;
+const filterLaneId = (chip: number) => chip === 0 ? 'filter-lane' : `filter-lane-${chip}`;
+const voiceName = (voice: number, stereo: boolean) => stereo ? `SID ${Math.floor(voice / 3) + 1} · Voice ${voice % 3 + 1}` : `Voice ${voice + 1}`;
 const MAX_FILE_BYTES = 65_662;
 const MAX_SEEK_SECONDS = 600;
 const TIMELINE_DENSITIES = [16, 32, 64, 128, 256, 512, 1024] as const;
@@ -34,37 +38,39 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   root.innerHTML = `
     <header class="app-header">
       <div class="brand"><img id="brand-logo" alt="SID Song Explorer sound lens" /><div><div class="brand-name">SID Song Explorer</div><div class="brand-subtitle">Hear the music. Explore the chip.</div></div></div>
-      <div class="header-note"><span class="mono">COMMODORE 64</span><span class="badge">Mono POC</span></div>
+      <div class="header-note"><span class="mono">COMMODORE 64</span><span class="badge">SID player</span></div>
     </header>
     <div class="app-shell">
       <aside class="sidebar" aria-label="Music library">
         <section><div class="eyebrow">Your listening desk</div><div class="library-mark"><span class="sid-icon mono">SID</span><div><strong>Published samples</strong><small>Source-backed listening</small></div></div>
           <label for="sample-select">Sample library</label><select id="sample-select" class="library-select"></select><button id="use-sample-button" class="small quiet library-load">Load selected sample →</button><p id="library-summary" class="library-summary"></p><details id="local-build-materials" class="local-materials"><summary>Local-build arrangements</summary><p>No audio download: build these locally using Crafter’s materials.</p><ul></ul></details>
         </section>
-        <section class="local-section"><h2>Bring your own SID</h2><input id="local-file" class="file-input" type="file" accept=".sid,audio/prs.sid" /><label for="local-file" class="file-button">＋ Open local SID</label><p class="privacy-note">Stays on your device. No uploads, file-hash requests or metadata lookups. Mono PSID · max 65,662 bytes.</p></section>
-        <div class="sidebar-footer"><span class="eyebrow">Made to explore</span><p>Three voices. One shared filter.<br />A whole world of sound.</p><p style="margin-top:12px"><a href="https://github.com/mbackschat/sid-song-explorer" target="_blank" rel="noreferrer">Project & source ↗</a></p></div>
+        <section class="local-section"><h2>Bring your own SID</h2><input id="local-file" class="file-input" type="file" accept=".sid,audio/prs.sid" /><label for="local-file" class="file-button">＋ Open local SID</label><p class="privacy-note">Stays on your device. No uploads, file-hash requests or metadata lookups. Mono or dual-SID PSID · max 65,662 bytes.</p></section>
+        <div class="sidebar-footer"><span class="eyebrow">Made to explore</span><p>Three voices per chip.<br />One shared filter per chip.</p><p style="margin-top:12px"><a href="https://github.com/mbackschat/sid-song-explorer" target="_blank" rel="noreferrer">Project & source ↗</a></p></div>
       </aside>
       <main class="workspace">
-        <section aria-labelledby="track-title"><div class="track-heading"><div><div class="eyebrow" id="source-kind">From the sample library</div><h1 id="track-title">Choose a SID to explore</h1><p id="track-description" class="track-description">Listen to a phrase, hold a moment, and see what the three SID voices are doing.</p><div class="track-profile"><span id="profile-badge" class="badge">PAL · MOS6581</span><span class="badge">1 SID · $D400 · mono</span><span id="analysis-badge" class="badge">Generic inspection</span></div></div><span id="play-status" class="badge">Ready to load</span></div></section>
+        <section aria-labelledby="track-title"><div class="track-heading"><div><div class="eyebrow" id="source-kind">From the sample library</div><h1 id="track-title">Choose a SID to explore</h1><p id="track-description" class="track-description">Listen to a phrase, hold a moment, and see what the SID voices are doing.</p><div class="track-profile"><span id="profile-badge" class="badge">PAL · MOS6581</span><span id="chip-profile-badge" class="badge">1 SID · $D400 · mono</span><span id="routing-badge" class="badge" hidden>Player routing · SID 1 left / SID 2 right</span><span id="analysis-badge" class="badge">Generic inspection</span></div></div><span id="play-status" class="badge">Ready to load</span></div></section>
         <div class="inspection-grid">
           <section id="timeline-panel" class="panel unified-panel" aria-labelledby="timeline-title">
             <div class="unified-toolbar"><div class="transport-buttons"><button id="play-button" class="primary" disabled>▶ Play</button><button id="restart-button" class="small quiet" disabled aria-label="Restart from beginning" title="Restart from beginning">↺</button><div class="time-display"><span id="heard-time">0:00</span> <small id="duration-label">/ —</small></div></div>
               <button id="load-button" class="small quiet">Load sample</button><div class="follow-controls"><div class="timeline-modes" role="group" aria-label="Timeline view"><button id="timeline-scroll" class="small" aria-pressed="true" title="Center heard playback with equal past and upcoming space">Scroll</button><button id="timeline-fit" class="small" aria-pressed="false" title="Fit all retained activity into the chart">Fit history</button></div><div id="timeline-zoom" class="timeline-zoom" role="group" aria-label="Timeline zoom"><button id="timeline-zoom-out" class="small" aria-label="Zoom out" title="Zoom out: show twice as much time">−</button><span id="timeline-scale" class="mono"></span><button id="timeline-zoom-in" class="small" aria-label="Zoom in" title="Zoom in: show twice the detail">+</button></div><button id="follow-button" class="small quiet" title="Hold the current moment in the Sound inspector">Hold</button><button id="return-button" class="small" aria-pressed="true" title="Return to centered playback and release held inspection">Follow</button></div></div>
             <div class="unified-heading"><h2 id="timeline-title">Voice activity</h2><small id="timeline-view-note">Centered on heard playback</small><button id="restore-button" class="small quiet" disabled>Full mix</button></div>
-            <div id="mix-controls" class="lane-list" aria-busy="false"><div id="timeline-direction" class="timeline-direction"><span id="timeline-earlier">Past</span><span id="timeline-later">Upcoming · prepared</span></div>${COLORS.map((color, voice) => `<div class="voice-lane" style="--voice:${color}"><div class="voice-label"><strong>Voice ${voice + 1}</strong><small id="lane-wave-${voice}">No observation</small><div class="lane-mix"><button id="mute-${voice}" class="small" aria-label="Mute voice ${voice + 1}" aria-pressed="false" disabled title="Mute voice ${voice + 1}">M</button><button id="solo-${voice}" class="small" aria-label="Solo voice ${voice + 1}" aria-pressed="false" disabled title="Solo voice ${voice + 1}">S</button></div></div><canvas id="voice-lane-${voice}" class="lane-plot" tabindex="0" role="slider" aria-label="Select inspection time for voice ${voice + 1}" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div>`).join('')}
-              <div class="voice-lane filter-lane" style="--voice:#b2a1ff"><div class="voice-label"><strong>Shared filter</strong><small>Cutoff register</small></div><canvas id="filter-lane" class="lane-plot" tabindex="0" role="slider" aria-label="Select shared filter inspection time" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div><div class="timeline-ruler"><input id="seek-slider" type="range" min="0" max="30" step="0.01" value="0" disabled aria-label="Seek playback in seconds" title="Click or drag the ruler to seek; arrow keys adjust playback" /><div class="timeline-key mono"><span id="timeline-start">0:00</span><span id="timeline-cursor">Heard playhead</span><span id="timeline-end">0:30</span></div></div><div class="timeline-scrollbar"><button id="timeline-scroll-back" class="small" aria-label="Scroll timeline earlier">◀</button><div id="timeline-scroll-track" tabindex="0" role="scrollbar" aria-label="Browse timeline" aria-controls="voice-lane-0 voice-lane-1 voice-lane-2 filter-lane" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><div id="timeline-scroll-thumb"></div></div><button id="timeline-scroll-forward" class="small" aria-label="Scroll timeline later">▶</button></div>
+            <div id="mix-controls" class="lane-list" aria-busy="false"><div id="timeline-direction" class="timeline-direction"><span id="timeline-earlier">Past</span><span id="timeline-later">Upcoming · prepared</span></div>${CHIPS.map(chip => `<div id="chip-lanes-${chip}" class="chip-lanes"${chip ? ' hidden' : ''}><div id="chip-heading-${chip}" class="chip-heading" hidden>SID ${chip + 1}</div>${[0, 1, 2].map(localVoice => {
+              const voice = chip * 3 + localVoice;
+              return `<div class="voice-lane" style="--voice:${COLORS[localVoice]}"><div class="voice-label"><strong id="voice-label-${voice}">Voice ${localVoice + 1}</strong><small id="lane-wave-${voice}">No observation</small><div class="lane-mix"><button id="mute-${voice}" class="small" aria-label="Mute voice ${voice + 1}" aria-pressed="false" disabled title="Mute voice ${voice + 1}">M</button><button id="solo-${voice}" class="small" aria-label="Solo voice ${voice + 1}" aria-pressed="false" disabled title="Solo voice ${voice + 1}">S</button></div></div><canvas id="voice-lane-${voice}" class="lane-plot" tabindex="0" role="slider" aria-label="Select inspection time for voice ${voice + 1}" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0" data-sid-number="${chip}"></canvas></div>`;
+            }).join('')}<div class="voice-lane filter-lane" style="--voice:#b2a1ff"><div class="voice-label"><strong>Shared filter</strong><small>Cutoff register</small></div><canvas id="${filterLaneId(chip)}" class="lane-plot" tabindex="0" role="slider" aria-label="Select shared filter inspection time" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0" data-sid-number="${chip}"></canvas></div></div>`).join('')}<div class="timeline-ruler"><input id="seek-slider" type="range" min="0" max="30" step="0.01" value="0" disabled aria-label="Seek playback in seconds" title="Click or drag the ruler to seek; arrow keys adjust playback" /><div class="timeline-key mono"><span id="timeline-start">0:00</span><span id="timeline-cursor">Heard playhead</span><span id="timeline-end">0:30</span></div></div><div class="timeline-scrollbar"><button id="timeline-scroll-back" class="small" aria-label="Scroll timeline earlier">◀</button><div id="timeline-scroll-track" tabindex="0" role="scrollbar" aria-label="Browse timeline" aria-controls="voice-lane-0 voice-lane-1 voice-lane-2 filter-lane" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><div id="timeline-scroll-thumb"></div></div><button id="timeline-scroll-forward" class="small" aria-label="Scroll timeline later">▶</button></div>
             </div><div class="timeline-feedback"><span id="timeline-availability"></span><div id="status-message" class="status-line" role="status" aria-live="polite">Choose a sample to begin.</div></div>
             <div id="history-summary" class="history-summary"><span id="history-description">No retained observations yet.</span> <span id="trace-warning" role="status" hidden></span> <a id="view-inspector" href="#inspector-title" hidden>View inspector →</a></div>
             <p id="voice-mix-status" class="intervention-note" role="status" aria-live="polite" aria-atomic="true"></p>
             <div class="panel-options"><details id="loop-details"><summary>Loop A–B</summary>
-            <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="0" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="8" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restarts may briefly pause; playback is not gapless.</span></div></details><details id="playback-setup"><summary>Playback setup</summary><div class="settings"><label><span>Clock</span><select id="clock-select"><option>PAL</option><option>NTSC</option></select></label><label><span>Chip model</span><select id="model-select"><option value="MOS6581">MOS 6581</option><option value="MOS8580">MOS 8580</option></select></label><label><span>Subtune</span><select id="subtune-select"><option value="1">1</option></select></label><p id="settings-note" class="settings-note">Settings apply when you load. Prepared audio supports quick seeking; other positions need preparation. Trace timestamp alignment is approximate.</p></div></details><details id="timeline-help"><summary>Help & details</summary><p class="timeline-help">Drag the proportional scrollbar to browse without changing sound. Click or drag the time ruler to seek when released. Click a lane to seek playback. Shift-click a lane to inspect its settings; Hold captures the current heard position. Follow returns to centered playback. Zoom changes detail; wider charts show more time at the same zoom. Shading marks unavailable observations. Fit history shows retained heard activity. A line shows register frequency, not loudness; gate clear can still release sound.</p><div class="transport-foot"><span id="seek-note"></span><span id="render-lead"></span></div></details></div>
+            <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="0" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="8" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restarts may briefly pause; playback is not gapless.</span></div></details><details id="playback-setup"><summary>Playback setup</summary><div class="settings"><label><span>Clock</span><select id="clock-select"><option>PAL</option><option>NTSC</option></select></label><label><span id="chip-model-label">Chip model</span><select id="model-select"><option value="MOS6581">MOS 6581</option><option value="MOS8580">MOS 8580</option></select></label><label><span>Subtune</span><select id="subtune-select"><option value="1">1</option></select></label><p id="settings-note" class="settings-note">Settings apply when you load. Prepared audio supports quick seeking; other positions need preparation. Trace timestamp alignment is approximate.</p></div></details><details id="timeline-help"><summary>Help & details</summary><p class="timeline-help">Drag the proportional scrollbar to browse without changing sound. Click or drag the time ruler to seek when released. Click a lane to seek playback. Shift-click a lane to inspect its settings; Hold captures the current heard position. Follow returns to centered playback. Zoom changes detail; wider charts show more time at the same zoom. Shading marks unavailable observations. Fit history shows retained heard activity. A line shows register frequency, not loudness; gate clear can still release sound.</p><div class="transport-foot"><span id="seek-note"></span><span id="render-lead"></span></div></details></div>
           </section>
-          <aside class="panel inspector" aria-labelledby="inspector-title"><div class="panel-header"><h2 id="inspector-title" tabindex="-1">Sound inspector</h2><span id="inspection-time" class="inspection-time mono">0:00.00</span></div><div class="inspector-body"><p id="inspector-note" class="inspector-note">Following heard playback. Register settings are derived observations, not recovered instruments or measured envelope amplitude.</p><div class="voice-tabs" role="group" aria-label="Inspect voice">${COLORS.map((_, voice) => `<button id="inspect-${voice}" class="small" aria-pressed="${voice === 0}">Voice ${voice + 1}</button>`).join('')}</div>
+          <aside class="panel inspector" aria-labelledby="inspector-title"><div class="panel-header"><h2 id="inspector-title" tabindex="-1">Sound inspector</h2><span id="inspection-time" class="inspection-time mono">0:00.00</span></div><div class="inspector-body"><p id="inspector-note" class="inspector-note">Following heard playback. Register settings are derived observations, not recovered instruments or measured envelope amplitude.</p><div class="voice-tabs" role="group" aria-label="Inspect voice">${VOICES.map(voice => `<button id="inspect-${voice}" class="small" aria-pressed="${voice === 0}"${voice >= 3 ? ' hidden' : ''}>Voice ${voice + 1}</button>`).join('')}</div>
             <dl class="register-grid"><div><dt>Frequency register</dt><dd id="reg-frequency">—</dd></div><div><dt>Derived oscillator Hz</dt><dd id="reg-hz">—</dd></div><div class="wide"><dt>Waveform selection</dt><dd id="reg-waveform">—</dd></div><div><dt>Gate / Test</dt><dd id="reg-gate">—</dd></div><div><dt>Pulse width · 12-bit</dt><dd id="reg-pulse">—</dd></div><div><dt>AD / SR settings</dt><dd id="reg-adsr">—</dd></div><div><dt>Ring / Sync</dt><dd id="reg-coupling">—</dd></div></dl>
-            <h3 class="inspector-subhead">One filter · all three voices</h3><div id="filter-details" class="shared-filter">No observed register frame.</div><h3 class="inspector-subhead">Last ordered writes ≤ cursor</h3><ol id="write-list" class="write-list"><li class="write-empty">Load and play to collect writes.</li></ol></div></aside>
+            <h3 id="filter-title" class="inspector-subhead">One filter · all three voices</h3><div id="filter-details" class="shared-filter">No observed register frame.</div><h3 class="inspector-subhead">Last ordered writes ≤ cursor</h3><ol id="write-list" class="write-list"><li class="write-empty">Load and play to collect writes.</li></ol></div></aside>
         </div>
         <div class="bottom-grid"><section class="panel" aria-labelledby="evidence-title"><div class="panel-header"><h2 id="evidence-title">Listen a little closer</h2><span class="badge">Linked evidence</span></div><div class="evidence-body"><p id="evidence-scope" class="evidence-scope">Authored annotations apply only to their exact catalog file, clock, chip model and subtune.</p><div id="evidence-cards"></div></div></section>
-          <section class="panel" aria-labelledby="output-title"><div class="panel-header"><h2 id="output-title">Audio output</h2><span class="badge">PCM · mono</span></div><div class="audio-body"><div class="meter-label"><span>Peak · measured PCM</span><span id="peak-label" class="mono">−∞ dBFS</span></div><div class="meter-track"><span id="peak-meter" class="meter-level"></span></div><div class="meter-label"><span>RMS</span><span id="rms-label" class="mono">−∞ dBFS</span></div><canvas id="waveform-plot" class="audio-plot" aria-label="Actual output waveform"></canvas><div class="plot-caption"><span>WAVEFORM</span><span>Audio output</span></div><canvas id="spectrum-plot" class="audio-plot" aria-label="Actual output frequency spectrum"></canvas><div class="plot-caption"><span>SPECTRUM</span><span id="spectrum-range">0 → Nyquist</span></div></div><div id="reference-section" class="reference-body"><h3>Retained reference · WAV</h3><p id="reference-scope">Load a catalog sample for its retained listening reference.</p><audio id="reference-audio" controls preload="none" aria-label="Retained reference recording"></audio></div></section>
+          <section class="panel" aria-labelledby="output-title"><div class="panel-header"><h2 id="output-title">Audio output</h2><span id="output-profile-badge" class="badge">PCM · mono</span></div><div class="audio-body"><p id="analysis-monitor" class="audio-monitor" hidden>Mono monitor · (L + R) / 2</p><div class="meter-label"><span id="peak-title">Peak · measured PCM</span><span id="peak-label" class="mono">−∞ dBFS</span></div><div class="meter-track"><span id="peak-meter" class="meter-level"></span></div><div class="meter-label"><span id="rms-title">RMS</span><span id="rms-label" class="mono">−∞ dBFS</span></div><canvas id="waveform-plot" class="audio-plot" aria-label="Actual output waveform"></canvas><div class="plot-caption"><span>WAVEFORM</span><span id="waveform-source">Audio output</span></div><canvas id="spectrum-plot" class="audio-plot" aria-label="Actual output frequency spectrum"></canvas><div class="plot-caption"><span>SPECTRUM</span><span id="spectrum-range">0 → Nyquist</span></div></div><div id="reference-section" class="reference-body"><h3>Retained reference · WAV</h3><p id="reference-scope">Load a catalog sample for its retained listening reference.</p><audio id="reference-audio" controls preload="none" aria-label="Retained reference recording"></audio></div></section>
         </div>
         <footer class="source-footer"><div id="source-links" class="source-links"></div><span id="audio-diagnostics">Device-local playback · no backend</span><div id="engine-links" class="source-links" aria-label="Playback engine licenses and source"></div></footer>
       </main>
@@ -100,8 +106,13 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let cursor = 0;
   let selectedEnd: number | null = null;
   let selectedVoice = 0;
-  let selectedFilter = false;
-  const inspectionSubject = () => selectedFilter ? 'Shared filter' : `Voice ${selectedVoice + 1}`;
+  let selectedFilterChip: number | null = null;
+  const chipCount = () => state?.info?.installedSids ?? 1;
+  const voiceCount = () => chipCount() * 3;
+  const inspectionSubject = () => {
+    if (selectedFilterChip === null) return voiceName(selectedVoice, chipCount() > 1);
+    return chipCount() > 1 ? `SID ${selectedFilterChip + 1} shared filter` : 'Shared filter';
+  };
   let busy = false;
   let notice = '';
   let seekDragging = false;
@@ -113,6 +124,14 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let evidenceKey = '';
   let sourceKey = '';
   let previousEpoch = -1;
+  let liveObservationCache: {
+    epoch: number;
+    renderedUntil: number;
+    historyStart: number;
+    end: number;
+    preview: TimelineObservation | null;
+    observations: DisplayedObservation;
+  } | null = null;
 
   const report = (message: string, isError = false) => {
     notice = message;
@@ -150,7 +169,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   const updateReference = () => {
     reference.pause();
     if (loadedEntry) {
-      reference.src = generated(loadedEntry.files.reference.filename);
+      reference.src = loadedEntry.referenceUrl ?? generated(loadedEntry.files.reference!.filename);
       setText('reference-scope', `${loadedEntry.listening.status}: ${loadedEntry.listening.scope} This retained render is separate from live emulation.`);
       el('reference-section').hidden = false;
     } else {
@@ -190,7 +209,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
         report('Reloading local SID with the selected settings…');
         await loadBytes(localBytes, null);
       } else {
-        if (!chosenEntry) throw new Error('No catalog samples are available. Open a local mono PSID.');
+        if (!chosenEntry) throw new Error('No catalog samples are available. Open a local PSID.');
         report('Fetching sample and verifying its SHA-256…');
         const response = await fetch(generated(chosenEntry.files.sid.filename), { signal: AbortSignal.timeout(20000) });
         if (!response.ok) throw new Error(`Sample download failed (${response.status}). You can retry Load sample.`);
@@ -215,17 +234,25 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     draw();
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      if (bytes.length < 118 || String.fromCharCode(...bytes.slice(0, 4)) !== 'PSID') throw new Error('Open a mono PSID .sid file. RSID and ROM-dependent formats are outside this prototype.');
+      if (bytes.length < 118 || String.fromCharCode(...bytes.slice(0, 4)) !== 'PSID') throw new Error('Open a mono PSID or dual-SID PSID .sid file. RSID and ROM-dependent formats are outside this prototype.');
       const header = new DataView(bytes.buffer);
       const version = header.getUint16(4);
       const songs = header.getUint16(14);
       const start = header.getUint16(16);
       if (version < 1 || version > 4 || songs < 1 || songs > 256 || start < 1 || start > songs) throw new Error('The PSID header has an unsupported version or invalid subtune information.');
       if (version >= 2 && bytes.length < 124) throw new Error('The PSID header is truncated.');
-      if ((version >= 3 && bytes[122]) || (version >= 4 && bytes[123])) throw new Error('This first prototype supports one mono SID. This file declares additional chips.');
+      if (version >= 4 && bytes[123]) throw new Error('This player supports one or two SID chips. This file declares a third chip.');
       const flags = version >= 2 ? header.getUint16(118) : 0;
+      const firstModel = (flags >> 4) & 3;
+      const secondModel = version >= 3 && bytes[122] ? (flags >> 6) & 3 : 0;
+      const concreteFirst = firstModel === 1 || firstModel === 2;
+      const concreteSecond = secondModel === 1 || secondModel === 2;
+      if (concreteFirst && concreteSecond && firstModel !== secondModel) {
+        throw new Error('This dual-SID file declares different chip models. Mixed-model playback is outside the current shared-model profile.');
+      }
+      const model = concreteFirst ? firstModel : concreteSecond ? secondModel : 0;
       select('clock-select').value = ((flags >> 2) & 3) === 2 ? 'NTSC' : 'PAL';
-      select('model-select').value = ((flags >> 4) & 3) === 2 ? 'MOS8580' : 'MOS6581';
+      select('model-select').value = model === 2 ? 'MOS8580' : 'MOS6581';
       setSubtunes(songs, start);
       sourceMode = 'local';
       localBytes = bytes;
@@ -287,8 +314,26 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       start: state.historyStart, end: position, dropped: state.dropped, endInclusive: true,
     };
   };
-  const liveObservations = (): DisplayedObservation => timelineView === 'scroll' && state?.preview
-    ? {...state.preview, endInclusive: false} : heardObservations();
+  const liveObservations = (): DisplayedObservation => {
+    if (timelineView !== 'scroll' || !state || ['loading', 'error'].includes(state.status)) return heardObservations();
+    const end = Math.min(state.renderedUntil, state.timelineCenterSeconds === null ? state.loop?.end ?? Infinity : Infinity);
+    if (!liveObservationCache || liveObservationCache.epoch !== state.epoch || liveObservationCache.renderedUntil !== state.renderedUntil ||
+      liveObservationCache.historyStart !== state.historyStart || liveObservationCache.end !== end || liveObservationCache.preview !== state.preview) {
+      // Audio scheduling retains real observations beyond heard time, bridging a PCM cache that can evict scheduled audio.
+      const retained: DisplayedObservation = {
+        start: Math.min(state.historyStart, end), end, endInclusive: false,
+        frames: state.historyStart <= end ? state.frames : [],
+        writes: state.historyStart <= end ? state.writes : [], dropped: state.dropped,
+      };
+      const observations = state.preview
+        ? composeTimelineObservations(retained, {...state.preview, endInclusive: false}) : retained;
+      liveObservationCache = {
+        epoch: state.epoch, renderedUntil: state.renderedUntil, historyStart: state.historyStart,
+        end, preview: state.preview, observations,
+      };
+    }
+    return liveObservationCache.observations;
+  };
   const copyObservations = (observations: DisplayedObservation): DisplayedObservation => ({
     ...observations,
     frames: observations.frames.map(frame => ({time: frame.time, registers: [...frame.registers]})),
@@ -296,8 +341,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   });
   const copyVisibleHistory = (): HeldHistory => {
     const history = copyObservations(heardObservations());
-    const observations = timelineView === 'scroll' && state?.preview
-      ? copyObservations({...state.preview, endInclusive: false}) : history;
+    const observations = timelineView === 'scroll' ? copyObservations(liveObservations()) : history;
     return {
       ...observations,
       history,
@@ -432,38 +476,39 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     seekTimeline(rulerTarget);
   });
   ruler.addEventListener('pointercancel', () => { rulerPointer = null; seekDragging = false; draw(); });
-  for (let voice = 0; voice < 3; voice++) {
-    button(`inspect-${voice}`).addEventListener('click', () => { selectedVoice = voice; selectedFilter = false; draw(); });
+  for (const voice of VOICES) {
+    button(`inspect-${voice}`).addEventListener('click', () => { selectedVoice = voice; selectedFilterChip = null; draw(); });
     button(`mute-${voice}`).addEventListener('click', () => { void run(async () => {
-      const mask = [...(state?.muted ?? [false, false, false])];
+      const mask = [...state!.muted];
       mask[voice] = !mask[voice];
       await controls.setMuted(mask);
       evidenceKey = '';
     }); });
     button(`solo-${voice}`).addEventListener('click', () => { void run(async () => {
       const soloed = state?.muted.every((muted, index) => muted === (index !== voice));
-      await controls.setMuted(soloed ? [false, false, false] : [0, 1, 2].map(index => index !== voice));
+      await controls.setMuted(state!.muted.map((_, index) => !soloed && index !== voice));
       evidenceKey = '';
     }); });
   }
-  button('restore-button').addEventListener('click', () => { void run(async () => { await controls.setMuted([false, false, false]); evidenceKey = ''; }); });
-  for (const id of ['voice-lane-0', 'voice-lane-1', 'voice-lane-2', 'filter-lane']) {
+  button('restore-button').addEventListener('click', () => { void run(async () => { await controls.setMuted(state!.muted.map(() => false)); evidenceKey = ''; }); });
+  for (const lane of [...VOICES.map(voice => ({id: `voice-lane-${voice}`, voice, chip: Math.floor(voice / 3)})), ...CHIPS.map(chip => ({id: filterLaneId(chip), voice: null, chip}))]) {
+    const {id, voice, chip} = lane;
     const canvas = el<HTMLCanvasElement>(id);
     canvas.title = 'Click to seek playback; Shift-click to inspect';
     canvas.addEventListener('pointerdown', event => {
       if (event.button !== 0) return;
       const rect = canvas.getBoundingClientRect();
       const selectedTime = plotStart + Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * (plotEnd - plotStart);
-      selectedFilter = id === 'filter-lane';
-      if (!selectedFilter) selectedVoice = Number(id.slice(-1));
+      selectedFilterChip = voice === null ? chip : null;
+      selectedVoice = voice ?? chip * 3 + selectedVoice % 3;
       if (event.shiftKey) holdAt(selectedTime);
       else seekTimeline(selectedTime);
     });
     canvas.addEventListener('keydown', event => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       event.preventDefault();
-      selectedFilter = id === 'filter-lane';
-      if (!selectedFilter) selectedVoice = Number(id.slice(-1));
+      selectedFilterChip = voice === null ? chip : null;
+      selectedVoice = voice ?? chip * 3 + selectedVoice % 3;
       holdAt(Math.min(plotEnd, Math.max(plotStart, (held ? cursor : state?.position ?? 0) + (event.key === 'ArrowRight' ? 1 : -1) * (event.shiftKey ? 1 : .1))));
     });
   }
@@ -488,7 +533,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     held.plotEnd = annotation.startSeconds + FOLLOW_WINDOW_SECONDS;
     cursor = annotation.startSeconds;
     selectedEnd = annotation.endSeconds;
-    selectedFilter = false;
+    selectedFilterChip = null;
     selectedVoice = Math.max(0, (annotation.voices[0] ?? 1) - 1);
     const playbackLimit = Math.min(state?.duration ?? MAX_SEEK_SECONDS, MAX_SEEK_SECONDS);
     const contextEnd = Math.min(playbackLimit, Math.max(annotation.endSeconds, annotation.startSeconds + 4));
@@ -572,7 +617,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       if (loadedEntry.stereo) {
         links.append(link('Stereo SID ↓', loadedEntry.stereo.sidUrl), link('Stereo WAV ↗', loadedEntry.stereo.referenceUrl));
         const scope = document.createElement('span');
-        scope.textContent = 'Live inspection uses the mono version. The stereo SID requires a two-SID player.';
+        scope.textContent = 'Separate stereo arrangement downloads.';
         scope.className = 'attribution';
         links.append(scope);
       }
@@ -599,7 +644,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     ctx.clearRect(0, 0, width, height);
     return { ctx, width, height };
   };
-  const drawLane = (id: string, frames: RegisterFrame[], writes: WriteObservation[], voice: number | null, observedUntil: number, coverageStart: number) => {
+  const drawLane = (id: string, frames: RegisterFrame[], writes: WriteObservation[], voice: number | null, chip: number, observedUntil: number, coverageStart: number) => {
     const plot = canvasContext(id);
     if (!plot) return;
     const { ctx, width, height } = plot;
@@ -621,7 +666,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     if (selectedEnd !== null && held) { ctx.fillStyle = '#8b72d322'; ctx.fillRect(x(cursor), 0, x(selectedEnd) - x(cursor), height); }
     let previous: RegisterFrame | null = null;
     const stride = Math.max(1, Math.floor(frames.length / Math.max(1, width * 2)));
-    ctx.strokeStyle = voice === null ? '#b2a1ff' : COLORS[voice]!;
+    ctx.strokeStyle = voice === null ? '#b2a1ff' : COLORS[voice % 3]!;
     ctx.lineWidth = 1.4;
     ctx.beginPath();
     let started = false;
@@ -629,13 +674,14 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       const frame = frames[index]!;
       if (frame.time < Math.max(plotStart, coverageStart) || frame.time > observedUntil) continue;
       const registers = frame.registers;
-      const base = (voice ?? 0) * 7;
-      const value = voice === null ? ((registers[22] ?? 0) << 3) | ((registers[21] ?? 0) & 7) : ((registers[base + 1] ?? 0) << 8) | (registers[base] ?? 0);
+      const chipBase = chip * 32;
+      const base = chipBase + (voice ?? 0) % 3 * 7;
+      const value = voice === null ? ((registers[chipBase + 22] ?? 0) << 3) | ((registers[chipBase + 21] ?? 0) & 7) : ((registers[base + 1] ?? 0) << 8) | (registers[base] ?? 0);
       const normalized = voice === null ? value / 2047 : Math.log2(1 + value) / 16;
       const y = height - 15 - normalized * (height - 23);
       if (!started) { ctx.moveTo(x(frame.time), y); started = true; } else ctx.lineTo(x(frame.time), y);
       if (voice !== null && previous && ((previous.registers[base + 4] ?? 0) & 1)) {
-        ctx.fillStyle = `${COLORS[voice]}60`;
+        ctx.fillStyle = `${COLORS[voice % 3]}60`;
         ctx.fillRect(x(previous.time), height - 7, Math.max(1, x(frame.time) - x(previous.time)), 3);
       }
       previous = frame;
@@ -644,9 +690,9 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     if (voice !== null) {
       let previousWaveform: number | null = null;
       for (const write of writes) {
-        if (write.timeSeconds < Math.max(plotStart, coverageStart) || write.timeSeconds > observedUntil || (write.address & 31) !== voice * 7 + 4) continue;
+        if (write.timeSeconds < Math.max(plotStart, coverageStart) || write.timeSeconds > observedUntil || write.sidNumber !== chip || (write.address & 31) !== voice % 3 * 7 + 4) continue;
         const waveform = write.value & 0xf0;
-        if (previousWaveform !== waveform) { ctx.fillStyle = COLORS[voice]!; ctx.fillRect(x(write.timeSeconds), 4, 2, 4); }
+        if (previousWaveform !== waveform) { ctx.fillStyle = COLORS[voice % 3]!; ctx.fillRect(x(write.timeSeconds), 4, 2, 4); }
         previousWaveform = waveform;
       }
     }
@@ -697,12 +743,16 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     const coverage = held ? `Held ${inspectionSubject()} at ${time(cursor, true)}. ${state?.status === 'playing' ? 'Music continues; only inspection is frozen.' : 'Inspection is frozen independently of playback.'} ` : 'Following heard playback. ';
     setText('inspector-note', `${coverage}${held && registers && cursor > held.heardUntil ? 'Prepared ahead of playback when held. ' : ''}${held ? `Captured ${held.configuration}. ` : ''}${registers ? 'Register settings below describe the selected moment, not instrument identity or measured envelope amplitude.' : 'No retained observation at this time. Use Follow to inspect new observations.'}`);
     el('inspector-note').title = `Available ${time(coverageStart, true)}–${time(observedUntil, true)} · epoch ${held?.epoch ?? state?.epoch ?? 0}${registers ? ' · ordered writes applied through the cursor' : ''}${selectedEnd !== null ? ` · selected span ends ${time(selectedEnd, true)}` : ''}`;
-    for (let voice = 0; voice < 3; voice++) button(`inspect-${voice}`).setAttribute('aria-pressed', String(voice === selectedVoice));
+    const chip = selectedFilterChip ?? Math.floor(selectedVoice / 3);
+    const chipBase = chip * 32;
+    for (const voice of VOICES) button(`inspect-${voice}`).setAttribute('aria-pressed', String(voice === selectedVoice));
+    setText('filter-title', chipCount() > 1 ? `SID ${chip + 1} filter · its three voices` : 'One filter · all three voices');
+    el('filter-details').dataset.sidNumber = String(chip);
     const ids = ['reg-frequency', 'reg-hz', 'reg-waveform', 'reg-gate', 'reg-pulse', 'reg-adsr', 'reg-coupling'];
     if (!registers) { for (const id of ids) setText(id, '—'); setText('filter-details', 'No observed register frame at the selected time.'); }
     else {
       const r = registers;
-      const base = selectedVoice * 7;
+      const base = chipBase + selectedVoice % 3 * 7;
       const word = (offset: number) => (r[base + offset] ?? 0) | ((r[base + offset + 1] ?? 0) << 8);
       const frequency = word(0);
       const control = r[base + 4] ?? 0;
@@ -714,30 +764,66 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       setText('reg-pulse', `${word(2) & 4095} / 4095`);
       setText('reg-adsr', `$${hex(r[base + 5] ?? 0)} / $${hex(r[base + 6] ?? 0)}`);
       setText('reg-coupling', `${control & 4 ? 'On' : 'Off'} / ${control & 2 ? 'On' : 'Off'}`);
-      const route = r[23] ?? 0;
-      const modeVolume = r[24] ?? 0;
+      const route = r[chipBase + 23] ?? 0;
+      const modeVolume = r[chipBase + 24] ?? 0;
       const modes = ['Low-pass', 'Band-pass', 'High-pass'].filter((_, index) => modeVolume & (16 << index));
       const voices = [0, 1, 2].filter(voice => route & (1 << voice)).map(voice => `V${voice + 1}`);
-      setText('filter-details', `Cutoff ${((r[22] ?? 0) << 3) | ((r[21] ?? 0) & 7)} / 2047 · resonance ${route >> 4} / 15. ${modes.join(' + ') || 'No filter mode'}. Routed: ${voices.join(', ') || 'none'}. Master volume ${modeVolume & 15} / 15${modeVolume & 128 ? ' · V3 direct off' : ''}. Settings, not a measured frequency response.`);
+      setText('filter-details', `Cutoff ${((r[chipBase + 22] ?? 0) << 3) | ((r[chipBase + 21] ?? 0) & 7)} / 2047 · resonance ${route >> 4} / 15. ${modes.join(' + ') || 'No filter mode'}. Routed: ${voices.join(', ') || 'none'}. Master volume ${modeVolume & 15} / 15${modeVolume & 128 ? ' · V3 direct off' : ''}. Settings, not a measured frequency response.`);
     }
     const ordered: WriteObservation[] = [];
     for (let index = writes.length - 1; registers && index >= 0 && ordered.length < 7; index--) {
       const write = writes[index]!;
       if (write.timeSeconds < coverageStart) break;
+      if (write.sidNumber !== chip) continue;
       if (write.timeSeconds <= selectedTime + .000001 && write.timeSeconds <= observedUntil) ordered.unshift(write);
     }
     const list = el('write-list');
-    const writeKey = ordered.map(write => `${write.cyclePhi1}:${write.address}:${write.value}`).join('|');
+    list.dataset.sidNumber = String(chip);
+    const writeKey = `${chip}|${ordered.map(write => `${write.sidNumber}:${write.cyclePhi1}:${write.address}:${write.value}`).join('|')}`;
     if (list.dataset.key !== writeKey) {
       list.dataset.key = writeKey;
       list.replaceChildren();
       if (!ordered.length) { const item = document.createElement('li'); item.className = 'write-empty'; item.textContent = 'No retained writes at this cursor.'; list.append(item); }
-      for (const write of ordered) { const item = document.createElement('li'); item.textContent = `${time(write.timeSeconds, true)}  $${hex(write.address >= 0xd400 ? write.address : 0xd400 + write.address, 4)} ← $${hex(write.value)}`; item.title = `Ordered emulation write · cycle φ1 ${write.cyclePhi1} · SID ${write.sidNumber}`; list.append(item); }
+      for (const write of ordered) { const item = document.createElement('li'); item.textContent = `${time(write.timeSeconds, true)}  ${chipCount() > 1 ? `SID ${write.sidNumber + 1} ` : ''}$${hex(write.address >= 0xd400 ? write.address : (state?.info?.sidChipBases[write.sidNumber] ?? 0xd400) + write.address, 4)} ← $${hex(write.value)}`; item.title = `Ordered emulation write · cycle φ1 ${write.cyclePhi1} · SID ${write.sidNumber + 1}`; list.append(item); }
     }
   };
 
   function draw(): void {
     const loaded = Boolean(state?.info) && !['empty', 'error', 'loading'].includes(state?.status ?? 'empty');
+    const stereo = chipCount() > 1;
+    if (selectedVoice >= voiceCount()) selectedVoice = 0;
+    if (selectedFilterChip !== null && selectedFilterChip >= chipCount()) selectedFilterChip = null;
+    for (const chip of CHIPS) {
+      el(`chip-lanes-${chip}`).hidden = chip >= chipCount();
+      el(`chip-heading-${chip}`).hidden = !stereo;
+      setText(`chip-heading-${chip}`, `SID ${chip + 1} · $${hex(state?.info?.sidChipBases[chip] ?? 0xd400, 4)} · ${chip === 0 ? 'Left' : 'Right'}`);
+      el(filterLaneId(chip)).setAttribute('aria-label', stereo ? `Select SID ${chip + 1} shared filter inspection time` : 'Select shared filter inspection time');
+    }
+    for (const voice of VOICES) {
+      button(`inspect-${voice}`).hidden = voice >= voiceCount();
+      setText(`inspect-${voice}`, stereo ? `SID ${Math.floor(voice / 3) + 1} · V${voice % 3 + 1}` : `Voice ${voice + 1}`);
+      setText(`voice-label-${voice}`, `Voice ${voice % 3 + 1}`);
+      const name = voiceName(voice, stereo).replace('Voice', 'voice');
+      el(`voice-lane-${voice}`).setAttribute('aria-label', `Select inspection time for ${name}`);
+      for (const operation of ['mute', 'solo']) {
+        const label = `${operation === 'mute' ? 'Mute' : 'Solo'} ${name}`;
+        button(`${operation}-${voice}`).setAttribute('aria-label', label);
+        button(`${operation}-${voice}`).title = label;
+      }
+    }
+    el('timeline-scroll-track').setAttribute('aria-controls', [...VOICES.filter(voice => voice < voiceCount()).map(voice => `voice-lane-${voice}`), ...CHIPS.filter(chip => chip < chipCount()).map(filterLaneId)].join(' '));
+    setText('chip-profile-badge', `${chipCount()} SID${stereo ? 's' : ''} · ${(state?.info?.sidChipBases ?? [0xd400]).map(base => `$${hex(base, 4)}`).join(' / ')} · ${state?.info?.channels === 2 ? 'stereo' : 'mono'}`);
+    el('chip-profile-badge').hidden = !state?.info;
+    setText('output-profile-badge', `PCM · ${state?.info?.channels === 2 ? 'stereo' : 'mono'}`);
+    setText('chip-model-label', stereo ? 'Chip model · both chips' : 'Chip model');
+    el('routing-badge').hidden = !stereo;
+    // AnalyserNode analyzes mono while passing output unchanged: https://www.w3.org/TR/webaudio-1.0/#AnalyserNode.
+    el('analysis-monitor').hidden = !stereo;
+    setText('peak-title', stereo ? 'Peak · mono monitor' : 'Peak · measured PCM');
+    setText('rms-title', stereo ? 'RMS · mono monitor' : 'RMS');
+    setText('waveform-source', stereo ? 'Mono monitor' : 'Audio output');
+    el('waveform-plot').setAttribute('aria-label', stereo ? 'Mono monitor waveform: left plus right divided by two' : 'Actual output waveform');
+    el('spectrum-plot').setAttribute('aria-label', stereo ? 'Mono monitor frequency spectrum: left plus right divided by two' : 'Actual output frequency spectrum');
     const seeking = state?.seekTarget != null;
     const preparingVoices = seeking && state?.pendingOperation === 'voice-mix';
     const preparationLabel = preparingVoices ? 'Preparing voices…' : 'Seeking…';
@@ -751,7 +837,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     el('voice-mix-status').classList.toggle('preparing', preparingVoices);
     el('mix-controls').setAttribute('aria-busy', String(preparingVoices));
     const changing = busy || state?.status === 'loading' || seeking;
-    for (const id of ['play-button', 'restart-button', 'restore-button', 'mark-a', 'mark-b', 'loop-button', 'clear-loop', 'mute-0', 'mute-1', 'mute-2', 'solo-0', 'solo-1', 'solo-2']) button(id).disabled = !loaded || changing;
+    for (const id of ['play-button', 'restart-button', 'restore-button', 'mark-a', 'mark-b', 'loop-button', 'clear-loop']) button(id).disabled = !loaded || changing;
+    for (const voice of VOICES) for (const operation of ['mute', 'solo']) button(`${operation}-${voice}`).disabled = !loaded || changing || voice >= voiceCount();
     button('load-button').disabled = changing || sourceMode === 'catalog' && !chosenEntry;
     button('use-sample-button').disabled = changing || !chosenEntry;
     for (const id of ['clock-select', 'model-select', 'subtune-select', 'sample-select']) select(id).disabled = changing;
@@ -794,7 +881,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     button('return-button').disabled = !loaded;
     button('return-button').setAttribute('aria-pressed', String(!held && !seekViewport && state?.timelineCenterSeconds == null && timelineView === 'scroll'));
     el('view-inspector').hidden = !held;
-    for (let voice = 0; voice < 3; voice++) {
+    for (const voice of VOICES) {
       button(`mute-${voice}`).setAttribute('aria-pressed', String(Boolean(state?.muted[voice])));
       button(`solo-${voice}`).setAttribute('aria-pressed', String(state?.muted.every((muted, index) => muted === (index !== voice)) ?? false));
     }
@@ -893,14 +980,18 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       const heardRegisters = observationRegistersAt(history, inspectedTime, history.endInclusive);
       if (heardRegisters) { inspection = history; registers = heardRegisters; }
     }
-    for (let voice = 0; voice < 3; voice++) { setText(`lane-wave-${voice}`, registers ? waveforms(registers[voice * 7 + 4] ?? 0) : 'No observation'); drawLane(`voice-lane-${voice}`, plotFrames, writes, voice, chartEnd, historyStart); }
-    drawLane('filter-lane', plotFrames, writes, null, chartEnd, historyStart);
+    for (let voice = 0; voice < voiceCount(); voice++) {
+      const chip = Math.floor(voice / 3);
+      setText(`lane-wave-${voice}`, registers ? waveforms(registers[chip * 32 + voice % 3 * 7 + 4] ?? 0) : 'No observation');
+      drawLane(`voice-lane-${voice}`, plotFrames, writes, voice, chip, chartEnd, historyStart);
+    }
+    for (let chip = 0; chip < chipCount(); chip++) drawLane(filterLaneId(chip), plotFrames, writes, null, chip, chartEnd, historyStart);
     renderInspector(inspection, registers);
     setText('peak-label', db(state?.peakDb ?? -Infinity));
     setText('rms-label', db(state?.rmsDb ?? -Infinity));
     el('peak-meter').style.width = `${Math.min(100, Math.max(0, ((state?.peakDb ?? -60) + 60) / 60 * 100))}%`;
     setText('spectrum-range', state?.info ? `0 → ${(state.info.sampleRate / 2000).toFixed(1)} kHz · frequency bins` : '0 → Nyquist');
-    setText('audio-diagnostics', state?.info ? `${state.info.sampleRate.toLocaleString()} Hz PCM · ${state.underruns} buffer underruns · mono` : 'Device-local playback · no backend');
+    setText('audio-diagnostics', state?.info ? `${state.info.sampleRate.toLocaleString()} Hz PCM · ${state.underruns} buffer underruns · ${state.info.channels === 2 ? 'stereo' : 'mono'}` : 'Device-local playback · no backend');
     drawAudio();
     renderEvidence();
     root.querySelectorAll<HTMLButtonElement>('[data-annotation]').forEach(control => { control.disabled = changing || !loaded; });

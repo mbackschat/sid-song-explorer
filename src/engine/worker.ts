@@ -1,4 +1,5 @@
-import wasmUrl from 'libsidplayfp-wasm/dist/sidlite/libsidplayfp.wasm?url';
+import moduleUrl from '../../build/engine/libsidplayfp.js?url';
+import wasmUrl from '../../build/engine/libsidplayfp.wasm?url';
 import { CachedSidSession } from './cached-session.ts';
 import { SAMPLE_RATE } from './session.ts';
 import type { EngineEvent, EngineReply, EngineRequest, EngineResult } from './protocol.ts';
@@ -54,7 +55,7 @@ async function dispatch(request: EngineRequest): Promise<EngineResult> {
     session = undefined;
     return null;
   }
-  session ??= await CachedSidSession.create({ wasmUrl });
+  session ??= await CachedSidSession.create({ moduleUrl, wasmUrl });
   switch (request.method) {
     case 'load': {
       cacheEpoch = request.cacheEpoch;

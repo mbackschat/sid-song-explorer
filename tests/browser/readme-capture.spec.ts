@@ -3,8 +3,8 @@ import {dirname} from 'node:path';
 import {test, expect} from './fixtures.ts';
 
 const shot = {
-  sample: 'rambo-loader-main',
-  viewport: {width:1600, height:1280},
+  sample: 'rambo-stereo-main',
+  viewport: {width:1600, height:1240},
   earliestSeconds: 12,
 };
 
@@ -16,9 +16,9 @@ test('README capture shows Rambo playing with populated voice history', async ({
   await page.goto('./');
   await page.locator('#sample-select').selectOption(shot.sample);
   await page.locator('#load-button').click();
-  await expect(page.locator('#track-title')).toHaveText('Rambo loader — main music');
+  await expect(page.locator('#track-title')).toHaveText('Rambo loader — main music, stereo');
   await expect(page.locator('#profile-badge')).toContainText('PAL · MOS6581');
-  await expect(page.locator('.track-profile')).toContainText('1 SID · $D400 · mono');
+  await expect(page.locator('.track-profile')).toContainText('2 SIDs · $D400 / $D420 · stereo');
   await expect(page.locator('#play-button')).toBeEnabled();
   await page.locator('#play-button').click();
   await expect(page.locator('#play-status')).toHaveText('Live SID');
@@ -29,21 +29,28 @@ test('README capture shows Rambo playing with populated voice history', async ({
   await expect(page.locator('#reg-frequency')).not.toHaveText('—');
   await expect(page.locator('#write-list')).toContainText('$D4');
   await expect(page.locator('#timeline-scroll')).toHaveAttribute('aria-pressed', 'true');
-  for (const voice of [0, 1, 2]) {
+  for (const voice of [0, 1, 2, 3, 4, 5]) {
     await expect(page.locator(`#lane-wave-${voice}`)).not.toHaveText(/^(No observation|None)$/);
     await expect.poll(() => page.locator(`#voice-lane-${voice}`).evaluate((canvas: HTMLCanvasElement) => {
       // drawLane in src/ui.ts places zero frequency, gate bars and waveform markers outside this pitch area.
       const pixels = canvas.getContext('2d')!.getImageData(0, 10, canvas.width, canvas.height - 28).data;
-      let colored = 0;
+      let past = 0;
+      let upcoming = 0;
       for (let index = 0; index < pixels.length; index += 4) {
-        if (pixels[index + 3]! > 0 && Math.max(pixels[index]!, pixels[index + 1]!, pixels[index + 2]!) - Math.min(pixels[index]!, pixels[index + 1]!, pixels[index + 2]!) > 40) colored++;
+        const x = index / 4 % canvas.width;
+        if (pixels[index + 3]! > 0 && Math.max(pixels[index]!, pixels[index + 1]!, pixels[index + 2]!) - Math.min(pixels[index]!, pixels[index + 1]!, pixels[index + 2]!) > 40) {
+          if (x < canvas.width * .45) past++;
+          if (x > canvas.width * .55) upcoming++;
+        }
       }
-      return colored;
+      return Math.min(past, upcoming);
     })).toBeGreaterThan(50);
   }
   await page.evaluate(() => document.fonts.ready);
   await page.mouse.move(0, 0);
   await expect(page.locator('#play-button')).toHaveText('Ⅱ Pause');
+  const timeline = (await page.locator('#timeline-panel').boundingBox())!;
+  expect(timeline.y + timeline.height).toBeLessThan(shot.viewport.height);
   const gains = await page.evaluate(() => (window as unknown as {__explorerSilentSinks: GainNode[]}).__explorerSilentSinks.map(sink => sink.gain.value));
   expect(gains.length).toBeGreaterThan(0);
   expect(gains.every(value => value === 0)).toBe(true);

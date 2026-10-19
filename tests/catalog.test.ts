@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { parseCatalog } from '../src/catalog.ts';
+import { MAX_ASSET_BYTES, parseCatalog } from '../src/catalog.ts';
 import { prepareSamples } from '../scripts/prepare-samples.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -12,24 +12,95 @@ const snapshot = JSON.parse(await readFile(new URL('../config/catalog.json', imp
 const clone = () => structuredClone(snapshot);
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
-test('the snapshot pins all four cleared mono downloads and preserves scoped listening verdicts', () => {
+test('the snapshot retains all four cleared mono downloads and their scoped listening verdicts', () => {
   const catalog = parseCatalog(snapshot);
+  const mono = catalog.entries.filter((entry) => entry.target.sidCount === 1);
   assert.equal(catalog.source.revision, '3db086b6963676ef75f34d7f77c3b67232a777fb');
-  assert.deepEqual(catalog.entries.map((entry) => entry.id), ['rambo-loader-main', 'bach-toccata', 'mozart-minuet', 'instrument-mix']);
-  assert.deepEqual(catalog.entries.map((entry) => entry.target.model), ['MOS6581', 'MOS8580', 'MOS8580', 'MOS8580']);
-  assert.deepEqual(catalog.entries.map((entry) => entry.durationSeconds), [193.35884353741497, 88.12292517006803, 146.37780045351474, 10]);
+  assert.deepEqual(mono.map((entry) => entry.id), ['rambo-loader-main', 'bach-toccata', 'mozart-minuet', 'instrument-mix']);
+  assert.deepEqual(mono.map((entry) => entry.target.model), ['MOS6581', 'MOS8580', 'MOS8580', 'MOS8580']);
+  assert.deepEqual(mono.map((entry) => entry.durationSeconds), [193.35884353741497, 88.12292517006803, 146.37780045351474, 10]);
   assert.deepEqual(catalog.materials.map((material) => material.id), ['moon-river', 'pink-panther', 'axel-f', 'ghostbusters']);
-  assert.ok(catalog.entries.every((entry) => entry.stereo));
-  assert.ok(catalog.entries.slice(1).every((entry) => entry.analysis.annotations.length === 0 && entry.files.notices));
+  assert.ok(mono.every((entry) => entry.stereo));
+  assert.ok(mono.slice(1).every((entry) => entry.analysis.annotations.length === 0 && entry.files.notices));
   const entry = catalog.entries[0];
   assert.equal(entry.id, 'rambo-loader-main');
   assert.equal(entry.files.sid.sha256, '99c61d30de4a27e800d185709192de0af92e6d1f2b2350ff8b80f47d8dc4a8cc');
-  assert.equal(entry.files.reference.sha256, '4d3f3c78a89a384a14244f4ca6a36efe0022ea2f636327619ebc00be93909544');
+  assert.equal(entry.files.reference!.sha256, '4d3f3c78a89a384a14244f4ca6a36efe0022ea2f636327619ebc00be93909544');
   assert.match(entry.listening.scope, /cold-start.*not separately/i);
   assert.equal(entry.target.sidCount, 1);
   assert.equal(entry.analysis.timeBasis, 'seconds-from-init');
   assert.equal(entry.analysis.annotations.length, 3);
   assert.ok(entry.analysis.annotations.every((annotation) => annotation.voices.every((voice) => voice >= 1 && voice <= 3)));
+});
+
+test('the snapshot adds pinned two-chip performances without inheriting mono evidence', () => {
+  const catalog = parseCatalog(snapshot);
+  const stereo = catalog.entries.filter((entry) => entry.target.sidCount === 2);
+  assert.deepEqual(stereo.map((entry) => entry.id), ['rambo-stereo-main', 'bach-toccata-stereo']);
+  assert.deepEqual(stereo.map((entry) => entry.target.model), ['MOS6581', 'MOS8580']);
+  assert.ok(stereo.every((entry) => entry.target.secondSidAddress === 54304 && entry.target.baseAddress === 54272));
+  assert.ok(stereo.every((entry) => entry.analysis.annotations.length === 0 && entry.analysis.sidSha256 === entry.files.sid.sha256));
+  assert.ok(stereo.every((entry) => /2026-10-16/.test(entry.listening.scope) && /stereo WAV/.test(entry.listening.scope)));
+  const [rambo, bach] = stereo;
+  assert.equal(rambo.durationSeconds, 193.35884353741497);
+  assert.equal(rambo.files.sid.bytes, 17937);
+  assert.equal(rambo.files.sid.sha256, '0998646302f2f89090976b0d2cfee6b141885f378c10242c3a009ce5741d3727');
+  assert.equal(rambo.files.reference, undefined);
+  assert.equal(rambo.referenceUrl, `${catalog.source.repository.replace('github.com', 'raw.githubusercontent.com')}/${catalog.source.revision}/samples/rambo-stereo/rambo-stereo-main.wav`);
+  assert.match(rambo.rights.license, /GPL-3.0-only/);
+  assert.match(rambo.listening.sourceUrl, /rambo-stereo\/main-manifest.json$/);
+  assert.equal(bach.durationSeconds, 88.12292517006803);
+  assert.equal(bach.files.sid.bytes, 9602);
+  assert.equal(bach.files.sid.sha256, '96ba9684c3eea789bab1262bfd233ec87666791d40e8d8ccf8aaeb7a9e151bc4');
+  assert.equal(bach.files.reference!.bytes, 15544928);
+  assert.equal(bach.files.reference!.sha256, '51796c32439bf93c20d0aa85fcb91e76cdf3e4150bcbe4beb6370ce9953a835c');
+  assert.ok(bach.files.notices);
+  assert.match(bach.listening.sourceUrl, /bach-toccata\/stereo-manifest.json$/);
+  assert.ok(catalog.entries.every((entry) => Object.values(entry.files).every((file) => file.bytes <= MAX_ASSET_BYTES)));
+});
+
+test('accepts the bounded two-SID target with six hash-bound annotation voices', () => {
+  const value = clone();
+  value.entries = [value.entries[0]];
+  Object.assign(value.entries[0].target, { sidCount: 2, secondSidAddress: 54304 });
+  value.entries[0].analysis.annotations[0].voices = [1, 4, 6];
+  assert.equal(parseCatalog(value).entries[0].target.sidCount, 2);
+});
+
+test('requires exactly one prepared or pinned external reference and preserves the asset cap', () => {
+  const value = clone();
+  const entry = value.entries[0];
+  entry.referenceUrl = entry.files.reference.url;
+  delete entry.files.reference;
+  assert.equal(parseCatalog(value).entries[0].referenceUrl, entry.referenceUrl);
+  const mutations = [
+    (entry: any) => { delete entry.referenceUrl; },
+    (entry: any) => { entry.files.reference = structuredClone(snapshot.entries[0].files.reference); },
+    (entry: any) => { entry.referenceUrl = 'http://example.com/reference.wav'; },
+    (entry: any) => { entry.referenceUrl = entry.referenceUrl.replace(value.source.revision, 'main'); },
+    (entry: any) => { entry.referenceUrl = 'https://example.com/reference.wav'; },
+    (entry: any) => { entry.files.sid.bytes = MAX_ASSET_BYTES + 1; },
+  ];
+  for (const mutate of mutations) {
+    const invalid = structuredClone(value);
+    mutate(invalid.entries[0]);
+    assert.throws(() => parseCatalog(invalid), /catalog/i);
+  }
+});
+
+test('rejects missing, unsupported or contradictory second-chip addresses', () => {
+  const mutations = [
+    (target: any) => { target.sidCount = 2; },
+    (target: any) => { target.secondSidAddress = 54304; },
+    (target: any) => { Object.assign(target, { sidCount: 2, secondSidAddress: 54272 }); },
+    (target: any) => { Object.assign(target, { sidCount: 2, secondSidAddress: 54336 }); },
+    (target: any) => { Object.assign(target, { sidCount: 3, secondSidAddress: 54304 }); },
+  ];
+  for (const mutate of mutations) {
+    const value = clone();
+    mutate(value.entries[0].target);
+    assert.throws(() => parseCatalog(value), /catalog/i);
+  }
 });
 
 test('schema 1 keeps the original mono-only snapshot compatible with optional additions', () => {
@@ -95,6 +166,8 @@ test('rejects unsafe files, moving source pins, duplicate identities and invalid
     (value: any) => { value.entries.push(structuredClone(value.entries[0])); },
     (value: any) => { value.entries[0].files.license.filename = value.entries[0].files.sid.filename; },
     (value: any) => { value.entries[0].analysis.annotations[0].voices = [0]; },
+    (value: any) => { value.entries[0].analysis.annotations[0].voices = [4]; },
+    (value: any) => { Object.assign(value.entries[0].target, { sidCount: 2, secondSidAddress: 54304 }); value.entries[0].analysis.annotations[0].voices = [7]; },
     (value: any) => { value.entries[0].analysis.annotations[0].voices = [1, 1]; },
     (value: any) => { value.entries[0].analysis.annotations[0].startSeconds = -1; },
     (value: any) => { value.entries[0].analysis.annotations[0].endSeconds = value.entries[0].durationSeconds + 1; },
@@ -190,6 +263,27 @@ test('prepares the SID-Wizard license and player notices without fetching stereo
     assert.deepEqual(requests, Object.values(value.catalog.entries[0].files).map((file) => file.url));
     const notices = value.catalog.entries[0].files.notices!;
     assert.equal(sha256(await readFile(path.join(value.outputDirectory, notices.filename))), notices.sha256);
+  } finally {
+    await rm(value.directory, { recursive: true, force: true });
+  }
+});
+
+test('prepares a playable two-SID entry without downloading its external reference', async () => {
+  const value = await fixture('rambo-stereo-main');
+  const requests: string[] = [];
+  try {
+    const result = await prepareSamples(value.catalog, {
+      outputDirectory: value.outputDirectory,
+      fetcher: async (input) => {
+        requests.push(String(input));
+        return new Response(new Uint8Array(value.data.get(String(input)) ?? []));
+      },
+    });
+    assert.equal(result.length, 2);
+    assert.deepEqual(requests, Object.values(value.catalog.entries[0].files).map((file) => file.url));
+    assert.ok(!requests.includes(value.catalog.entries[0].referenceUrl!));
+    const reused = await prepareSamples(value.catalog, { outputDirectory: value.outputDirectory, sourceRoot: '/does-not-exist' });
+    assert.ok(reused.every((file) => file.status === 'verified'));
   } finally {
     await rm(value.directory, { recursive: true, force: true });
   }

@@ -1,21 +1,22 @@
 # Third-party and transferred-material notices
 
-Original SID Song Explorer work is GPL-3.0-or-later; see [LICENSE](LICENSE). The mono player adopts the engine and cleared samples below. Their applicable terms remain separate from the app's license. ROMs and original reference SID binaries are excluded.
+Original SID Song Explorer work is GPL-3.0-or-later; see [LICENSE](LICENSE). The player adopts the engine and cleared samples below. Their applicable terms remain separate from the app's license. ROMs and original reference SID binaries are excluded.
 
 ## libsidplayfp-wasm 1.1.0 / SIDLite
 
-The pinned [`libsidplayfp-wasm` 1.1.0 package](https://www.npmjs.com/package/libsidplayfp-wasm/v/1.1.0) is **GPL-2.0-or-later**. Explorer uses its SIDLite WebAssembly build and generated loader, with its own worker/transport adapter; the installed engine package is unmodified. The [engine source](https://github.com/chrisgleissner/libsidplayfp-wasm/tree/c9622e9ce7ffa2ddd3e0568e987b4c6614da8275) and [adapter record](docs/architecture/playback-adapter.md) identify the adopted boundary. This is an independent distribution and does not imply endorsement by libsidplayfp or the wrapper's authors.
+The pinned [`libsidplayfp-wasm` 1.1.0 package](https://www.npmjs.com/package/libsidplayfp-wasm/v/1.1.0) is **GPL-2.0-or-later**. Explorer builds SIDLite from its pinned complete-source archive with an additive raw-chip output binding and its own worker/transport adapter. The installed npm dependency remains unmodified; the application uses the separately rebuilt engine. Explorer’s binding/build additions are GPL-3.0-or-later and retain the upstream component notices. The [engine source](https://github.com/chrisgleissner/libsidplayfp-wasm/tree/c9622e9ce7ffa2ddd3e0568e987b4c6614da8275) and [adapter record](docs/architecture/playback-adapter.md) identify the adopted boundary. This is an independent distribution and does not imply endorsement by libsidplayfp or the wrapper's authors.
 
-Run `pnpm prepare:assets` before building or distributing. [The runtime preparer](scripts/prepare-runtime.ts) copies the package's exact license, third-party notices, modification record and complete corresponding-source archive beside the generated deployment assets. It records their hashes in `public/generated/engine-provenance.json`; Vite includes them in `dist/generated/`, and the app links to them.
+Run `pnpm prepare:engine` with Docker to build and verify the raw-chip engine, then `pnpm prepare:assets` before building or distributing. [The runtime preparer](scripts/prepare-runtime.ts) verifies the artifact fingerprints and passing gate receipt before copying its runtime, license texts, notices, modification record and complete corresponding-source archive. Runtime assets receive Vite fingerprints; source and notices are included under `dist/generated/` and linked from the app. `engine-provenance.json` identifies the build and exact files; `engine-verification.json` binds the raw-output result to that provenance.
 
-| Distributed filename | Package source | Purpose |
+| Distributed filename | Build artifact source | Purpose |
 | --- | --- | --- |
 | `engine-LICENSE.txt` | `LICENSE` | GPL-2.0-or-later declaration and full GPL version 2 text. |
 | `engine-NOTICES.txt` | `THIRD-PARTY-NOTICES.md` | Component copyrights and terms, including libsidplayfp, SIDLite, hashlib and the generated runtime/toolchain portions. |
-| `engine-MODIFICATIONS.txt` | `MODIFICATIONS.md` | Wrapper upstream modifications used to build the published engines; these are not additional Explorer engine patches. |
-| `engine-complete-source.tar.gz` | `dist/complete-source.tar.gz` | Complete upstream pins, modifications, bindings and build instructions corresponding to the package's binaries. |
+| `engine-MODIFICATIONS.txt` | `MODIFICATIONS.md` | Upstream changes plus Explorer’s raw-chip binding and reproducible build-input adaptations. |
+| `engine-EXPLORER-LICENSE.txt` | `EXPLORER-LICENSE.txt` | GPL version 3 text for Explorer’s additions. |
+| `engine-complete-source.tar.gz` | `complete-source.tar.gz` | Complete pinned native sources, patched bindings, build scripts, added-source license and reproduction instructions for the rebuilt engine. |
 
-The package's full notices and source archive retain its component-specific terms, including MIT, Emscripten's MIT/NCSA choice and Apache-2.0 with LLVM Exceptions. The archive also contains the package's reSIDfp build sources; this POC selects the SIDLite engine. Preserve the copied files and source access when redistributing the generated app. Dependency versions and integrity are pinned in [the pnpm lockfile](pnpm-lock.yaml); development tools and test runners retain their own package notices.
+The package's full notices and source archive retain its component-specific terms, including MIT, Emscripten's MIT/NCSA choice and Apache-2.0 with LLVM Exceptions. The archive also contains the package's reSIDfp build sources; Explorer selects the SIDLite engine. Preserve the copied files and source access when redistributing the generated app. Dependency versions and integrity are pinned in [the pnpm lockfile](pnpm-lock.yaml); development tools and test runners retain their own package notices.
 
 ## Rambo loader main-music sample
 
@@ -27,7 +28,7 @@ The [pinned catalog](config/catalog.json) identifies the exact SID/WAV/license b
 
 ## Bach, Mozart and the original instrument mix
 
-The public Bach Toccata and Mozart Minuet and Trio packages use public-domain compositions/source editions, with Crafter’s arrangements and tools under MIT. The instrument mix uses project-authored notes and instruments under MIT. Their SID-Wizard players retain the separate terms recorded in [Crafter’s pinned notices](https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/THIRD_PARTY_NOTICES.md). Each deployed package includes its exact MIT license and those player notices, linked from the application. [The catalog source record](docs/integration/poc-sources.md) identifies the owning manifests, declared hardware, exact SID/WAV hashes and listening scope. Stereo variants are linked to Crafter’s published files; the live engine remains mono.
+The public Bach Toccata and Mozart Minuet and Trio packages use public-domain compositions/source editions, with Crafter’s arrangements and tools under MIT. The instrument mix uses project-authored notes and instruments under MIT. Their SID-Wizard players retain the separate terms recorded in [Crafter’s pinned notices](https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/THIRD_PARTY_NOTICES.md). Each deployed package includes its exact MIT license and those player notices, linked from the application. [The catalog source record](docs/integration/poc-sources.md) identifies the owning manifests, declared hardware, exact SID/WAV hashes and listening scope. The catalog also prepares the cleared Bach stereo SID and reference; Rambo stereo is prepared with its GPL license and an external reference WAV link. The other stereo variants remain links to Crafter’s files.
 
 Local-build material links do not distribute their score/audio binaries or change their publication status.
 

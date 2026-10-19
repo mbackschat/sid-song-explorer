@@ -15,8 +15,7 @@ const MAX_OBSERVATION_WRITES = 20_000;
 const OBSERVATION_FRAME_SECONDS = 0.02;
 // SIDLite's PAL/NTSC clocks consume fewer than 25 scheduler cycles per sample.
 // Even one SID bus write per cycle cannot exceed this reservation; actual packed bytes own the cap.
-const RESERVED_BYTES_PER_FRAME = Int16Array.BYTES_PER_ELEMENT + 25 * WRITE_BYTES;
-const RESERVED_BLOCK_BYTES = REGISTER_BYTES + WRITE_BYTES;
+const RESERVED_WRITE_BYTES_PER_FRAME = 25 * WRITE_BYTES;
 
 export interface CachedSessionOptions extends SessionOptions {
   maxCacheBytes?: number;
@@ -71,6 +70,7 @@ export class CachedSidSession {
   private bytes = REGISTER_BYTES;
   private cursor = 0;
   private frontier = 0;
+  private channels: 1 | 2 = 1;
   private loaded = false;
   private disposed = false;
 
@@ -84,7 +84,7 @@ export class CachedSidSession {
     if (!Number.isSafeInteger(maxCacheBytes) || maxCacheBytes < REGISTER_BYTES) {
       throw new Error(`maxCacheBytes must be a safe integer of at least ${REGISTER_BYTES} bytes`);
     }
-    return new CachedSidSession(await SidSession.create({ wasmUrl: options.wasmUrl }), maxCacheBytes);
+    return new CachedSidSession(await SidSession.create({ wasmUrl: options.wasmUrl, moduleUrl: options.moduleUrl }), maxCacheBytes);
   }
 
   get positionFrame(): number { return this.cursor; }
@@ -102,6 +102,9 @@ export class CachedSidSession {
     if (!this.loaded) throw new Error('Load a SID before playback');
   }
 
+  private get reservedBytesPerFrame(): number { return this.channels * Int16Array.BYTES_PER_ELEMENT + RESERVED_WRITE_BYTES_PER_FRAME; }
+  private get reservedBlockBytes(): number { return this.frontierRegisters.byteLength + WRITE_BYTES; }
+
   private reset(frame: number, registers: number[]): void {
     this.blocks = [];
     this.frontierRegisters = Uint8Array.from(registers);
@@ -114,6 +117,11 @@ export class CachedSidSession {
     this.requireAlive();
     const info = await this.source.load(bytes, options);
     this.requireAlive();
+    if (info.registers.length > this.maxCacheBytes) {
+      this.loaded = false;
+      throw new Error('Cache cap cannot hold the installed SID registers');
+    }
+    this.channels = info.channels;
     this.reset(0, info.registers);
     this.loaded = true;
     return info;
@@ -137,13 +145,13 @@ export class CachedSidSession {
     }
     this.frontier = result.endFrame;
     this.frontierRegisters.set(result.registers);
-    if (required + REGISTER_BYTES <= this.maxCacheBytes) {
+    if (required + this.frontierRegisters.byteLength <= this.maxCacheBytes) {
       this.blocks.push(block);
       this.bytes += required;
     } else {
       // A foreground read can run without retention when even one result exceeds the configured cap.
       this.blocks = [];
-      this.bytes = REGISTER_BYTES;
+      this.bytes = this.frontierRegisters.byteLength;
     }
     return result;
   }
@@ -159,7 +167,7 @@ export class CachedSidSession {
     const registers = Array.from(block.registers);
     const endSeconds = frame / SAMPLE_RATE;
     for (let offset = 0; offset < block.writes.length && block.writes[offset] < endSeconds; offset += WRITE_FIELDS) {
-      registers[block.writes[offset + 2]] = block.writes[offset + 3];
+      registers[block.writes[offset + 4] * REGISTER_BYTES + block.writes[offset + 2]] = block.writes[offset + 3];
     }
     return registers;
   }
@@ -207,7 +215,7 @@ export class CachedSidSession {
       while (sample < sampleTimes.length && sampleTimes[sample] < block.endFrame / SAMPLE_RATE) {
         const time = sampleTimes[sample++];
         while (offset < block.writes.length && block.writes[offset] < time) {
-          registers[block.writes[offset + 2]] = block.writes[offset + 3];
+          registers[block.writes[offset + 4] * REGISTER_BYTES + block.writes[offset + 2]] = block.writes[offset + 3];
           offset += WRITE_FIELDS;
         }
         frames.push({time, registers: registers.slice()});
@@ -224,7 +232,7 @@ export class CachedSidSession {
     this.requireLoaded();
     validateFrames(frames);
     const startFrame = this.cursor;
-    const pcm = new Int16Array(frames);
+    const pcm = new Int16Array(frames * this.channels);
     const writes: SidWrite[] = [];
     let dropped = 0;
     let copied = 0;
@@ -232,7 +240,7 @@ export class CachedSidSession {
       const cached = this.blockAt(this.cursor);
       if (cached) {
         const take = Math.min(frames - copied, cached.endFrame - this.cursor);
-        pcm.set(cached.pcm.subarray(this.cursor - cached.startFrame, this.cursor - cached.startFrame + take), copied);
+        pcm.set(cached.pcm.subarray((this.cursor - cached.startFrame) * this.channels, (this.cursor - cached.startFrame + take) * this.channels), copied * this.channels);
         const startSeconds = this.cursor / SAMPLE_RATE;
         const endSeconds = (this.cursor + take) / SAMPLE_RATE;
         for (let offset = 0; offset < cached.writes.length; offset += WRITE_FIELDS) {
@@ -245,7 +253,7 @@ export class CachedSidSession {
         copied += take;
       } else {
         if (this.cursor !== this.frontier) throw new Error('Requested SID audio is outside retained history; seek before rendering');
-        const reservationFrames = Math.floor((this.maxCacheBytes - REGISTER_BYTES - RESERVED_BLOCK_BYTES) / RESERVED_BYTES_PER_FRAME);
+        const reservationFrames = Math.floor((this.maxCacheBytes - this.frontierRegisters.byteLength - this.reservedBlockBytes) / this.reservedBytesPerFrame);
         const take = Math.min(frames - copied, MAX_BLOCK_FRAMES, Math.max(1, reservationFrames));
         // This block is consumed immediately, so previously read history may be evicted for it.
         this.cursor += take;
@@ -256,7 +264,7 @@ export class CachedSidSession {
           this.cursor -= take;
           throw error;
         }
-        pcm.set(result.pcm, copied);
+        pcm.set(result.pcm, copied * this.channels);
         for (const write of result.writes) writes.push(write);
         dropped += result.dropped;
         copied += take;
@@ -270,13 +278,13 @@ export class CachedSidSession {
     this.requireLoaded();
     validateFrames(frames);
     const desired = Math.min(frames, MAX_BLOCK_FRAMES);
-    const desiredBytes = desired * RESERVED_BYTES_PER_FRAME + RESERVED_BLOCK_BYTES;
+    const desiredBytes = desired * this.reservedBytesPerFrame + this.reservedBlockBytes;
     while (this.blocks.length && this.blocks[0].endFrame <= this.cursor &&
       (this.maxCacheBytes - this.bytes < desiredBytes || this.blocks.length >= MAX_BLOCKS)) {
       this.evictFirst();
     }
     if (this.blocks.length >= MAX_BLOCKS) return false;
-    const availableFrames = Math.floor((this.maxCacheBytes - this.bytes - RESERVED_BLOCK_BYTES) / RESERVED_BYTES_PER_FRAME);
+    const availableFrames = Math.floor((this.maxCacheBytes - this.bytes - this.reservedBlockBytes) / this.reservedBytesPerFrame);
     if (availableFrames < 1) return false;
     this.produce(Math.min(desired, availableFrames));
     return true;
@@ -316,8 +324,8 @@ export class CachedSidSession {
 
   async mute(mask: MuteMask): Promise<PositionResult> {
     this.requireLoaded();
-    if (!Array.isArray(mask) || mask.length !== 3 || mask.some((value) => typeof value !== 'boolean')) {
-      throw new Error('mute mask must contain exactly three booleans (true means muted)');
+    if (!Array.isArray(mask) || mask.length !== this.channels * 3 || mask.some((value) => typeof value !== 'boolean')) {
+      throw new Error(`mute mask must contain exactly ${this.channels * 3} booleans (true means muted)`);
     }
     const frame = this.cursor;
     // Rebuilding muted history to the read cursor avoids replaying the producer's potentially long lead.

@@ -23,7 +23,8 @@ export interface PlaybackOptions {
   subtune: number;
 }
 
-export type MuteMask = [boolean, boolean, boolean];
+export type MuteMask = boolean[];
+type RawSidContext = SidPlayerContext & { renderRaw?: (cycles: number) => Int16Array | null };
 
 export interface SidWrite {
   timeSeconds: number;
@@ -39,6 +40,8 @@ export interface LoadResult extends PlaybackOptions {
   released: string;
   songs: number;
   installedSids: number;
+  channels: 1 | 2;
+  sidChipBases: number[];
   sampleRate: number;
   registers: number[];
   engine: {
@@ -71,10 +74,12 @@ export interface PositionResult {
 
 export interface SessionOptions {
   wasmUrl?: string;
+  moduleUrl?: string;
 }
 
 interface LiveState {
-  context: SidPlayerContext;
+  context: RawSidContext;
+  channels: 1 | 2;
   bytes: Uint8Array;
   options: PlaybackOptions;
   mask: MuteMask;
@@ -94,7 +99,7 @@ function validateInput(bytes: Uint8Array, options: PlaybackOptions): void {
   }
   if (bytes.byteLength < 118) throw new Error('Incomplete PSID header (at least 118 bytes required)');
   const magic = String.fromCharCode(...bytes.subarray(0, 4));
-  if (magic === 'RSID') throw new Error('RSID requires a complete C64/ROM environment; this prototype supports callable mono PSID only');
+  if (magic === 'RSID') throw new Error('RSID requires a complete C64/ROM environment; this prototype supports callable PSID only');
   if (magic !== 'PSID') throw new Error('Unsupported file: expected a PSID header');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const version = view.getUint16(4);
@@ -113,9 +118,13 @@ function validateInput(bytes: Uint8Array, options: PlaybackOptions): void {
   }
   if (version >= 2) {
     const flags = view.getUint16(118);
-    if (flags & 1) throw new Error('MUS payloads are unsupported; open a callable mono PSID');
-    if (flags & 2) throw new Error('PlaySID-specific compatibility is unsupported; open a C64-compatible mono PSID');
-    if (bytes[122] || bytes[123]) throw new Error('This prototype supports one mono SID; additional SID addresses are unsupported');
+    if (flags & 1) throw new Error('MUS payloads are unsupported; open a callable PSID');
+    if (flags & 2) throw new Error('PlaySID-specific compatibility is unsupported; open a C64-compatible PSID');
+    if (bytes[123]) throw new Error('Three-SID files are unsupported');
+    const second = bytes[122];
+    if (second && (version < 3 || second % 2 || second < 0x42 || (second >= 0x80 && second < 0xe0))) {
+      throw new Error('Invalid second SID address or PSID version; expected a PSID v3/v4 address in $D420–$D7E0 or $DE00–$DFE0');
+    }
   }
   if (view.getUint16(12) === 0) {
     throw new Error('PSID play address is zero: interrupt/ROM-driven tunes are outside this callable-player subset');
@@ -130,6 +139,10 @@ function validateInput(bytes: Uint8Array, options: PlaybackOptions): void {
   if (loadAddress + bytes.byteLength - payloadOffset > 65536) throw new Error('PSID payload exceeds C64 memory');
 }
 
+function declaredChannels(bytes: Uint8Array): 1 | 2 {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint16(4) >= 3 && bytes[122] ? 2 : 1;
+}
+
 function deadlineExceeded(deadline: number): void {
   if (performance.now() > deadline) throw new Error('SID execution exceeded the 15-second operation budget');
 }
@@ -138,7 +151,7 @@ function copyRegisters(state: LiveState): number[] {
   return state.registers.slice();
 }
 
-/** Mono SIDLite playback. The caller serializes operations; the worker supplies that boundary. */
+/** One- or two-chip SIDLite playback. The caller serializes operations; the worker supplies that boundary. */
 export class SidSession {
   private readonly loaderOptions: SessionOptions;
   private module: LibsidplayfpWasmModule | undefined;
@@ -171,10 +184,13 @@ export class SidSession {
     const selected = { ...options };
     if (!this.module) {
       const wasmUrl = this.loaderOptions.wasmUrl;
-      this.module = await loadLibsidplayfp({ engine: 'sidlite', ...(wasmUrl ? { locateFile: () => wasmUrl } : {}) });
+      const loader = this.loaderOptions.moduleUrl
+        ? (await import(/* @vite-ignore */ this.loaderOptions.moduleUrl)).default as typeof loadLibsidplayfp
+        : loadLibsidplayfp;
+      this.module = await loader({ engine: 'sidlite', ...(wasmUrl ? { locateFile: () => wasmUrl } : {}) });
     }
     this.requireAlive();
-    const state = this.createState(original, selected, [false, false, false]);
+    const state = this.createState(original, selected, Array<boolean>(declaredChannels(original) * 3).fill(false));
     const info = state.context.getTuneInfo()!;
     const engine = state.context.getEngineInfo();
     const configuration = state.context.getEmulationConfig();
@@ -186,6 +202,8 @@ export class SidSession {
       songs: info.songs,
       ...selected,
       installedSids: engine.installedSids,
+      channels: state.channels,
+      sidChipBases: info.sidChipBases.slice(),
       sampleRate: SAMPLE_RATE,
       registers: copyRegisters(state),
       engine: {
@@ -204,7 +222,8 @@ export class SidSession {
   }
 
   private createState(bytes: Uint8Array, options: PlaybackOptions, mask: MuteMask): LiveState {
-    const context = new this.module!.SidPlayerContext();
+    const context: RawSidContext = new this.module!.SidPlayerContext();
+    const channels = declaredChannels(bytes);
     try {
       if (!context.configure(SAMPLE_RATE, false) || !context.setEmulationConfig({
         frequency: SAMPLE_RATE,
@@ -224,15 +243,20 @@ export class SidSession {
       const info = context.getTuneInfo();
       const engine = context.getEngineInfo();
       const configured = context.getEmulationConfig();
-      if (!info || info.currentSong !== options.subtune || engine.installedSids !== 1 || engine.builder !== 'WasmSIDLite' ||
-        engine.sidModels[0] !== options.model || configured.c64Model !== options.clock ||
+      if (!info || info.currentSong !== options.subtune || engine.installedSids !== channels || engine.builder !== 'WasmSIDLite' ||
+        engine.sidModels.length !== channels || engine.sidModels.some(model => model !== options.model) ||
+        info.sidChipBases.length !== channels || info.sidChipBases[0] !== 0xd400 ||
+        (channels === 2 && info.sidChipBases[1] !== (0xd000 | bytes[122] << 4)) || configured.c64Model !== options.clock ||
         configured.frequency !== SAMPLE_RATE || configured.stereo || configured.powerOnDelay !== 0) {
-        throw new Error('Engine did not install the selected mono SIDLite configuration');
+        throw new Error('Engine did not install the selected SIDLite configuration');
       }
+      if (channels === 2 && !context.renderRaw) throw new Error('Dual-SID playback requires the verified raw-chip engine binding');
+      const readRegisters = () => Array.from({length: channels}, (_, chip) =>
+        Array.from(context.getSidStatus(chip) ?? new Uint8Array(32))).flat();
       const state: LiveState = {
-        context, bytes, options, mask: [...mask], consumedFrame: 0,
+        context, channels, bytes, options, mask: [...mask], consumedFrame: 0,
         pendingPcm: new Int16Array(), pendingOffset: 0, pendingWrites: [],
-        registers: Array.from(context.getSidStatus(0) ?? new Uint8Array(32)),
+        registers: readRegisters(),
         traceCycleOrigin: 0, dropped: 0, failed: false,
       };
       const deadline = performance.now() + OPERATION_BUDGET_MS;
@@ -242,10 +266,10 @@ export class SidSession {
       // in engine.test.ts requires resetting afterward because SIDLite is render-partition sensitive.
       for (let probe = 0; probe < RAW_RENDER_CYCLES; probe++) {
         deadlineExceeded(deadline);
-        const pcm = context.render(1)?.slice();
+        const pcm = (context.renderRaw ? context.renderRaw(1) : context.render(1))?.slice();
         if (!pcm) throw new Error(`SID startup render stopped: ${context.getLastError()}`);
         if (pcm.length) {
-          probeFrames += pcm.length;
+          probeFrames += pcm.length / channels;
         }
         state.dropped += context.getDroppedSidWriteTraceCount();
         const packed = context.getAndClearSidWriteTracesPacked();
@@ -254,9 +278,9 @@ export class SidSession {
         if (!context.reset()) throw new Error(`Could not reset after SID clock calibration: ${context.getLastError()}`);
         context.getAndClearSidWriteTracesPacked();
         state.dropped = 0;
-        state.registers = Array.from(context.getSidStatus(0) ?? new Uint8Array(32));
-        for (let voice = 0; voice < 3; voice++) {
-          if (!context.mute(0, voice, mask[voice])) throw new Error(`Could not restore SID mute mask: ${context.getLastError()}`);
+        state.registers = readRegisters();
+        for (let voice = 0; voice < channels * 3; voice++) {
+          if (!context.mute(Math.floor(voice / 3), voice % 3, mask[voice])) throw new Error(`Could not restore SID mute mask: ${context.getLastError()}`);
         }
         return state;
       }
@@ -286,7 +310,7 @@ export class SidSession {
   }
 
   private consume(state: LiveState, frames: number, retainPcm: boolean, deadline: number): RenderResult {
-    const pcm = new Int16Array(retainPcm ? frames : 0);
+    const pcm = new Int16Array(retainPcm ? frames * state.channels : 0);
     const startFrame = state.consumedFrame;
     let copied = 0;
     let emptyReads = 0;
@@ -297,11 +321,14 @@ export class SidSession {
         deadlineExceeded(deadline);
         if (state.pendingOffset >= state.pendingPcm.length) {
           if (++calls > callBudget) throw new Error('SID render exhausted its bounded sample-production budget');
-          // render() owns a heap view; copying before any further WASM call is required by the binding contract.
-          const chunk = state.context.render(RAW_RENDER_CYCLES)?.slice();
+          // Both binding render methods return borrowed heap views; copy before reading traces.
+          const chunk = (state.context.renderRaw
+            ? state.context.renderRaw(RAW_RENDER_CYCLES)
+            : state.context.render(RAW_RENDER_CYCLES))?.slice();
           state.dropped += state.context.getDroppedSidWriteTraceCount();
           this.appendWrites(state, state.context.getAndClearSidWriteTracesPacked());
           if (!chunk) throw new Error(`SID render stopped: ${state.context.getLastError()}`);
+          if (chunk.length % state.channels) throw new Error('Raw SID output is not frame aligned');
           if (!chunk.length) {
             if (++emptyReads > 64) throw new Error('SID render exhausted without producing samples; ROM-driven files are unsupported');
             continue;
@@ -310,9 +337,9 @@ export class SidSession {
           state.pendingPcm = chunk;
           state.pendingOffset = 0;
         }
-        const take = Math.min(frames - copied, state.pendingPcm.length - state.pendingOffset);
-        if (retainPcm) pcm.set(state.pendingPcm.subarray(state.pendingOffset, state.pendingOffset + take), copied);
-        state.pendingOffset += take;
+        const take = Math.min(frames - copied, (state.pendingPcm.length - state.pendingOffset) / state.channels);
+        if (retainPcm) pcm.set(state.pendingPcm.subarray(state.pendingOffset, state.pendingOffset + take * state.channels), copied * state.channels);
+        state.pendingOffset += take * state.channels;
         copied += take;
       }
       state.consumedFrame += frames;
@@ -320,7 +347,7 @@ export class SidSession {
       let writeCount = 0;
       while (writeCount < state.pendingWrites.length && state.pendingWrites[writeCount].timeSeconds < endSeconds) {
         const write = state.pendingWrites[writeCount++];
-        state.registers[write.address] = write.value;
+        state.registers[write.sidNumber * 32 + write.address] = write.value;
       }
       const writes = state.pendingWrites.splice(0, writeCount);
       const dropped = state.dropped;
@@ -342,8 +369,8 @@ export class SidSession {
 
   async mute(mask: MuteMask): Promise<PositionResult> {
     const state = this.requireState();
-    if (!Array.isArray(mask) || mask.length !== 3 || mask.some((value) => typeof value !== 'boolean')) {
-      throw new Error('mute mask must contain exactly three booleans (true means muted)');
+    if (!Array.isArray(mask) || mask.length !== state.channels * 3 || mask.some((value) => typeof value !== 'boolean')) {
+      throw new Error(`mute mask must contain exactly ${state.channels * 3} booleans (true means muted)`);
     }
     return this.replay(state.consumedFrame, [...mask]);
   }

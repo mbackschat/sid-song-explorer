@@ -15,6 +15,8 @@ export interface TuneDetails {
   clock: Clock;
   model: ChipModel;
   installedSids: number;
+  channels: 1 | 2;
+  sidChipBases: number[];
   sampleRate: number;
   registers: number[];
 }

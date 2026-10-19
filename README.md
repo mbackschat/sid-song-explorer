@@ -10,7 +10,7 @@ SID Song Explorer is a browser player and inspector for Commodore 64 SID music. 
   <a href="https://mbackschat.github.io/sid-song-explorer/"><img alt="Run in browser" src="https://img.shields.io/badge/Run%20in%20browser-8055c9?style=for-the-badge"></a>
 </p>
 <p>
-  <a href="assets/screenshots/rambo-playing.png"><img src="assets/screenshots/rambo-playing.png" alt="Rambo loader playing in mono, with three active SID voice lanes and live register inspection" width="560"></a>
+  <a href="assets/screenshots/rambo-playing.png"><img src="assets/screenshots/rambo-playing.png" alt="Rambo main music playing live in dual-SID stereo, with six chip-grouped voice lanes, two shared-filter lanes and register inspection." width="560"></a>
 </p>
 
 ## Related projects
@@ -20,40 +20,52 @@ SID Song Explorer is a browser player and inspector for Commodore 64 SID music. 
 
 ## Current state
 
-The first mono proof of concept is complete, with passing engine and headless Chromium/WebKit interaction checks and user acceptance of actual Safari full-ending playback and inspection usefulness on 2026-10-19. It uses a small TypeScript/Vite application over `libsidplayfp-wasm` 1.1.0's SIDLite engine. The centered timeline is implemented and accepted locally, before uninterrupted voice switching. [The plan](docs/PLAN.md) owns status, and [the validation record](docs/validation/mono-poc.md) separates automated checks from human acceptance and later browser gates. The app is hosted on GitHub Pages; local files remain on your device.
+The published mono proof of concept is complete, with user acceptance of actual Safari full-ending playback and inspection usefulness on 2026-10-19. [The mono validation record](docs/validation/mono-poc.md) retains its automated and human evidence. The working copy adds the unified timeline and six catalog entries, including two live stereo candidates. **Stereo is local and unpublished; automated routing, browser and full-song checks pass, with actual Safari/iPhone acceptance pending**; [dual-SID validation](docs/validation/stereo.md) owns those gates. The screenshot shows the local stereo implementation. [The plan](docs/PLAN.md) owns delivery status. Local files remain on your device.
 
-## Implemented POC capabilities
+## Capabilities in the working copy
 
-- Play the four public mono samples linked in Crafter’s README: Rambo loader main music, Bach Toccata, Mozart Minuet and Trio, and the original instrument mix. Each uses pinned, hash-verified files with its matching WAV, attribution, license and source links.
-- Follow stereo SID/WAV links for each published song. Live playback/inspection remains mono. Moon River, Pink Panther, Axel F and Ghostbusters appear separately as local-build materials, without unpublished audio.
-- Open callable mono PSID files locally, with subtune, PAL/NTSC and MOS6581/MOS8580 controls; local files and their hashes stay on the device.
+- Select the six entries listed below, using pinned, hash-verified SID files, retained WAV references, attribution, licenses and source links. Stereo Rambo’s reference WAV stays external because it exceeds the prepared-asset size cap.
+- Keep Moon River, Pink Panther, Axel F and Ghostbusters separate as local-build materials, without unpublished audio downloads. Other stereo arrangements remain external SID/WAV links.
+- Open callable mono or dual-SID PSID files locally, with subtune, PAL/NTSC and MOS6581/MOS8580 controls. Dual-SID playback uses one selected model for both chips; automatic opening rejects conflicting concrete model declarations. Local files and their hashes stay on the device.
 - Play, pause, restart, seek quickly within the prepared audio range, with busy feedback for unprepared positions, and set A–B study loops.
-- Mute or solo the three physical SID voices, with the waveform-write intervention and shared hardware dependencies labelled. Changing voices pauses sound to prepare the mix; a spinner and explanation appear beside the controls. Uninterrupted switching is tracked as `VOICE-1` in [the post-POC plan](docs/PLAN.md#exit-the-poc-and-continue-production-work).
-- Switch voice activity between **Scroll** (equal past and prepared upcoming space around the heard playhead, with zoom in/out and more visible time on wider charts) and **Fit history** (retained heard activity) in the graph header; select retained voice/register history while music continues, hold an inspection cursor, and return to following the heard playhead.
-- Inspect frequency, waveform, gate, pulse width, ADSR settings, ring/sync, the shared filter and ordered writes, alongside PCM levels, waveform and spectrum.
+- Mute or solo three voices for mono or six chip-grouped voices for stereo, with one shared filter per chip. Changing voices pauses sound to prepare the mix; a spinner and explanation appear beside the controls. Uninterrupted switching is explicitly deferred on cost grounds as [`VOICE-1`](docs/PLAN.md#exit-the-poc-and-continue-production-work).
+- Use the shared transport/timeline panel: browse with its scrollbar without seeking, click a lane or ruler to seek, **Shift-click** to inspect, **Hold** the heard moment and **Follow** to center playback again. **Scroll** shows past and prepared upcoming activity; **Fit history** shows retained heard activity. Zoom sets time density, so wider charts show more time at the same zoom.
+- Inspect frequency, waveform, gate, pulse width, ADSR settings, ring/sync, each chip’s shared filter and chip-indexed ordered writes. Stereo output routes SID 1 left and SID 2 right as an explicit player setting. The shared levels, waveform and spectrum are labelled as a mono monitor of `(L + R) / 2`.
 - Read three evidence-linked Rambo annotations with their exact evidence and listening scope.
 
-The POC accepts a bounded callable mono PSID subset; RSID, ROM/interrupt-driven profiles and additional SID chips are outside it. Seeking and loop continuation require the validation described in [the playback adapter](docs/architecture/playback-adapter.md); a state-restored loop does not promise a seamless audio splice. Dual-SID routing, the full model/count matrix and recent-iPhone compatibility remain product requirements for later gates in [the founding design](docs/design/web-player-and-analyser.md).
+The input boundary remains a bounded callable PSID subset: RSID, ROM/interrupt-driven profiles, three-SID files and mixed concrete chip-model declarations on automatic local opening are excluded. When one dual-SID model declaration is unknown or accepts either model, a concrete declaration on the other chip supplies the default; intentionally reloading with another model applies it to both chips. Seeking and loop continuation require [adapter validation](docs/architecture/playback-adapter.md); a state-restored loop does not promise a seamless audio splice. The local stereo implementation does not close the [design’s model/count and Safari gates](docs/design/web-player-and-analyser.md#first-step-and-milestones).
 
 ## Published library
 
-The [live app](https://mbackschat.github.io/sid-song-explorer/) mirrors [Crafter’s downloadable samples](https://github.com/mbackschat/sid-song-crafter#downloads). Rambo remains the initial selection and carries three source-linked annotations; the other songs use generic live register inspection. Stereo files open separately for use in a compatible player. The [pinned catalog](config/catalog.json) records the precise files and provenance; [source preparation](docs/integration/poc-sources.md) explains updates.
+The [published app](https://mbackschat.github.io/sid-song-explorer/) retains four mono entries from [Crafter’s downloadable samples](https://github.com/mbackschat/sid-song-crafter#downloads), with separate stereo downloads. The working-copy catalog contains six playable entries; the two stereo entries await the adoption and publication gates above. Mono Rambo remains the initial selection and carries three source-linked annotations; the other entries use generic live register inspection.
 
-The [Application workflow](.github/workflows/app.yml) deploys `main` only after both supported browser/platform jobs pass. It builds and uploads the cleared assets, license notices and corresponding engine source. [Publication checks](docs/validation/mono-poc.md#github-pages-and-readme-catalog) cover the hosted app separately from local tests.
+| Sample | Variant | Chip model | Application status |
+| --- | --- | --- | --- |
+| Rambo loader — main music | Mono | MOS6581 | Published |
+| Bach Toccata | Mono | MOS8580 | Published |
+| Mozart Minuet and Trio | Mono | MOS8580 | Published |
+| Original instrument mix | Mono | MOS8580 | Published |
+| Rambo loader — main music | Dual-SID stereo | MOS6581 × 2 | Local candidate; acceptance pending |
+| Bach Toccata | Dual-SID stereo | MOS8580 × 2 | Local candidate; acceptance pending |
+
+The [pinned catalog](config/catalog.json) records exact files and provenance; [source preparation](docs/integration/poc-sources.md) explains updates. Retained sample listening verdicts describe those source performances and do not certify the new browser backend.
+
+The [Application workflow](.github/workflows/app.yml) deploys `main` only after both shards pass on each supported browser/platform. It builds and uploads the cleared assets, license notices and corresponding engine source. [Publication checks](docs/validation/mono-poc.md#github-pages-and-readme-catalog) cover the hosted app separately from local tests.
 
 ## Set up and validate
 
-Use Node.js 24.18.0 (package minimum 24.12) and pnpm 11.20.0. Package versions are pinned in [package.json](package.json) and [the lockfile](pnpm-lock.yaml).
+Use Node.js 24.18.0 (package minimum 24.12), pnpm 11.20.0, Python 3.12 or newer and Docker with its daemon running. Python and Docker build the modified raw-chip SIDLite engine; [dual-SID validation](docs/validation/stereo.md) records the bounded native build and its current evidence. Package versions are pinned in [package.json](package.json) and [the lockfile](pnpm-lock.yaml).
 
 ```sh
 git clone https://github.com/mbackschat/sid-song-explorer.git
 cd sid-song-explorer
 pnpm install --frozen-lockfile
+pnpm prepare:engine
 pnpm prepare:assets
 pnpm dev
 ```
 
-Open the local URL printed by Vite, normally `http://127.0.0.1:5173`. Asset preparation downloads the cleared sample files and copies the engine license, notices, modifications and complete corresponding source into ignored `public/generated/`. The build includes those files in `dist/`; prepare them before building or serving the app. No sibling checkout, private cache, ROM download or live emulator bridge is required. [The sample snapshot guide](docs/integration/poc-sources.md) records exact hashes, rights, download limits and the optional explicit local-copy command.
+Open the local URL printed by Vite, normally `http://127.0.0.1:5173`. Engine preparation builds from pinned source and runs the raw-routing/mono-equality gate. Asset preparation then verifies the modified artifact, downloads cleared sample files and packages the engine license, notices, modifications and complete corresponding source in ignored `public/generated/`. The build includes these files in `dist/`; prepare them before building or serving the app. No sibling checkout, private cache, ROM download or live emulator bridge is required. [The sample snapshot guide](docs/integration/poc-sources.md) records hashes, rights, download limits and the optional explicit local-copy command.
 
 ```sh
 pnpm test
@@ -69,10 +81,11 @@ Browser checks use Google Chrome on Linux and macOS, plus Playwright WebKit on m
 ## Explore the Rambo main entry
 
 1. Leave **Rambo loader — main music** selected and press **Load sample**, then **Play**. This runs the SID live; the retained WAV has separate controls.
-2. Click a voice lane to hold an earlier moment while playback continues. Select a voice in **Sound inspector** to inspect its register state and the last ordered writes at or before the cursor. The highlighted held state names the selected voice and time; **View inspector** brings its settings into view on small screens. Press **Resume live** to follow playback again. Chart selection does not seek the audio; use the playback slider above.
-3. Try **Solo** on a voice, then **Restore full mix**. The control changes SID waveform writes; shared filtering and oscillator coupling can affect the result.
-4. Set A and B around a passage and enable **Loop A–B**. Use the linked evidence cards to inspect the main entrance, score returns and continuing sound lifetimes.
-5. Play the retained WAV separately for context and read its scope beside the controls. The accepted underlying phrase and ending do not establish acceptance of the new cold-start entrance or of this browser performance.
+2. Drag the scrollbar below the timeline to browse continuously without changing playback. Click a voice/filter lane or release the time ruler to seek. **Scroll** returns to centered playback; **Follow** centers it immediately.
+3. **Shift-click** a lane to inspect that moment while music continues, or press **Hold** to capture the current heard position. Select a voice in **Sound inspector** to read its registers and ordered writes. **View inspector** brings the held settings into view on small screens; **Follow** releases the held inspection.
+4. Try **Solo** on a voice, then **Full mix**. Sound pauses while the replacement mix is prepared. The control changes SID waveform writes; shared filtering and oscillator coupling can affect the result.
+5. Expand **Loop A–B**, set A and B around a passage and enable the loop. Use the linked evidence cards to inspect the main entrance, score returns and continuing sound lifetimes.
+6. Play the retained WAV separately for context and read its scope beside the controls. The accepted underlying phrase and ending do not establish acceptance of the new cold-start entrance or this browser performance. After the local stereo gate passes, select **Rambo loader — main music, stereo** to explore the six chip-grouped voices and two filters; stereo browser/listening acceptance remains separate.
 
 **Open local SID** provides the same generic inspection without authored annotations. It does not upload the file, send a file hash or request external metadata. Unsupported profiles fail with a message; unknown durations stay labelled unknown.
 
@@ -87,6 +100,7 @@ Both repositories can be worked on together in one agent session, with coordinat
 - [Plan](docs/PLAN.md): current scope and next development task.
 - [Playback adapter](docs/architecture/playback-adapter.md): app-base choice, engine boundary and timing limits.
 - [Mono POC validation](docs/validation/mono-poc.md): technical evidence, Safari/listening acceptance and remaining limitations.
+- [Dual-SID validation](docs/validation/stereo.md): local raw-routing implementation, execution status and outstanding stereo acceptance.
 - [Sample snapshot](docs/integration/poc-sources.md): pinned assets, rights and annotation scope.
 - [Founding design](docs/design/web-player-and-analyser.md): product contracts and verification gates.
 - [Application research](docs/research/web-music-explorers.md): dated comparisons and reuse alternatives.

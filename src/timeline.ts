@@ -1,5 +1,36 @@
 import type { TimelineObservation } from './player-types.ts';
 
+export type DisplayedObservation = TimelineObservation & {endInclusive: boolean};
+
+/** Combine connected coverage after the caller has verified a common configuration; retained data owns the overlap. */
+export function composeTimelineObservations(retained: DisplayedObservation, prepared: DisplayedObservation): DisplayedObservation {
+  if (!prepared.frames.length) return retained;
+  if (!retained.frames.length || retained.end < retained.start || retained.end === retained.start && !retained.endInclusive || retained.end < prepared.start || prepared.end < retained.start ||
+    retained.frames[0].registers.length !== prepared.frames[0]?.registers.length) return prepared;
+  const contains = (observation: DisplayedObservation, time: number) => time >= observation.start &&
+    (time < observation.end || observation.endInclusive && time === observation.end);
+  const retainedFrames = retained.frames.filter(frame => contains(retained, frame.time));
+  const boundary = observationRegistersAt(retained, retained.start, true);
+  if (boundary && retainedFrames[0]?.time !== retained.start) retainedFrames.unshift({time: retained.start, registers: boundary});
+  const frames = [
+    ...prepared.frames.filter(frame => frame.time >= prepared.start && frame.time < retained.start),
+    ...retainedFrames,
+    ...prepared.frames.filter(frame => frame.time <= prepared.end && frame.time >= retained.end && !contains(retained, frame.time)),
+  ];
+  const writes = [
+    ...prepared.writes.filter(write => contains(prepared, write.timeSeconds) && write.timeSeconds < retained.start),
+    ...retained.writes.filter(write => contains(retained, write.timeSeconds)),
+    ...prepared.writes.filter(write => contains(prepared, write.timeSeconds) && write.timeSeconds >= retained.end && !contains(retained, write.timeSeconds)),
+  ];
+  const end = Math.max(retained.end, prepared.end);
+  return {
+    start: Math.min(retained.start, prepared.start), end, frames, writes,
+    endInclusive: retained.end === end && retained.endInclusive || prepared.end === end && prepared.endInclusive,
+    // Both counts can cover the same CachedSidSession blocks; preserve the warning without counting that loss twice.
+    dropped: Math.max(retained.dropped, prepared.dropped),
+  };
+}
+
 export interface AudioSegment {
   contextStart: number;
   contextEnd: number;
@@ -70,9 +101,10 @@ export function observationRegistersAt(observation: TimelineObservation, seconds
   const registers = [...frame.registers];
   for (const write of observation.writes) {
     if (write.timeSeconds > seconds) break;
-    if (write.timeSeconds < frame.time || write.sidNumber !== 0) continue;
-    const offset = write.address >= 0xd400 ? write.address - 0xd400 : write.address;
-    if (offset >= 0 && offset < registers.length) registers[offset] = write.value;
+    if (write.timeSeconds < frame.time || !Number.isInteger(write.sidNumber) || write.sidNumber < 0) continue;
+    const address = write.address >= 0xd400 ? write.address - 0xd400 : write.address;
+    const offset = write.sidNumber * 32 + address;
+    if (address >= 0 && address < 32 && offset < registers.length) registers[offset] = write.value;
   }
   return registers;
 }

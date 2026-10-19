@@ -28,9 +28,12 @@ export type CatalogEntry = {
   title: string;
   description: string;
   durationSeconds: number;
-  files: { sid: CatalogFile; reference: CatalogFile; license: CatalogFile; notices?: CatalogFile };
+  files: { sid: CatalogFile; reference?: CatalogFile; license: CatalogFile; notices?: CatalogFile };
+  referenceUrl?: string;
   stereo?: { sidUrl: string; referenceUrl: string };
-  target: { clock: 'PAL'; model: 'MOS6581' | 'MOS8580'; sidCount: 1; baseAddress: 54272; subtune: 1 };
+  target: { clock: 'PAL'; model: 'MOS6581' | 'MOS8580'; baseAddress: 54272; subtune: 1 } & (
+    { sidCount: 1; secondSidAddress?: never } | { sidCount: 2; secondSidAddress: 54304 }
+  );
   rights: { license: string; attribution: string; sourceUrl: string; licenseUrl: string; correspondingSourceUrl: string };
   listening: { status: string; scope: string; sourceUrl: string };
   analysis: {
@@ -111,14 +114,15 @@ export function parseCatalog(value: unknown): Catalog {
   const filenames = new Set<string>();
 
   for (const rawEntry of catalog.entries) {
-    const entry = record(rawEntry, ['id', 'title', 'description', 'durationSeconds', 'files', 'target', 'rights', 'listening', 'analysis'], 'entry', ['stereo']);
+    const entry = record(rawEntry, ['id', 'title', 'description', 'durationSeconds', 'files', 'target', 'rights', 'listening', 'analysis'], 'entry', ['stereo', 'referenceUrl']);
     identifier(entry.id, 'entry.id');
     requireValue(!entryIds.has(entry.id), 'duplicate entry id');
     entryIds.add(entry.id);
     text(entry.title, 'entry.title');
     text(entry.description, 'entry.description');
     requireValue(typeof entry.durationSeconds === 'number' && Number.isFinite(entry.durationSeconds) && entry.durationSeconds > 0, 'durationSeconds');
-    const files = record(entry.files, ['sid', 'reference', 'license'], 'files', ['notices']);
+    const files = record(entry.files, ['sid', 'license'], 'files', ['reference', 'notices']);
+    requireValue(Object.hasOwn(files, 'reference') !== Object.hasOwn(entry, 'referenceUrl'), 'exactly one prepared or external reference');
     for (const [kind, rawFile] of Object.entries(files)) {
       const file = record(rawFile, ['url', 'sha256', 'bytes', 'filename'], `files.${kind}`);
       httpsUrl(file.url, `files.${kind}.url`);
@@ -130,6 +134,11 @@ export function parseCatalog(value: unknown): Catalog {
       filenames.add(file.filename);
     }
 
+    if (Object.hasOwn(entry, 'referenceUrl')) {
+      httpsUrl(entry.referenceUrl, 'referenceUrl');
+      assetSourcePath(source as Catalog['source'], entry.referenceUrl);
+    }
+
     if (Object.hasOwn(entry, 'stereo')) {
       const stereo = record(entry.stereo, ['sidUrl', 'referenceUrl'], 'stereo');
       for (const field of ['sidUrl', 'referenceUrl']) {
@@ -138,8 +147,9 @@ export function parseCatalog(value: unknown): Catalog {
       }
     }
 
-    const target = record(entry.target, ['clock', 'model', 'sidCount', 'baseAddress', 'subtune'], 'target');
-    requireValue(target.clock === 'PAL' && (target.model === 'MOS6581' || target.model === 'MOS8580') && target.sidCount === 1 && target.baseAddress === 54272 && target.subtune === 1, 'unsupported POC target');
+    const target = record(entry.target, ['clock', 'model', 'sidCount', 'baseAddress', 'subtune'], 'target', ['secondSidAddress']);
+    requireValue(target.clock === 'PAL' && (target.model === 'MOS6581' || target.model === 'MOS8580') && (target.sidCount === 1 || target.sidCount === 2) && target.baseAddress === 54272 && target.subtune === 1, 'unsupported playback target');
+    requireValue(target.sidCount === 2 ? target.secondSidAddress === 54304 : !Object.hasOwn(target, 'secondSidAddress'), 'second SID address must match chip count');
     const rights = record(entry.rights, ['license', 'attribution', 'sourceUrl', 'licenseUrl', 'correspondingSourceUrl'], 'rights');
     text(rights.license, 'rights.license');
     text(rights.attribution, 'rights.attribution');
@@ -165,7 +175,7 @@ export function parseCatalog(value: unknown): Catalog {
       text(annotation.title, 'annotation.title');
       text(annotation.description, 'annotation.description');
       requireValue(typeof annotation.evidenceLevel === 'string' && ['verified', 'derived', 'interpretation'].includes(annotation.evidenceLevel), 'annotation.evidenceLevel');
-      requireValue(Array.isArray(annotation.voices) && annotation.voices.length > 0 && annotation.voices.every((voice) => Number.isInteger(voice) && voice >= 1 && voice <= 3) && new Set(annotation.voices).size === annotation.voices.length, 'annotation.voices');
+      requireValue(Array.isArray(annotation.voices) && annotation.voices.length > 0 && annotation.voices.every((voice) => Number.isInteger(voice) && voice >= 1 && voice <= (target.sidCount === 2 ? 6 : 3)) && new Set(annotation.voices).size === annotation.voices.length, 'annotation.voices');
       httpsUrl(annotation.sourceUrl, 'annotation.sourceUrl');
     }
   }

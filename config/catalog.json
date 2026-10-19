@@ -293,6 +293,115 @@
         "timeBasis": "seconds-from-init",
         "annotations": []
       }
+    },
+    {
+      "id": "rambo-stereo-main",
+      "title": "Rambo loader — main music, stereo",
+      "description": "Martin Galway's loading music in SID Song Crafter's centered-lead two-SID arrangement, with independent accompaniment on each chip. The main entry omits the original introduction and retains the ending; SID A goes left and SID B goes right.",
+      "durationSeconds": 193.35884353741497,
+      "files": {
+        "sid": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-stereo/rambo-stereo-main.sid",
+          "sha256": "0998646302f2f89090976b0d2cfee6b141885f378c10242c3a009ce5741d3727",
+          "bytes": 17937,
+          "filename": "rambo-stereo-main.sid"
+        },
+        "license": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-stereo/LICENSE",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "bytes": 35149,
+          "filename": "rambo-stereo-LICENSE.txt"
+        }
+      },
+      "referenceUrl": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-stereo/rambo-stereo-main.wav",
+      "target": {
+        "clock": "PAL",
+        "model": "MOS6581",
+        "sidCount": 2,
+        "baseAddress": 54272,
+        "secondSidAddress": 54304,
+        "subtune": 1
+      },
+      "rights": {
+        "license": "GPL-3.0-only",
+        "attribution": "Composed, arranged and programmed by Martin Galway, 1985; historical credit: (C) Ocean Software 1985. Galway's upstream README dated 2026-04-14 states that he acquired the music/programming rights from Infogrames. Modified version: SID Song Crafter's independent symbolic score and computed two-SID player, packaged 2026-10-15, with source-derived held harmony, a duplicated native lead and bounded sync/ring modulator handoffs; the main-entry modification is dated 2026-10-16. The combined score, SID and generated WAV are distributed under GNU GPL version 3, without warranty; separately used independently authored tools retain their MIT license.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-stereo/README.md",
+        "licenseUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-stereo/LICENSE",
+        "correspondingSourceUrl": "https://github.com/mbackschat/sid-song-crafter/archive/3db086b6963676ef75f34d7f77c3b67232a777fb.tar.gz"
+      },
+      "listening": {
+        "status": "Main-entry stereo release accepted on 2026-10-16; complete arrangement verdict retained",
+        "scope": "On 2026-10-16 the listener accepted the presented trimmed Rambo stereo WAV alongside the complete Bach Toccata stereo WAV. This main-entry release has fresh SID envelopes, oscillators and filter history and is not promised to match a crop of the complete render. The reference is the generated two-SID performance; this source verdict does not establish Explorer or hardware playback acceptance.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/rambo-stereo/main-manifest.json"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "sidSha256": "0998646302f2f89090976b0d2cfee6b141885f378c10242c3a009ce5741d3727",
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": []
+      }
+    },
+    {
+      "id": "bach-toccata-stereo",
+      "title": "Bach Toccata — complete Toccata section, stereo",
+      "description": "The complete BWV 565 Toccata section redistributed across two SID chips: the melody is duplicated at center, bass goes left and harmony goes right. Notes, instruments and timing retain the mono arrangement; SID A goes left and SID B goes right.",
+      "durationSeconds": 88.12292517006803,
+      "files": {
+        "sid": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/bach-toccata/bach-toccata-stereo.sid",
+          "sha256": "96ba9684c3eea789bab1262bfd233ec87666791d40e8d8ccf8aaeb7a9e151bc4",
+          "bytes": 9602,
+          "filename": "bach-toccata-stereo.sid"
+        },
+        "reference": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/bach-toccata/bach-toccata-stereo.wav",
+          "sha256": "51796c32439bf93c20d0aa85fcb91e76cdf3e4150bcbe4beb6370ce9953a835c",
+          "bytes": 15544928,
+          "filename": "bach-toccata-stereo.wav"
+        },
+        "license": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/LICENSE",
+          "sha256": "11890fae1065b64e4f3a65e82ac5c20f29407325a1ed5b48ad7c252b8acec062",
+          "bytes": 1073,
+          "filename": "bach-toccata-stereo-LICENSE.txt"
+        },
+        "notices": {
+          "url": "https://raw.githubusercontent.com/mbackschat/sid-song-crafter/3db086b6963676ef75f34d7f77c3b67232a777fb/THIRD_PARTY_NOTICES.md",
+          "sha256": "ba3e3c7edfc5b6d5ee1245f870211805427f8cbafbe20babbd4a9dc887d4816a",
+          "bytes": 16043,
+          "filename": "bach-toccata-stereo-THIRD-PARTY-NOTICES.md"
+        }
+      },
+      "target": {
+        "clock": "PAL",
+        "model": "MOS8580",
+        "sidCount": 2,
+        "baseAddress": 54272,
+        "secondSidAddress": 54304,
+        "subtune": 1
+      },
+      "rights": {
+        "license": "MIT; separate SID-Wizard player declaration",
+        "attribution": "J. S. Bach, BWV 565, public-domain composition. Anonymous Mutopia 1780 typesetting from Bach-Gesellschaft Ausgabe (1867), dedicated to the public domain. Original SID arrangement, patches and generated performance: SID Song Crafter, Copyright (c) 2026 Martin Backschat, MIT to the extent the project holds rights. Embedded SID-Wizard 1.97 player by Hermit Software / Mihaly Horvath, with help from Soci of Singular Crew, retains the upstream WTF-licensed declaration reproduced in the accompanying third-party notices; no formal SPDX identifier is inferred.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/bach-toccata/README.md",
+        "licenseUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/LICENSE",
+        "correspondingSourceUrl": "https://github.com/mbackschat/sid-song-crafter/archive/3db086b6963676ef75f34d7f77c3b67232a777fb.tar.gz"
+      },
+      "listening": {
+        "status": "Stereo presentation accepted on 2026-10-16; mono verdict retained",
+        "scope": "On 2026-10-16 the listener accepted the presented complete Bach Toccata stereo WAV alongside the trimmed Rambo stereo WAV. The matching WAV is rendered directly from the two-SID file at unity gain and is not duplicated mono audio or an organ recording. This source verdict does not establish Explorer or hardware playback acceptance.",
+        "sourceUrl": "https://github.com/mbackschat/sid-song-crafter/blob/3db086b6963676ef75f34d7f77c3b67232a777fb/samples/bach-toccata/stereo-manifest.json"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "sidSha256": "96ba9684c3eea789bab1262bfd233ec87666791d40e8d8ccf8aaeb7a9e151bc4",
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": []
+      }
     }
   ],
   "materials": [

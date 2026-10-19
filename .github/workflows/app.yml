@@ -10,11 +10,43 @@ concurrency:
   group: application-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  engine:
+    name: Build and verify raw-chip engine / ubuntu-24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prepare:engine
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-raw-chip-engine
+          path: build/stereo-gate/output/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: raw-chip-engine-failures
+          path: |
+            build/stereo-gate/*.log
+            build/stereo-gate/*.json
+            build/stereo-gate/output/*.json
+
   check:
-    name: ${{ matrix.browser }} / ${{ matrix.os }}
+    name: ${{ matrix.browser }} / ${{ matrix.os }} / shard ${{ matrix.shard }}
+    needs: engine
     strategy:
       fail-fast: false
       matrix:
+        browser: [chrome, webkit]
+        shard: [1, 2]
         include:
           - os: ubuntu-24.04
             browser: chrome
@@ -34,24 +66,28 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-raw-chip-engine
+          path: build/stereo-gate/output/
       - run: pnpm prepare:assets
       - run: pnpm test
         timeout-minutes: 1
       - run: pnpm build
         timeout-minutes: 2
       - run: pnpm exec playwright install --with-deps ${{ matrix.install }}
-      - run: pnpm test:browser --project ${{ matrix.browser }}
+      - run: pnpm test:browser --project ${{ matrix.browser }} --shard ${{ matrix.shard }}/2
         timeout-minutes: 3
       - uses: actions/configure-pages@v5
-        if: matrix.browser == 'chrome' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: matrix.browser == 'chrome' && matrix.shard == 1 && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
       - uses: actions/upload-pages-artifact@v3
-        if: matrix.browser == 'chrome' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: matrix.browser == 'chrome' && matrix.shard == 1 && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
           path: dist
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: browser-failures-${{ matrix.browser }}-${{ matrix.os }}
+          name: browser-failures-${{ matrix.browser }}-${{ matrix.os }}-${{ matrix.shard }}
           path: test-results/
 
   deploy:
