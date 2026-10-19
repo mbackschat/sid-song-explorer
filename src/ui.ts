@@ -811,9 +811,9 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       if (elapsed < 0 || timelineView === 'fit' && elapsed > 0) seekViewport = null;
       else {
         if (state?.status === 'playing' && elapsed > 0) {
-          // The click-position guard in tests/browser/unified-panel.spec.ts requires paused stability and gradual following independent of drawing frequency.
-          seekViewport.center = position + (seekViewport.center - seekViewport.heard!) * Math.exp(-elapsed / .35);
-          if (Math.abs(seekViewport.center - position) * TIMELINE_DENSITIES[timelineZoom]! < .5) seekViewport = null;
+          // The normal-motion guards in tests/browser/unified-panel.spec.ts prohibit scrolling faster than heard playback after a seek.
+          if (seekViewport.heard! > seekViewport.center) seekViewport.center += elapsed;
+          else if (position >= seekViewport.center) seekViewport = null;
         }
         if (seekViewport) seekViewport.heard = position;
       }

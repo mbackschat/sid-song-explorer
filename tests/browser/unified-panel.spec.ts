@@ -248,49 +248,55 @@ test('timeline seeking keeps chart and toolbar geometry stable while feedback is
   }
 });
 
-test('timeline click position stays under the pointer and playback returns gradually to centered following', async ({page}) => {
+for (const fraction of [.8, .2]) test(`timeline click on the ${fraction > .5 ? 'right' : 'left'} uses normal playback motion after seeking`, async ({page}) => {
   await openPaused(page);
   await page.locator('#seek-slider').fill('30');
   const lane = page.locator('#voice-lane-0');
   await expect.poll(() => lane.getAttribute('data-observed-until').then(Number)).toBeGreaterThan(35);
   const window = () => lane.evaluate(element => ({start:Number(element.getAttribute('aria-valuemin')),end:Number(element.getAttribute('aria-valuemax'))}));
-  for (const fraction of [.8, .2]) {
-    const before = await window();
-    const target = before.start + fraction * (before.end - before.start);
-    const release = await holdWorkerRequest(page, 'seek');
-    const box = (await lane.boundingBox())!;
-    await lane.click({position:{x:box.width * fraction,y:20}});
-    await expect(page.locator('#play-status')).toHaveText('Seeking…');
-    expect(await window()).toEqual(before);
-    await release();
-    await expect(page.locator('#play-status')).toHaveText('Paused');
-    await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeCloseTo(target,1);
-    expect(await window(), 'seeking must move the playhead, not the clicked point').toEqual(before);
-  }
-  const beforePlay = await window();
+  const before = await window();
+  const target = before.start + fraction * (before.end - before.start);
+  const release = await holdWorkerRequest(page, 'seek');
+  const box = (await lane.boundingBox())!;
+  await lane.click({position:{x:box.width * fraction,y:20}});
+  await expect(page.locator('#play-status')).toHaveText('Seeking…');
+  expect(await window()).toEqual(before);
+  await release();
+  await expect(page.locator('#play-status')).toHaveText('Paused');
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeCloseTo(target,1);
+  expect(await window(), 'seeking must move the playhead, not the clicked point').toEqual(before);
   const startHeard = Number(await page.locator('#seek-slider').inputValue());
+  const initialOffset = startHeard - (before.start + before.end) / 2;
   await page.locator('#play-button').click();
-  const frames = await lane.evaluate(async element => {
+  const frames = await lane.evaluate(async (element, {start, distance}) => {
     const samples: {center:number;heard:number}[] = [];
-    const start = Number((document.querySelector('#seek-slider') as HTMLInputElement).value);
-    const deadline = performance.now() + 6000;
+    const deadline = performance.now() + 7000;
     while (performance.now() < deadline) {
       const heard = Number((document.querySelector('#seek-slider') as HTMLInputElement).value);
       samples.push({center:(Number(element.getAttribute('aria-valuemin')) + Number(element.getAttribute('aria-valuemax'))) / 2,heard});
-      if (heard > start + 2.5) break;
+      if (heard > start + distance + .3) break;
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
     }
     return samples;
-  });
-  expect(frames.at(-1)!.heard).toBeGreaterThan(startHeard + 2);
-  const span = beforePlay.end - beforePlay.start;
-  let previous = (beforePlay.start + beforePlay.end) / 2;
+  }, {start:startHeard,distance:Math.abs(initialOffset)});
+  expect(frames.at(-1)!.heard).toBeGreaterThan(startHeard + Math.abs(initialOffset));
   for (const frame of frames) {
-    expect(Math.abs(frame.center - previous), 'following must not snap to the newly sought time').toBeLessThan(span * .15);
-    previous = frame.center;
+    const elapsed = frame.heard - startHeard;
+    const expectedOffset = initialOffset > 0 ? initialOffset : Math.min(0, initialOffset + elapsed);
+    expect(Math.abs(frame.heard - frame.center - expectedOffset), 'left clicks advance toward center; right clicks retain their screen position at normal scrolling speed').toBeLessThan(.03);
   }
+  await expect(page.locator('#return-button')).toHaveAttribute('aria-pressed', initialOffset > 0 ? 'false' : 'true');
+  await page.locator('#play-button').click();
+  await expect(page.locator('#play-status')).toHaveText('Paused');
+  const paused = await window();
+  const heard = await page.locator('#seek-slider').inputValue();
+  await page.locator('#timeline-scroll-track').focus();
+  expect(await window()).toEqual(paused);
+  expect(await page.locator('#seek-slider').inputValue()).toBe(heard);
+  await page.locator('#return-button').click();
   await expect(page.locator('#return-button')).toHaveAttribute('aria-pressed','true');
-  expect(Math.abs(frames.at(-1)!.center - frames.at(-1)!.heard)).toBeLessThan(.05);
+  const centered = await window();
+  expect((centered.start + centered.end) / 2).toBeCloseTo(Number(heard), 1);
 });
 
 test('seek positioning preserves startup, browsed and fitted windows until Follow is requested', async ({page}) => {
