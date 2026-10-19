@@ -175,7 +175,9 @@ audio { display: block; width: 100%; height: 36px; color-scheme: dark; }
 .inspector.held { border-color: #aa8bdf; }
 .inspector.held .panel-header { background: #211c37; }
 .status-line.seeking { color: #e2d5ff; }
-.status-line.seeking::before, button.seeking::before { content: ''; display: inline-block; width: 13px; height: 13px; border: 2px solid #62517d; border-top-color: #e2d5ff; border-radius: 50%; background: transparent; animation: seek-spin .8s linear infinite; }
-button.seeking::before { margin-right: 8px; vertical-align: -2px; }
+.status-line.seeking::before, button.seeking::before, #voice-mix-status.preparing::before { content: ''; display: inline-block; width: 13px; height: 13px; border: 2px solid #62517d; border-top-color: #e2d5ff; border-radius: 50%; background: transparent; animation: seek-spin .8s linear infinite; }
+button.seeking::before, #voice-mix-status.preparing::before { margin-right: 8px; vertical-align: -2px; }
 @keyframes seek-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .status-line.seeking::before, button.seeking::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .status-line.seeking::before, button.seeking::before, #voice-mix-status.preparing::before { animation: none; } }
+
+#voice-mix-status.preparing { color: #e2d5ff; }

@@ -78,7 +78,7 @@ export class ExplorerPlayer implements PlayerControls {
   private timer: ReturnType<typeof setInterval>;
   private animation = 0;
   private state: PlayerState = {
-    status: 'empty', position: 0, seekTarget: null, preparedRange: null, renderedUntil: 0, duration: null, error: null,
+    status: 'empty', position: 0, seekTarget: null, pendingOperation: null, preparedRange: null, renderedUntil: 0, duration: null, error: null,
     info: null, muted: [false, false, false], loop: null, peakDb: -Infinity,
     rmsDb: -Infinity, spectrum: new Uint8Array(512), waveform: new Float32Array(1024),
     frames: [], writes: [], historyStart: 0, dropped: 0, underruns: 0, epoch: 0,
@@ -155,6 +155,7 @@ export class ExplorerPlayer implements PlayerControls {
     this.state.status = 'error';
     this.state.preparedRange = null;
     this.state.seekTarget = null;
+    this.state.pendingOperation = null;
     this.state.error = error instanceof Error ? error.message : String(error);
     this.emit();
   }
@@ -175,6 +176,7 @@ export class ExplorerPlayer implements PlayerControls {
     this.state.status = 'loading';
     this.state.preparedRange = null;
     this.state.seekTarget = null;
+    this.state.pendingOperation = null;
     this.state.error = null;
     this.state.info = null;
     this.state.position = 0;
@@ -243,6 +245,7 @@ export class ExplorerPlayer implements PlayerControls {
     this.stopSources();
     this.state.status = 'seeking';
     this.state.seekTarget = seconds;
+    this.state.pendingOperation = 'seek';
     this.emit();
     try {
       const result = await engine.request<{frame: number; registers: number[]}>('seek', {seconds});
@@ -253,6 +256,7 @@ export class ExplorerPlayer implements PlayerControls {
       this.clearHistory(result.registers);
       this.nextStart = (this.context?.currentTime ?? 0) + 0.06;
       this.state.seekTarget = null;
+      this.state.pendingOperation = null;
       this.state.status = this.wantsPlayback ? 'playing' : 'paused';
       this.emit();
       if (this.wantsPlayback) await this.pump();
@@ -274,6 +278,7 @@ export class ExplorerPlayer implements PlayerControls {
     this.stopSources();
     this.state.status = 'seeking';
     this.state.seekTarget = position;
+    this.state.pendingOperation = 'voice-mix';
     this.emit();
     try {
       await engine.request('mute', {mask});
@@ -287,6 +292,7 @@ export class ExplorerPlayer implements PlayerControls {
       this.clearHistory(result.registers);
       this.nextStart = (this.context?.currentTime ?? 0) + 0.06;
       this.state.seekTarget = null;
+      this.state.pendingOperation = null;
       this.state.status = this.wantsPlayback ? 'playing' : 'paused';
       this.emit();
       if (this.wantsPlayback) await this.pump();

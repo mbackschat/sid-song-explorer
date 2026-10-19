@@ -83,6 +83,7 @@ test('mute clears prepared audio and rejects coverage from the previous mix epoc
   worker.coverage(1, 180);
   assert.deepEqual(value.state.preparedRange, {start: 0, end: 180});
   const muting = value.player.setMuted([true, false, false]);
+  assert.equal(value.state.pendingOperation, 'voice-mix');
   const immediately = value.state.preparedRange;
   worker.coverage(1, 180);
   const staleWhilePending = value.state.preparedRange;
@@ -108,10 +109,12 @@ test('muting during a delayed seek preserves its requested destination', async (
   worker.reply(worker.lastRequest('seek'), position(1));
   await initialSeek;
   const seeking = value.player.seek(180);
+  assert.equal(value.state.pendingOperation, 'seek');
   const pendingSeek = worker.lastRequest('seek');
   const muting = value.player.setMuted([false, true, false]);
   worker.reply(pendingSeek, position(180));
   await seeking;
+  assert.equal(value.state.pendingOperation, 'voice-mix', 'superseded seek must not clear newer voice feedback');
   worker.reply(worker.lastRequest('mute'), position(180));
   await flushReplies();
   const finalSeek = worker.lastRequest('seek');
@@ -119,6 +122,7 @@ test('muting during a delayed seek preserves its requested destination', async (
   await muting;
   assert.equal(worker.lastRequest('mute').cacheEpoch, 2);
   assert.equal(finalSeek.payload.seconds, 180);
+  assert.equal(value.state.pendingOperation, null);
   assert.equal(value.state.position, 180);
   assert.deepEqual(value.state.muted, [false, true, false]);
   assert.equal(value.state.status, 'paused');
@@ -164,6 +168,7 @@ test('a rejected mute leaves the next accepted mix coverage synchronized with it
   const rejected = assert.rejects(rejectedMute, /queue is full/);
   worker.reject(rejectedRequest, 'Engine request queue is full');
   await rejected;
+  assert.equal(value.state.pendingOperation, null, 'failure clears pending feedback');
   const acceptedMute = value.player.setMuted([false, true, false]);
   const acceptedRequest = worker.lastRequest('mute');
   worker.reply(acceptedRequest, position(0));

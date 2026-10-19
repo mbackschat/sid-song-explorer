@@ -31,6 +31,7 @@ export interface PlayerState {
   status: PlayerStatus;
   position: number;
   seekTarget: number | null;
+  pendingOperation: 'seek' | 'voice-mix' | null;
   preparedRange: {start: number; end: number} | null;
   renderedUntil: number;
   duration: number | null;

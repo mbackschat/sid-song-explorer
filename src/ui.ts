@@ -58,7 +58,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
             <div class="lane-list">${COLORS.map((color, voice) => `<div class="voice-lane" style="--voice:${color}"><div class="voice-label"><strong>Voice ${voice + 1}</strong><small id="lane-wave-${voice}">No observation</small></div><canvas id="voice-lane-${voice}" class="lane-plot" tabindex="0" role="slider" aria-label="Select inspection time for voice ${voice + 1}" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div>`).join('')}
               <div class="voice-lane filter-lane" style="--voice:#b2a1ff"><div class="voice-label"><strong>Shared filter</strong><small>Cutoff register</small></div><canvas id="filter-lane" class="lane-plot" tabindex="0" role="slider" aria-label="Select shared filter inspection time" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"></canvas></div><div class="timeline-key mono"><span id="timeline-start">0:00</span><span id="timeline-cursor">Heard playhead</span><span id="timeline-end">0:30</span></div>
             </div><p class="timeline-help">Scroll keeps a fixed ${FOLLOW_WINDOW_SECONDS}-second scale; Fit history shows all retained activity. Click a lane to freeze its register settings in the Sound inspector while music continues. Use the playback slider above to seek. Arrow keys move the inspection cursor. A line shows register frequency, not loudness; gate clear can still release sound.</p>
-            <div class="mix-section"><div class="mix-heading"><strong>Listen by voice</strong><button id="restore-button" class="small quiet" disabled>Restore full mix</button></div><div class="mix-buttons">${COLORS.map((color, voice) => `<div class="voice-controls" style="--voice:${color}"><span>V${voice + 1}</span><button id="mute-${voice}" aria-label="Mute voice ${voice + 1}" aria-pressed="false" disabled>Mute</button><button id="solo-${voice}" aria-label="Solo voice ${voice + 1}" aria-pressed="false" disabled>Solo</button></div>`).join('')}</div><p class="intervention-note">Waveform-write intervention, not isolated stems. Mute acts on subsequent control writes; shared filtering and ring/sync coupling still apply.</p></div>
+            <div class="mix-section"><div class="mix-heading"><strong>Listen by voice</strong><button id="restore-button" class="small quiet" disabled>Restore full mix</button></div><div id="mix-controls" class="mix-buttons" aria-busy="false">${COLORS.map((color, voice) => `<div class="voice-controls" style="--voice:${color}"><span>V${voice + 1}</span><button id="mute-${voice}" aria-label="Mute voice ${voice + 1}" aria-pressed="false" disabled>Mute</button><button id="solo-${voice}" aria-label="Solo voice ${voice + 1}" aria-pressed="false" disabled>Solo</button></div>`).join('')}</div><p id="voice-mix-status" class="intervention-note" role="status" aria-live="polite" aria-atomic="true"></p></div>
             <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="0" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="8" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restarts may briefly pause; playback is not gapless.</span></div>
           </section>
           <aside class="panel inspector" aria-labelledby="inspector-title"><div class="panel-header"><h2 id="inspector-title" tabindex="-1">Sound inspector</h2><span id="inspection-time" class="inspection-time mono">0:00.00</span></div><div class="inspector-body"><p id="inspector-note" class="inspector-note">Following heard playback. Register settings are derived observations, not recovered instruments or measured envelope amplitude.</p><div class="voice-tabs" role="group" aria-label="Inspect voice">${COLORS.map((_, voice) => `<button id="inspect-${voice}" class="small" aria-pressed="${voice === 0}">Voice ${voice + 1}</button>`).join('')}</div>
@@ -590,21 +590,32 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   function draw(): void {
     const loaded = Boolean(state?.info) && !['empty', 'error', 'loading'].includes(state?.status ?? 'empty');
     const seeking = state?.seekTarget != null;
+    const preparingVoices = seeking && state?.pendingOperation === 'voice-mix';
+    const preparationLabel = preparingVoices ? 'Preparing voices…' : 'Seeking…';
+    const voiceMessage = preparingVoices
+      ? `Preparing voice mix at ${time(state!.seekTarget!, true)}. Sound pauses while the SID replays to your position with the selected voices. Please wait…`
+      : state?.error ? `Playback error: ${state.error}. Reload the tune to try again.`
+      : 'Voice changes pause sound while the selected mix is prepared. Waveform-write intervention, not isolated stems; shared filtering and ring/sync coupling still apply.';
+    el('voice-mix-status').setAttribute('aria-live', preparingVoices ? 'polite' : 'off');
+    el('status-message').setAttribute('aria-live', preparingVoices ? 'off' : 'polite');
+    setText('voice-mix-status', voiceMessage);
+    el('voice-mix-status').classList.toggle('preparing', preparingVoices);
+    el('mix-controls').setAttribute('aria-busy', String(preparingVoices));
     const changing = busy || state?.status === 'loading' || seeking;
     for (const id of ['play-button', 'restart-button', 'restore-button', 'mark-a', 'mark-b', 'loop-button', 'clear-loop', 'mute-0', 'mute-1', 'mute-2', 'solo-0', 'solo-1', 'solo-2']) button(id).disabled = !loaded || changing;
     button('load-button').disabled = changing || sourceMode === 'catalog' && !chosenEntry;
     button('use-sample-button').disabled = changing || !chosenEntry;
     for (const id of ['clock-select', 'model-select', 'subtune-select', 'sample-select']) select(id).disabled = changing;
     input('local-file').disabled = changing;
-    setText('play-button', seeking ? 'Seeking…' : state?.status === 'playing' ? 'Ⅱ Pause' : '▶ Play');
+    setText('play-button', seeking ? preparationLabel : state?.status === 'playing' ? 'Ⅱ Pause' : '▶ Play');
     const labels: Record<string, string> = { empty: 'Ready to load', loading: 'Loading…', ready: 'Ready', playing: 'Live SID', paused: 'Paused', seeking: 'Seeking…', ended: 'Ended', error: 'Playback error' };
-    setText('play-status', busy ? 'Loading…' : seeking ? 'Seeking…' : labels[state?.status ?? 'empty']!);
+    setText('play-status', busy ? 'Loading…' : seeking ? preparationLabel : labels[state?.status ?? 'empty']!);
     el('play-status').classList.toggle('live', state?.status === 'playing');
     el('status-message').classList.toggle('seeking', seeking);
     button('play-button').classList.toggle('seeking', seeking);
     if (state?.error) report(state.error, true);
     else if (seeking) {
-      setText('status-message', `Seeking to ${time(state!.seekTarget!, true)} — preparing sound at the requested position. Please wait…`);
+      setText('status-message', preparingVoices ? voiceMessage : `Seeking to ${time(state!.seekTarget!, true)} — preparing sound at the requested position. Please wait…`);
       el('status-message').classList.remove('error');
     } else if (notice) setText('status-message', notice);
     else {
@@ -619,9 +630,9 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     input('seek-slider').disabled = !loaded || changing;
     input('loop-start').max = String(Math.min(state?.duration ?? MAX_SEEK_SECONDS, MAX_SEEK_SECONDS));
     input('loop-end').max = String(Math.min(state?.duration ?? MAX_SEEK_SECONDS, MAX_SEEK_SECONDS));
-    input('seek-slider').setAttribute('aria-valuetext', `${time(transportPosition, true)} ${seeking ? 'requested; seeking' : 'heard'}${state?.duration == null ? '; duration unknown' : ` of ${time(state.duration)}`}`);
+    input('seek-slider').setAttribute('aria-valuetext', `${time(transportPosition, true)} ${preparingVoices ? 'preparing selected voices' : seeking ? 'requested; seeking' : 'heard'}${state?.duration == null ? '; duration unknown' : ` of ${time(state.duration)}`}`);
     setText('duration-label', state?.duration != null ? `/ ${time(state.duration)}` : '/ duration unknown');
-    setText('seek-note', seeking ? 'Requested position · restoring sound…' : state?.duration != null ? 'Heard position · white dashed cursor' : `Unknown duration · explored seek window ${time(exploredUntil)} · 10-minute prototype limit`);
+    setText('seek-note', preparingVoices ? 'Position kept · preparing selected voices…' : seeking ? 'Requested position · restoring sound…' : state?.duration != null ? 'Heard position · white dashed cursor' : `Unknown duration · explored seek window ${time(exploredUntil)} · 10-minute prototype limit`);
     const prepared = state?.preparedRange;
     el('render-lead').dataset.preparedUntil = String(prepared?.end ?? 0);
     setText('render-lead', `${prepared ? `Prepared ${time(prepared.start)}–${time(prepared.end)}` : 'Preparing audio'} · audio queue ${Math.max(0, (state?.renderedUntil ?? 0) - position).toFixed(2)} s`);
