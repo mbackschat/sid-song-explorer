@@ -1,6 +1,6 @@
 # Web SID player and arrangement analyser
 
-Status: founding design, originally recorded 2026-10-16 and transferred on 2026-10-18 after the user authorized a standalone public repository. Repository setup is complete; application implementation has not begun. [The Explorer plan](../../PLAN.md) owns current status. Technology stack and final playback-library selection remain open.
+Status: founding design, originally recorded 2026-10-16 and transferred on 2026-10-18 after the user authorized a standalone public repository. Repository setup is complete; application implementation has not begun. [The Explorer plan](../PLAN.md) owns current status. Technology stack and final playback-library selection remain open.
 
 ## Purpose and user requirements
 
@@ -355,7 +355,7 @@ The decisive feasibility evidence is playback and inspection across the required
 
 ## First step and milestones
 
-The order below is retained from the proposal. Step 1 was authorized, including public GitHub publication, on 2026-10-18. [The Explorer plan](../../PLAN.md) owns current readiness and remaining work; the later application milestones remain unimplemented.
+The order below is retained from the proposal. Step 1 was authorized, including public GitHub publication, on 2026-10-18. [The Explorer plan](../PLAN.md) owns current readiness and remaining work; the later application milestones remain unimplemented.
 
 ### Step 1: establish the repository (documentation only)
 

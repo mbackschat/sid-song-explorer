@@ -1,6 +1,6 @@
 # SID Song Explorer contributor guide
 
-This is the canonical agent/contributor guide. [AGENTS.md](AGENTS.md) is a relative symlink to this file; edit this file only. Use [PLAN.md](PLAN.md) for current scope and status, [the design](docs/design/web-player-and-analyser.md) for product contracts and [the documentation index](docs/README.md) for navigation.
+This is the canonical agent/contributor guide. [AGENTS.md](AGENTS.md) is a relative symlink to this file; edit this file only. Use [PLAN.md](docs/PLAN.md) for current scope and status, [the design](docs/design/web-player-and-analyser.md) for product contracts and [the documentation index](docs/README.md) for navigation.
 
 ## Product and ownership
 

@@ -15,7 +15,7 @@ SID Song Explorer is a browser player and inspector for Commodore 64 SID music. 
 
 ## Current state
 
-The first mono proof of concept is implemented, with passing engine and headless Chromium/WebKit interaction checks. It uses a small TypeScript/Vite application over `libsidplayfp-wasm` 1.1.0's SIDLite engine. Real desktop Safari playback through the complete ending and the user's judgment of the explanations remain pending; milestone 1 is not complete. [The plan](PLAN.md) owns status, and [the validation record](docs/validation/mono-poc.md) separates checks from remaining listening and browser gates. The app is hosted on GitHub Pages; local files remain on your device.
+The first mono proof of concept is implemented, with passing engine and headless Chromium/WebKit interaction checks. It uses a small TypeScript/Vite application over `libsidplayfp-wasm` 1.1.0's SIDLite engine. Real desktop Safari playback through the complete ending and the user's judgment of the explanations remain pending; milestone 1 is not complete. [The plan](docs/PLAN.md) owns status, and [the validation record](docs/validation/mono-poc.md) separates checks from remaining listening and browser gates. The app is hosted on GitHub Pages; local files remain on your device.
 
 [View the live interface](assets/screenshots/mono-poc.png), captured by the silent headless WebKit test.
 
@@ -25,7 +25,7 @@ The first mono proof of concept is implemented, with passing engine and headless
 - Follow stereo SID/WAV links for each published song. Live playback/inspection remains mono. Moon River, Pink Panther, Axel F and Ghostbusters appear separately as local-build materials, without unpublished audio.
 - Open callable mono PSID files locally, with subtune, PAL/NTSC and MOS6581/MOS8580 controls; local files and their hashes stay on the device.
 - Play, pause, restart, seek quickly within the prepared audio range, with busy feedback for unprepared positions, and set A–B study loops.
-- Mute or solo the three physical SID voices, with the waveform-write intervention and shared hardware dependencies labelled. Changing voices pauses sound to prepare the mix; a spinner and explanation appear beside the controls. Uninterrupted switching is tracked as `VOICE-1` in [the post-POC plan](PLAN.md#exit-the-poc-and-continue-production-work).
+- Mute or solo the three physical SID voices, with the waveform-write intervention and shared hardware dependencies labelled. Changing voices pauses sound to prepare the mix; a spinner and explanation appear beside the controls. Uninterrupted switching is tracked as `VOICE-1` in [the post-POC plan](docs/PLAN.md#exit-the-poc-and-continue-production-work).
 - Switch voice activity between **Scroll** (the default fixed ten-second window) and **Fit history** (the former expanding overview) in the graph header; select retained voice/register history while music continues, hold an inspection cursor, and return to following the heard playhead.
 - Inspect frequency, waveform, gate, pulse width, ADSR settings, ring/sync, the shared filter and ordered writes, alongside PCM levels, waveform and spectrum.
 - Read three evidence-linked Rambo annotations with their exact evidence and listening scope.
@@ -81,7 +81,7 @@ Both repositories can be worked on together in one agent session, with coordinat
 
 ## Documentation
 
-- [Plan](PLAN.md): current scope and next development task.
+- [Plan](docs/PLAN.md): current scope and next development task.
 - [Playback adapter](docs/architecture/playback-adapter.md): app-base choice, engine boundary and timing limits.
 - [Mono POC validation](docs/validation/mono-poc.md): technical evidence and outstanding Safari/listening gates.
 - [Sample snapshot](docs/integration/poc-sources.md): pinned assets, rights and annotation scope.

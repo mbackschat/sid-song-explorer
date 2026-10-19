@@ -1,6 +1,6 @@
 # Mono proof of concept validation
 
-[The plan](../../PLAN.md) owns completion. This checkpoint implements the first playable Explorer, while real desktop Safari listening and the user's explanation-value verdict remain open. All new Explorer code, experiments and decisions live here. Crafter was used read-only for the pinned sample/evidence import; normal setup downloads the cleared assets independently.
+[The plan](../PLAN.md) owns completion. This checkpoint implements the first playable Explorer, while real desktop Safari listening and the user's explanation-value verdict remain open. All new Explorer code, experiments and decisions live here. Crafter was used read-only for the pinned sample/evidence import; normal setup downloads the cleared assets independently.
 
 ## Reproduce
 
@@ -81,7 +81,7 @@ The 2026-10-19 audit confirmed the public GitHub repository and tracked guide, r
 | Actual Safari playback and audible agreement with the retained render | The user reviewed Safari and reported the unresolved voice-switch gap. Complete-ending/render agreement is still unestablished; the permitted feedback fallback needs a new scoped review. No Safari setting change is required. |
 | Explanations make the documented finding clearer | Pending the user's product judgment; an async review request is outstanding. |
 
-Production build and documentation checks passed after the warning fix. The audio engine and transport were unchanged by this final presentation correction, so their passed full-duration and exact-audio checks were not repeated. Milestone 1 remains open for the direct-browser and human verdicts; dual-SID and the normalized Crafter producer remain deferred under [the plan](../../PLAN.md).
+Production build and documentation checks passed after the warning fix. The audio engine and transport were unchanged by this final presentation correction, so their passed full-duration and exact-audio checks were not repeated. Milestone 1 remains open for the direct-browser and human verdicts; dual-SID and the normalized Crafter producer remain deferred under [the plan](../PLAN.md).
 
 
 ## CI cold-seek investigation
@@ -107,7 +107,7 @@ The corrected configuration type-checks and builds locally. The original two fai
 
 ## Voice-change feedback fallback
 
-The user confirmed the Listen by voice gap in Safari on 2026-10-19, then permitted explicit spinner/explanation feedback if uninterrupted switching is too costly. The [cost decision and proposed production route](../research/seek-performance.md#production-feedback-fallback-and-follow-up) retain why the broader audio rewrite remains [plan item `VOICE-1`](../../PLAN.md#exit-the-poc-and-continue-production-work), rather than claiming it was fixed.
+The user confirmed the Listen by voice gap in Safari on 2026-10-19, then permitted explicit spinner/explanation feedback if uninterrupted switching is too costly. The [cost decision and proposed production route](../research/seek-performance.md#production-feedback-fallback-and-follow-up) retain why the broader audio rewrite remains [plan item `VOICE-1`](../PLAN.md#exit-the-poc-and-continue-production-work), rather than claiming it was fixed.
 
 [The browser regression](../../tests/browser/voice-feedback.spec.ts) failed on the prior UI because no voice-local preparation indicator existed. It now verifies mute, solo and restore feedback beside the controls, animation/reduced-motion behavior, resumed playback, preserved paused state, error cleanup and reload recovery. A bounded worker-message delay keeps the transient state observable; the test verifies feedback rather than measuring real mute latency. Both silent Chrome and macOS WebKit checks passed in 26.5 seconds; the 38 unit/engine tests passed in 20.02 seconds, including stale-operation and failure cleanup guards. Type checking and the production build passed. The 390-pixel WebKit screenshot was inspected with no horizontal overflow or added controls row. The complete browser suite passed twenty interaction checks in 2.3 minutes; the two opt-in full-song cases were skipped because audio generation and scheduling are unchanged. A subsequent accessibility review removed duplicate live-region announcements during voice preparation and added assertions for the active announcer. The audible gap remains and no new listening acceptance is claimed.
 
