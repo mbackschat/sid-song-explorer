@@ -212,3 +212,38 @@ test('timeline clicks seek playback while Shift-click and Hold inspect without s
   expect(await page.locator('#seek-slider').inputValue()).toBe(before);
   await expect(page.locator('#trace-navigation-note')).toHaveCount(0);
 });
+
+test('timeline seeking keeps chart and toolbar geometry stable while feedback is pending', async ({page}) => {
+  await openPaused(page);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({width,height:1100});
+    await page.locator('#seek-slider').fill('30');
+    await expect(page.locator('#play-status')).toHaveText('Paused');
+    await expect.poll(() => page.locator('#voice-lane-0').getAttribute('data-observed-until').then(Number)).toBeGreaterThan(32);
+    const geometry = () => page.evaluate(() => Object.fromEntries(
+      ['voice-lane-0','timeline-scroll-track','play-button'].map(id => {
+        const rect = document.getElementById(id)!.getBoundingClientRect();
+        return [id, {x:rect.x,y:rect.y,width:rect.width,height:rect.height}];
+      }),
+    ));
+    for (const held of [false, true]) {
+      const before = await geometry();
+      if (held) {
+        await page.locator('#follow-button').click();
+        await expect(page.locator('#inspector-title')).toHaveText('Held sound inspector');
+        expect(await geometry(), 'holding inspection must not move the chart').toEqual(before);
+      }
+      const release = await holdWorkerRequest(page, 'seek');
+      const lane = page.locator('#voice-lane-0');
+      const box = (await lane.boundingBox())!;
+      await lane.click({position:{x:box.width * .6,y:20}});
+      await expect(page.locator('#play-status')).toHaveText('Seeking…');
+      await expect(page.locator('#status-message')).toBeVisible();
+      expect(await geometry(), `pending seek at ${width}px must not move the clicked chart`).toEqual(before);
+      expect(Number(await lane.getAttribute('data-observed-until'))).toBeGreaterThan(32);
+      await release();
+      await expect(page.locator('#play-status')).toHaveText('Paused');
+      expect(await geometry(), `completed seek at ${width}px must keep its original layout`).toEqual(before);
+    }
+  }
+});

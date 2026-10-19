@@ -87,6 +87,28 @@ const preview = (start: number, end: number): TimelineObservation => ({
   start, end, frames: [{time: start, registers: details.registers.slice()}, {time: end, registers: details.registers.slice()}], writes: [], dropped: 0,
 });
 
+test('a same-configuration seek retains accepted observations while rejecting its pending old-generation reply', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const accepted = value.state.preview;
+  value.advance(250);
+  const obsolete = worker.lastRequest('observe');
+  const seeking = value.player.seek(3);
+  assert.equal(value.state.preview, accepted, 'prepared observations remain valid while only the transport position changes');
+  worker.reply(obsolete, preview(0, 6));
+  await flushReplies();
+  assert.equal(value.state.preview, accepted, 'old-generation replies cannot replace the retained snapshot');
+  worker.reply(worker.lastRequest('seek'), position(3));
+  await seeking;
+  assert.equal(value.state.position, 3);
+  assert.equal(value.state.preview, accepted);
+  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 0, endSeconds: 9});
+  worker.reply(worker.lastRequest('observe'), preview(0, 9));
+  await flushReplies();
+  assert.deepEqual(value.state.preview, preview(0, 9));
+});
+
 test('preview requests use a centered bounded window while ready or paused and permit one throttled request', async (t) => {
   const {value, worker} = await loaded(t);
   const initial = worker.lastRequest('observe');
@@ -109,7 +131,7 @@ test('preview requests use a centered bounded window while ready or paused and p
   worker.reply(worker.lastRequest('observe'), preview(0, 6));
   await flushReplies();
   const seeking = value.player.seek(198);
-  assert.equal(value.state.preview, null);
+  assert.deepEqual(value.state.preview, preview(0, 6), 'a seek retains available observations while awaiting a different prepared range');
   worker.reply(worker.lastRequest('seek'), position(198));
   await seeking;
   assert.equal(value.state.status, 'paused');
@@ -369,6 +391,7 @@ test('browsing can inspect prepared regions beyond loop B while following stays 
   worker.reply(worker.lastRequest('observe'), preview(13, 24));
   await flushReplies();
   const looping = value.player.setLoop({start: 10, end: 20});
+  assert.equal(value.state.preview, null, 'a newly narrowed loop invalidates retained observations extending beyond loop B');
   worker.reply(worker.lastRequest('seek'), position(18));
   await looping;
   assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 13, endSeconds: 20});

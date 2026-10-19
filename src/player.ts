@@ -115,9 +115,13 @@ export class ExplorerPlayer implements PlayerControls {
 
   private emit() { for (const listener of this.listeners) listener(this.state); }
 
-  private invalidatePreview() {
+  private previewFitsFollowLoop(observation = this.state.preview): boolean {
+    return this.state.timelineCenterSeconds !== null || !this.state.loop || !observation || observation.end <= this.state.loop.end;
+  }
+
+  private invalidatePreview(preserveAccepted = false) {
     this.previewRevision++;
-    this.state.preview = null;
+    if (!preserveAccepted || !this.previewFitsFollowLoop()) this.state.preview = null;
     this.previewRequestedAt = -Infinity;
   }
 
@@ -147,7 +151,7 @@ export class ExplorerPlayer implements PlayerControls {
     this.previewRequestedAt = performance.now();
     void engine.request<TimelineObservation | null>('observe', {startSeconds, endSeconds}).then(observation => {
       if (generation !== this.generation || engine !== this.engine || this.disposed) return;
-      if (this.state.timelineCenterSeconds === null && this.state.loop && observation && observation.end > this.state.loop.end) return;
+      if (!this.previewFitsFollowLoop(observation)) return;
       if (revision !== this.previewRevision && this.previewOverlap(observation) <= this.previewOverlap(this.state.preview)) return;
       this.state.preview = observation;
       this.emit();
@@ -306,7 +310,7 @@ export class ExplorerPlayer implements PlayerControls {
     if (!this.engine || !this.state.info) throw new Error('Load a SID file first.');
     if (!Number.isFinite(seconds) || seconds < 0 || seconds > (this.state.duration ?? 600)) throw new Error('Seek is outside this tune’s supported range.');
     const generation = ++this.generation;
-    this.invalidatePreview();
+    this.invalidatePreview(true);
     const engine = this.engine;
     this.stopSources();
     this.state.status = 'seeking';
@@ -392,7 +396,7 @@ export class ExplorerPlayer implements PlayerControls {
     }
     if (seconds === this.state.timelineCenterSeconds) return;
     this.state.timelineCenterSeconds = seconds;
-    if (seconds === null && this.state.loop && this.state.preview && this.state.preview.end > this.state.loop.end) this.state.preview = null;
+    if (!this.previewFitsFollowLoop()) this.state.preview = null;
     this.previewRevision++;
     this.emit();
     this.refreshPreview();
