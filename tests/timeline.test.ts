@@ -42,7 +42,7 @@ test('the following window centers heard time across startup, ending and backwar
 });
 
 test('timeline density preserves time scale across widths and zoom levels', () => {
-  for (const pixelsPerSecond of [32, 64, 128]) {
+  for (const pixelsPerSecond of [16, 32, 64, 128, 256, 512, 1024]) {
     for (const width of [240, 640, 1280]) {
       const span = width / pixelsPerSecond;
       const window = followingWindow(30, span);

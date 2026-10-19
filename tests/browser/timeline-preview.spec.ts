@@ -33,7 +33,11 @@ test('timeline zoom preserves density on resize and holds selected observations'
   expect(initial.end - initial.start).toBeCloseTo(await width() / 64, 1);
   await page.getByRole('button', {name:'Zoom out', exact:true}).click();
   await expect.poll(async () => { const value = await chart(page); return value.end - value.start; }).toBeCloseTo(await width() / 32, 1);
+  await expect(page.getByRole('button', {name:'Zoom out', exact:true})).toBeEnabled();
+  await page.getByRole('button', {name:'Zoom out', exact:true}).click();
+  await expect.poll(async () => { const value = await chart(page); return value.end - value.start; }).toBeCloseTo(await width() / 16, 1);
   await expect(page.getByRole('button', {name:'Zoom out', exact:true})).toBeDisabled();
+  await page.getByRole('button', {name:'Zoom in', exact:true}).click();
   await expect.poll(async () => { const value = await chart(page); return value.observedUntil - value.end; }).toBeGreaterThan(.5);
   await page.setViewportSize({width:2200, height:1100});
   await expect.poll(async () => { const value = await chart(page); return (value.end - value.start) / await width(); }).toBeCloseTo(1 / 32, 4);
@@ -47,10 +51,15 @@ test('timeline zoom preserves density on resize and holds selected observations'
   await expect(page.locator('#reg-frequency')).not.toHaveText('—');
   const selected = await chart(page);
   const settings = await page.locator('#write-list').textContent();
-  await page.getByRole('button', {name:'Zoom in', exact:true}).click();
+  for (const density of [128, 256, 512, 1024]) {
+    await page.getByRole('button', {name:'Zoom in', exact:true}).click();
+    await expect.poll(async () => { const value = await chart(page); return value.end - value.start; }).toBeCloseTo(await width() / density, 1);
+  }
   await expect(page.getByRole('button', {name:'Zoom in', exact:true})).toBeDisabled();
+  await expect(page.locator('#timeline-start')).toHaveText(/^\d+:\d{2}\.\d{2}$/);
+  await expect(page.locator('#timeline-end')).toHaveText(/^\d+:\d{2}\.\d{2}$/);
   const detail = await chart(page);
-  expect(detail.end - detail.start).toBeCloseTo(await width() / 128, 1);
+  expect(detail.end - detail.start).toBeCloseTo(await width() / 1024, 1);
   expect((detail.start + detail.end) / 2).toBeCloseTo(selected.cursor, 1);
   await expect(page.locator('#write-list')).toHaveText(settings!);
   await page.locator('#timeline-fit').click();
@@ -59,9 +68,9 @@ test('timeline zoom preserves density on resize and holds selected observations'
   await expect(page.getByRole('button', {name:'Zoom in', exact:true})).toBeDisabled();
   await page.locator('#return-button').click();
   await page.setViewportSize({width:390, height:844});
-  await expect.poll(async () => { const value = await chart(page); return (value.end - value.start) / await width(); }).toBeCloseTo(1 / 128, 4);
+  await expect.poll(async () => { const value = await chart(page); return (value.end - value.start) / await width(); }).toBeCloseTo(1 / 1024, 4);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({path:`build/timeline-zoom/${test.info().project.name}-narrow.png`, fullPage:true});
+  await page.screenshot({path:`build/timeline-zoom/${test.info().project.name}-extended-narrow.png`, fullPage:true});
 });
 
 test('prepared upcoming activity stays filled between refreshes during playback and after seeking', async ({page}) => {

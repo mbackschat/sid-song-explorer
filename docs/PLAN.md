@@ -48,9 +48,9 @@ Status: the bounded preview is implemented locally; [the validation record](vali
 
 After accepting `TIMELINE-1` on 2026-10-19, the user requested zoom/unzoom and specified that equal zoom means equal time density: if width W shows N seconds, width 2W must show 2N seconds. This supersedes the spike’s fixed ten-second viewport. The drawable timeline width excludes voice labels and side panels.
 
-Required: zoom in/out changes time density by a factor of two across three levels; resizing preserves the selected density. Live playback stays centered with equal past/upcoming space. Zooming or resizing a held view centers its selected cursor and preserves its captured observations, shading anything outside that capture. Fit history remains the retained-heard overview. Preview refreshes remain read-only, throttled and bounded, with an off-screen margin for smooth scrolling. Pinch/wheel gestures, persistent preferences and a configurable past/upcoming split are excluded.
+Required: zoom in/out changes time density by a factor of two across seven levels; resizing preserves the selected density. Live playback stays centered with equal past/upcoming space. Zooming or resizing a held view centers its selected cursor and preserves its captured observations, shading anything outside that capture. Fit history remains the retained-heard overview. Preview refreshes remain read-only, throttled and bounded, with an off-screen margin for smooth scrolling. Pinch/wheel gestures, persistent preferences and a configurable past/upcoming split are excluded.
 
-Status: implemented and verified locally. The user has not yet supplied a separate visual verdict on zoom. [The validation record](validation/mono-poc.md#timeline-zoom) owns red/green, resize, playback and cost evidence. `VOICE-1` follows this bounded addition.
+Status: the initial zoom was implemented and verified locally. The user then requested a larger range: the follow-up extends zoom to eight times closer and twice as far out, retaining the default density. The expanded range passed focused unit checks, build and Chrome/macOS WebKit regression checks. [The validation record](validation/mono-poc.md#timeline-zoom) owns red/green, resize, playback and cost evidence. `VOICE-1` follows this bounded addition.
 
 ## Bounded live-voice prototype
 

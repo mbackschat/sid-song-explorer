@@ -18,7 +18,7 @@ type HeldHistory = DisplayedObservation & {
 const COLORS = ['#6ee0de', '#f3c681', '#f493b5'];
 const MAX_FILE_BYTES = 65_662;
 const MAX_SEEK_SECONDS = 600;
-const TIMELINE_DENSITIES = [32, 64, 128] as const;
+const TIMELINE_DENSITIES = [16, 32, 64, 128, 256, 512, 1024] as const;
 const hex = (value: number, width = 2) => value.toString(16).toUpperCase().padStart(width, '0');
 const time = (seconds: number, precise = false) => {
   const safe = Math.abs(seconds);
@@ -95,7 +95,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let state: PlayerState | null = null;
   let held: HeldHistory | null = null;
   let timelineView: 'scroll' | 'fit' = 'scroll';
-  let timelineZoom = 1;
+  let timelineZoom = TIMELINE_DENSITIES.indexOf(64);
   let timelineSpan = FOLLOW_WINDOW_SECONDS;
   let cursor = 0;
   let selectedEnd: number | null = null;
@@ -713,11 +713,12 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     button('timeline-scroll').setAttribute('aria-pressed', String(timelineView === 'scroll'));
     button('timeline-fit').setAttribute('aria-pressed', String(timelineView === 'fit'));
     el('timeline-direction').hidden = timelineView !== 'scroll';
-    setText('timeline-view-note', timelineView === 'scroll' ? `${Number((timelineSpan / 2).toFixed(1))} s past · ${Number((timelineSpan / 2).toFixed(1))} s upcoming` : 'All retained heard history');
+    const durationPrecision = timelineSpan < 1 ? 2 : 1;
+    setText('timeline-view-note', timelineView === 'scroll' ? `${Number((timelineSpan / 2).toFixed(durationPrecision))} s past · ${Number((timelineSpan / 2).toFixed(durationPrecision))} s upcoming` : 'All retained heard history');
     el('timeline-zoom').hidden = timelineView !== 'scroll';
     button('timeline-zoom-out').disabled = timelineZoom === 0;
     button('timeline-zoom-in').disabled = timelineZoom === TIMELINE_DENSITIES.length - 1;
-    setText('timeline-scale', `${timelineSpan.toFixed(1)} s`);
+    setText('timeline-scale', `${timelineSpan.toFixed(durationPrecision)} s`);
     const plotFrames = visibleTimelineFrames(frames, Math.max(plotStart, historyStart), Math.min(plotEnd, chartEnd));
     const dropped = held?.dropped ?? Math.max(observations.dropped, state?.dropped ?? 0);
     el('history-summary').title = `${held ? 'HELD COPY' : timelineView === 'scroll' ? 'PREPARED OBSERVATIONS' : 'HEARD HISTORY'} ${time(historyStart, true)}–${time(observedUntil, true)} · ${frames.length} sampled frames · ${dropped} dropped writes · epoch ${held?.epoch ?? state?.epoch ?? 0}`;
@@ -728,8 +729,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     el('trace-warning').hidden = dropped === 0;
     setText('trace-warning', dropped ? `Trace incomplete: ${dropped} dropped writes.` : '');
     el('history-summary').classList.toggle('held', Boolean(held));
-    setText('timeline-start', time(plotStart));
-    setText('timeline-end', time(plotEnd));
+    setText('timeline-start', time(plotStart, plotEnd - plotStart < 2));
+    setText('timeline-end', time(plotEnd, plotEnd - plotStart < 2));
     setText('timeline-cursor', held ? `Held ${time(cursor, true)}` : `Heard ${time(position, true)}`);
     const inspectedTime = held ? cursor : position;
     let inspection = held ?? observations;
