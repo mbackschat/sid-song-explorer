@@ -3,6 +3,7 @@ import type { PlayerControls, PlayerState, Profile, TimelineObservation, TuneDet
 import { positionAt, trimHistory, validateLoop, type AudioSegment } from './timeline.ts';
 
 const TIMELINE_PREVIEW_MARGIN_SECONDS = 1;
+const TIMELINE_BROWSE_MARGIN_SECONDS = 5;
 
 interface RenderBlock {
   pcm: Int16Array;
@@ -90,7 +91,7 @@ export class ExplorerPlayer implements PlayerControls {
   private timer: ReturnType<typeof setInterval>;
   private animation = 0;
   private state: PlayerState = {
-    status: 'empty', position: 0, seekTarget: null, pendingOperation: null, preparedRange: null, preview: null, timelineWindowSeconds: 10, renderedUntil: 0, duration: null, error: null,
+    status: 'empty', position: 0, seekTarget: null, pendingOperation: null, preparedRange: null, preview: null, timelineWindowSeconds: 10, timelineCenterSeconds: null, renderedUntil: 0, duration: null, error: null,
     info: null, muted: [false, false, false], loop: null, peakDb: -Infinity,
     rmsDb: -Infinity, spectrum: new Uint8Array(512), waveform: new Float32Array(1024),
     frames: [], writes: [], historyStart: 0, dropped: 0, underruns: 0, epoch: 0,
@@ -120,14 +121,24 @@ export class ExplorerPlayer implements PlayerControls {
     this.previewRequestedAt = -Infinity;
   }
 
-  private refreshPreview() {
-    if (this.disposed || this.previewPending || this.pumping || !this.engine || !this.state.info ||
-      !['ready', 'paused', 'playing', 'ended'].includes(this.state.status) || performance.now() - this.previewRequestedAt < 250) return;
+  private previewOverlap(observation: TimelineObservation | null): number {
+    if (!observation) return 0;
+    const center = this.state.timelineCenterSeconds ?? this.state.position;
     const halfWindow = this.state.timelineWindowSeconds / 2;
-    const startSeconds = Math.max(0, this.state.position - halfWindow);
-    // The extra second keeps the moving viewport covered between requests (tests/player.test.ts).
-    const endSeconds = Math.min(startSeconds + this.state.timelineWindowSeconds + TIMELINE_PREVIEW_MARGIN_SECONDS,
-      this.state.position + halfWindow + TIMELINE_PREVIEW_MARGIN_SECONDS, this.state.duration ?? 600, 600, this.state.loop?.end ?? Infinity);
+    return Math.max(0, Math.min(observation.end, center + halfWindow) - Math.max(observation.start, center - halfWindow));
+  }
+
+  private refreshPreview() {
+    const browsing = this.state.timelineCenterSeconds !== null;
+    if (this.disposed || this.previewPending || this.pumping || !this.engine || !this.state.info ||
+      !['ready', 'paused', 'playing', 'ended'].includes(this.state.status) || performance.now() - this.previewRequestedAt < (browsing ? 100 : 250)) return;
+    const halfWindow = this.state.timelineWindowSeconds / 2;
+    const center = this.state.timelineCenterSeconds ?? this.state.position;
+    const loopEnd = browsing ? Infinity : this.state.loop?.end ?? Infinity;
+    const margin = browsing ? TIMELINE_BROWSE_MARGIN_SECONDS : TIMELINE_PREVIEW_MARGIN_SECONDS;
+    const startSeconds = Math.max(0, center - halfWindow - (browsing ? margin : 0));
+    // Offscreen observations keep movement covered between requests (tests/player.test.ts).
+    const endSeconds = Math.min(center + halfWindow + margin, this.state.duration ?? 600, 600, loopEnd);
     if (startSeconds >= endSeconds) return;
     const engine = this.engine;
     const generation = this.generation;
@@ -135,7 +146,9 @@ export class ExplorerPlayer implements PlayerControls {
     this.previewPending = true;
     this.previewRequestedAt = performance.now();
     void engine.request<TimelineObservation | null>('observe', {startSeconds, endSeconds}).then(observation => {
-      if (generation !== this.generation || revision !== this.previewRevision || engine !== this.engine || this.disposed) return;
+      if (generation !== this.generation || engine !== this.engine || this.disposed) return;
+      if (this.state.timelineCenterSeconds === null && this.state.loop && observation && observation.end > this.state.loop.end) return;
+      if (revision !== this.previewRevision && this.previewOverlap(observation) <= this.previewOverlap(this.state.preview)) return;
       this.state.preview = observation;
       this.emit();
     }).catch(() => {
@@ -229,6 +242,7 @@ export class ExplorerPlayer implements PlayerControls {
     this.state.error = null;
     this.state.info = null;
     this.state.position = 0;
+    this.state.timelineCenterSeconds = null;
     this.state.renderedUntil = 0;
     this.state.duration = profile.durationSeconds ?? null;
     this.state.loop = null;
@@ -367,6 +381,18 @@ export class ExplorerPlayer implements PlayerControls {
     if (!Number.isFinite(seconds) || seconds <= 0) throw new Error('Timeline window must be finite and positive.');
     if (seconds === this.state.timelineWindowSeconds) return;
     this.state.timelineWindowSeconds = seconds;
+    this.previewRevision++;
+    this.emit();
+    this.refreshPreview();
+  }
+
+  setTimelineCenter(seconds: number | null) {
+    if (seconds !== null && (!Number.isFinite(seconds) || seconds < 0 || seconds > 600)) {
+      throw new Error('Timeline center must be null or finite and within 0–600 seconds.');
+    }
+    if (seconds === this.state.timelineCenterSeconds) return;
+    this.state.timelineCenterSeconds = seconds;
+    if (seconds === null && this.state.loop && this.state.preview && this.state.preview.end > this.state.loop.end) this.state.preview = null;
     this.previewRevision++;
     this.emit();
     this.refreshPreview();

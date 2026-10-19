@@ -43,6 +43,7 @@ export interface PlayerState {
   preparedRange: {start: number; end: number} | null;
   preview: TimelineObservation | null;
   timelineWindowSeconds: number;
+  timelineCenterSeconds: number | null;
   renderedUntil: number;
   duration: number | null;
   error: string | null;
@@ -68,6 +69,7 @@ export interface PlayerControls {
   setMuted(mask: boolean[]): Promise<void>;
   setLoop(loop: {start: number; end: number} | null): Promise<void>;
   setTimelineWindow(seconds: number): void;
+  setTimelineCenter(seconds: number | null): void;
   subscribe(listener: (state: PlayerState) => void): () => void;
   dispose(): void;
 }

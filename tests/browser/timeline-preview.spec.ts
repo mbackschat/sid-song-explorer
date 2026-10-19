@@ -47,7 +47,7 @@ test('timeline zoom preserves density on resize and holds selected observations'
   await page.getByRole('button', {name:'Zoom in', exact:true}).click();
   await expect.poll(async () => { const value = await chart(page); return value.end - value.start; }).toBeCloseTo(await width() / 64, 1);
   const box = (await lane.boundingBox())!;
-  await lane.click({position:{x:box.width * .65, y:20}});
+  await lane.click({position:{x:box.width * .65, y:20}, modifiers:['Shift']});
   await expect(page.locator('#reg-frequency')).not.toHaveText('—');
   const selected = await chart(page);
   const settings = await page.locator('#write-list').textContent();
@@ -132,7 +132,7 @@ test('centered timeline shows actual upcoming activity and holds future inspecti
 
   const lane = page.locator('#voice-lane-0');
   const box = (await lane.boundingBox())!;
-  await lane.click({position:{x:box.width * .75, y:20}});
+  await lane.click({position:{x:box.width * .75, y:20}, modifiers:['Shift']});
   await expect(page.locator('#inspector-note')).toContainText('Prepared ahead of playback when held');
   await expect(page.locator('#reg-frequency')).not.toHaveText('—');
   const captured = await page.locator('#write-list').textContent();
@@ -178,7 +178,7 @@ test('centered timeline shades unavailable startup ending and loop regions and i
   expect(startup.end).toBeCloseTo(halfSpan, 1);
   const lane = page.locator('#voice-lane-0');
   const box = (await lane.boundingBox())!;
-  await lane.click({position:{x:box.width * .25, y:20}});
+  await lane.click({position:{x:box.width * .25, y:20}, modifiers:['Shift']});
   await expect(page.locator('#reg-frequency')).toHaveText('—');
   await expect(page.locator('#write-list')).toContainText('No retained writes');
   await page.locator('#return-button').click();
@@ -192,6 +192,7 @@ test('centered timeline shades unavailable startup ending and loop regions and i
   expect(ending.observedUntil).toBeLessThanOrEqual(duration);
   expect(ending.end).toBeGreaterThan(duration + 4);
 
+  await page.locator('#loop-details > summary').click();
   await page.locator('#loop-start').fill('30');
   await page.locator('#loop-end').fill('32');
   await page.locator('#loop-button').click();

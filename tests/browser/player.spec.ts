@@ -26,6 +26,7 @@ test('live audio, held inspection, mute/solo, loop replay and complete ending', 
   await expect(page.locator('#mute-1')).toHaveAttribute('aria-pressed','true');
   await page.locator('#restore-button').click();
   await expect(page.locator('#mute-1')).toHaveAttribute('aria-pressed','false');
+  await page.locator('#loop-details > summary').click();
   await page.locator('#loop-start').fill('1');
   await page.locator('#loop-end').fill('2');
   await page.locator('#loop-button').click();
@@ -53,6 +54,7 @@ test('local file stays local and profile changes invalidate authored annotations
   await page.goto('/');
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
+  await page.locator('#playback-setup > summary').click();
   await page.locator('#model-select').selectOption('MOS8580');
   await page.locator('#load-button').click();
   await expect(page.locator('#analysis-badge')).toContainText('Generic');
@@ -150,17 +152,17 @@ test('timeline switches between scrolling and fitted history without changing pl
 
 test('compact chart controls explain held inspection without moving playback', async ({page}) => {
   await page.goto('/');
-  const header = page.locator('[aria-labelledby="timeline-title"] > .panel-header');
+  const header = page.locator('[aria-labelledby="timeline-title"] > .unified-toolbar');
   await expect(header.locator('#timeline-scroll')).toBeVisible();
   await expect(header.locator('#timeline-fit')).toBeVisible();
-  expect((await header.boundingBox())!.height).toBeLessThan(85);
+  expect((await header.boundingBox())!.height).toBeLessThan(120);
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
   await page.locator('#play-button').click();
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThanOrEqual(1);
   const lane = page.locator('#voice-lane-1');
   const box = (await lane.boundingBox())!;
-  await lane.click({position:{x:box.width * .5, y:20}});
+  await lane.click({position:{x:box.width * .5, y:20}, modifiers:['Shift']});
   await expect(page.locator('#history-summary')).toContainText('Inspecting Voice 2 at');
   const selectedPosition = await lane.evaluate(element => {
     const start = Number(element.getAttribute('aria-valuemin'));
@@ -173,7 +175,7 @@ test('compact chart controls explain held inspection without moving playback', a
   await expect(page.locator('#inspect-1')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#reg-frequency')).not.toHaveText('—');
   await expect(page.locator('#inspector-title')).toHaveText('Held sound inspector');
-  await expect(page.locator('#return-button')).toHaveText('Resume live');
+  await expect(page.locator('#return-button')).toHaveText('Follow');
   await expect(page.locator('#follow-button')).toBeHidden();
   const selected = await page.locator('#inspection-time').textContent();
   const playbackPosition = Number(await page.locator('#seek-slider').inputValue());
@@ -187,7 +189,7 @@ test('compact chart controls explain held inspection without moving playback', a
   await page.locator('#return-button').click();
   await expect(page.locator('#history-summary')).not.toContainText('Inspecting');
   await expect(page.locator('#follow-button')).toBeVisible();
-  await expect(page.locator('#return-button')).toBeHidden();
+  await expect(page.locator('#return-button')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('seek feedback keeps the requested position visible until playback resumes', async ({page}) => {

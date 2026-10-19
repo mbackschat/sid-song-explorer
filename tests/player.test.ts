@@ -258,6 +258,256 @@ test('zooming during a pending seek preserves its transport generation and reque
   assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 40, endSeconds: 61});
 });
 
+test('timeline browsing changes prepared coverage without seeking, rendering or accepting invalid centers', async (t) => {
+  const {value, worker} = await loaded(t);
+  assert.equal(value.state.timelineCenterSeconds, null);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const transport = worker.requests.filter((request) => request.method !== 'observe');
+  const playback = [value.state.position, value.state.renderedUntil, value.state.status, value.state.epoch];
+  for (const [center, start, end] of [[100, 90, 110], [0, 0, 10], [199, 189, 200]]) {
+    value.player.setTimelineCenter(center);
+    value.advance(250);
+    const request = worker.lastRequest('observe');
+    assert.deepEqual(request.payload, {startSeconds: start, endSeconds: end});
+    assert.equal(value.state.timelineCenterSeconds, center);
+    worker.reply(request, preview(start, end));
+    await flushReplies();
+    assert.deepEqual([value.state.position, value.state.renderedUntil, value.state.status, value.state.epoch], playback);
+    assert.deepEqual(worker.requests.filter((request) => request.method !== 'observe'), transport);
+  }
+  const sameCenterRequests = worker.requests.length;
+  const sameCenterPreview = value.state.preview;
+  value.player.setTimelineCenter(199);
+  assert.equal(worker.requests.length, sameCenterRequests);
+  assert.equal(value.state.preview, sameCenterPreview);
+  value.player.setTimelineCenter(600);
+  assert.equal(value.state.timelineCenterSeconds, 600);
+  const before = structuredClone(value.state);
+  const beforeRequests = worker.requests.length;
+  for (const invalid of [-1, 600.001, NaN, Infinity, '100', undefined]) {
+    assert.throws(() => value.player.setTimelineCenter(invalid as number), /finite|center|600/i);
+    assert.deepEqual(value.state, before);
+    assert.equal(worker.requests.length, beforeRequests);
+  }
+});
+
+test('browsing and Follow retain valid data while rejecting stale view replies through the refresh throttle', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const accepted = value.state.preview;
+  value.advance(250);
+  const obsoleteFollow = worker.lastRequest('observe');
+  const requests = worker.requests.length;
+  value.player.setTimelineCenter(60);
+  value.player.setTimelineCenter(80);
+  assert.equal(value.state.preview, accepted);
+  assert.equal(worker.requests.length, requests);
+  worker.reply(obsoleteFollow, preview(0, 6));
+  await flushReplies();
+  assert.equal(value.state.preview, accepted);
+  value.advance(99);
+  assert.equal(worker.requests.length, requests);
+  value.advance(1);
+  const obsoleteBrowse = worker.lastRequest('observe');
+  assert.deepEqual(obsoleteBrowse.payload, {startSeconds: 70, endSeconds: 90});
+  value.state.position = 3;
+  value.player.setTimelineCenter(null);
+  worker.reply(obsoleteBrowse, preview(70, 90));
+  await flushReplies();
+  assert.equal(value.state.preview, accepted);
+  value.advance(250);
+  const following = worker.lastRequest('observe');
+  assert.deepEqual(following.payload, {startSeconds: 0, endSeconds: 9});
+  worker.reply(following, preview(0, 9));
+  await flushReplies();
+  assert.equal(value.state.timelineCenterSeconds, null);
+  assert.equal(value.state.position, 3);
+  assert.deepEqual(value.state.preview, preview(0, 9));
+});
+
+test('browsing preserves pending seek and mute destinations and resets to heard-follow on load', async (t) => {
+  const {value, worker} = await loaded(t);
+  value.player.setTimelineCenter(75);
+  const oldPreview = worker.lastRequest('observe');
+  const seeking = value.player.seek(10);
+  value.player.setTimelineCenter(80);
+  worker.reply(oldPreview, preview(0, 6));
+  await flushReplies();
+  worker.reply(worker.lastRequest('seek'), position(10));
+  await seeking;
+  assert.equal(value.state.position, 10);
+  assert.equal(value.state.status, 'paused');
+  assert.equal(value.state.timelineCenterSeconds, 80);
+  worker.reply(worker.lastRequest('observe'), preview(70, 90));
+  await flushReplies();
+  const muting = value.player.setMuted([true, false, false]);
+  worker.reply(worker.lastRequest('mute'), position(10));
+  await flushReplies();
+  worker.reply(worker.lastRequest('seek'), position(10));
+  await muting;
+  assert.equal(value.state.position, 10);
+  assert.equal(value.state.timelineCenterSeconds, 80);
+  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 70, endSeconds: 90});
+  const reloading = value.player.load(new Uint8Array([0]), profile);
+  assert.equal(value.state.timelineCenterSeconds, null);
+  const replacement = FakeWorker.instances.at(-1)!;
+  replacement.reply(replacement.lastRequest('load'), details);
+  await reloading;
+  await flushReplies();
+  assert.deepEqual(replacement.lastRequest('observe').payload, {startSeconds: 0, endSeconds: 6});
+});
+
+test('browsing can inspect prepared regions beyond loop B while following stays clipped', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const seeking = value.player.seek(18);
+  worker.reply(worker.lastRequest('seek'), position(18));
+  await seeking;
+  worker.reply(worker.lastRequest('observe'), preview(13, 24));
+  await flushReplies();
+  const looping = value.player.setLoop({start: 10, end: 20});
+  worker.reply(worker.lastRequest('seek'), position(18));
+  await looping;
+  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 13, endSeconds: 20});
+  worker.reply(worker.lastRequest('observe'), preview(13, 20));
+  await flushReplies();
+  const transport = worker.requests.filter((request) => request.method !== 'observe');
+  value.player.setTimelineCenter(40);
+  value.advance(250);
+  const browsing = worker.lastRequest('observe');
+  assert.deepEqual(browsing.payload, {startSeconds: 30, endSeconds: 50});
+  worker.reply(browsing, preview(30, 50));
+  await flushReplies();
+  value.player.setTimelineCenter(18);
+  value.advance(100);
+  const crossing = worker.lastRequest('observe');
+  assert.deepEqual(crossing.payload, {startSeconds: 8, endSeconds: 28});
+  value.player.setTimelineCenter(null);
+  assert.equal(value.state.preview, null, 'following a loop discards accepted browse data extending beyond loop B');
+  worker.reply(crossing, preview(8, 28));
+  await flushReplies();
+  assert.equal(value.state.preview, null, 'a pending browse reply cannot restore activity after loop B');
+  value.advance(250);
+  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 13, endSeconds: 20});
+  assert.deepEqual(worker.requests.filter((request) => request.method !== 'observe'), transport);
+  assert.deepEqual(value.state.loop, {start: 10, end: 20});
+});
+
+test('entering browsing reuses useful in-flight follow data while a padded request catches up', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const seeking = value.player.seek(20);
+  worker.reply(worker.lastRequest('seek'), position(20));
+  await seeking;
+  const follow = worker.lastRequest('observe');
+  assert.deepEqual(follow.payload, {startSeconds: 15, endSeconds: 26});
+  const transport = worker.requests.filter((request) => request.method !== 'observe');
+  value.player.setTimelineCenter(21);
+  worker.reply(follow, preview(15, 26));
+  await flushReplies();
+  assert.deepEqual(value.state.preview, preview(15, 26));
+  value.advance(100);
+  const browsing = worker.lastRequest('observe');
+  assert.deepEqual(browsing.payload, {startSeconds: 11, endSeconds: 31});
+  value.player.setTimelineCenter(23);
+  worker.reply(browsing, preview(11, 31));
+  await flushReplies();
+  assert.deepEqual(value.state.preview, preview(11, 31));
+  assert.equal(value.state.position, 20);
+  assert.deepEqual(worker.requests.filter((request) => request.method !== 'observe'), transport);
+});
+
+test('continuous browsing accepts useful pending coverage without waiting for dragging to stop', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const transport = worker.requests.filter((request) => request.method !== 'observe');
+  value.player.setTimelineCenter(50);
+  value.advance(100);
+  const first = worker.lastRequest('observe');
+  assert.deepEqual(first.payload, {startSeconds: 40, endSeconds: 60});
+  for (const center of [51, 52, 53]) {
+    value.player.setTimelineCenter(center);
+    value.advance(20);
+  }
+  worker.reply(first, preview(40, 60));
+  await flushReplies();
+  assert.deepEqual(value.state.preview, preview(40, 60), 'same-configuration data that improves the moving viewport must remain usable');
+  assert.ok(value.state.preview!.start <= 48 && value.state.preview!.end >= 58);
+  value.player.setTimelineCenter(54);
+  value.advance(39);
+  assert.equal(worker.lastRequest('observe').id, first.id);
+  value.player.setTimelineCenter(55);
+  value.advance(1);
+  const next = worker.lastRequest('observe');
+  assert.deepEqual(next.payload, {startSeconds: 45, endSeconds: 65});
+  for (const center of [56, 57, 58]) {
+    value.player.setTimelineCenter(center);
+    value.advance(20);
+  }
+  worker.reply(next, preview(45, 65));
+  await flushReplies();
+  assert.deepEqual(value.state.preview, preview(45, 65));
+  assert.ok(value.state.preview!.start <= 53 && value.state.preview!.end >= 63);
+  assert.deepEqual(worker.requests.filter((request) => request.method !== 'observe'), transport);
+  assert.equal(value.state.position, 0);
+});
+
+test('obsolete browsing responses cannot replace current data with equal or smaller visible coverage', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  value.player.setTimelineCenter(50);
+  value.advance(100);
+  worker.reply(worker.lastRequest('observe'), preview(45, 55));
+  await flushReplies();
+  const accepted = value.state.preview;
+  assert.deepEqual(accepted, preview(45, 55));
+  value.player.setTimelineCenter(52);
+  value.advance(100);
+  const lessCoverage = worker.lastRequest('observe');
+  value.player.setTimelineCenter(53);
+  worker.reply(lessCoverage, preview(48, 53));
+  await flushReplies();
+  assert.equal(value.state.preview, accepted);
+  value.player.setTimelineCenter(54);
+  value.advance(100);
+  const equalCoverage = worker.lastRequest('observe');
+  value.player.setTimelineCenter(55);
+  worker.reply(equalCoverage, preview(50, 55));
+  await flushReplies();
+  assert.equal(value.state.preview, accepted);
+});
+
+test('continuous browsing refreshes at most ten times per second without changing follow timing', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  let replied = worker.lastRequest('observe').id;
+  const before = worker.requests.length;
+  for (let index = 1; index <= 100; index++) {
+    value.player.setTimelineCenter(50 + index / 10);
+    value.advance(10);
+    const request = worker.lastRequest('observe');
+    if (request.id !== replied) {
+      worker.reply(request, preview(request.payload.startSeconds as number, request.payload.endSeconds as number));
+      replied = request.id;
+      await flushReplies();
+    }
+  }
+  const browseRequests = worker.requests.length - before;
+  assert.equal(browseRequests, 10);
+  value.player.setTimelineCenter(null);
+  value.advance(249);
+  assert.equal(worker.requests.length - before, browseRequests);
+  value.advance(1);
+  assert.equal(worker.requests.length - before, browseRequests + 1);
+});
+
 test('replaced, failed and disposed sessions cannot restore preview responses', async (t) => {
   const {value, worker} = await loaded(t);
   const stale = worker.lastRequest('observe');

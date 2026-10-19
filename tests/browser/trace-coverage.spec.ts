@@ -1,6 +1,6 @@
 import {test, expect} from './fixtures.ts';
 
-test('trace loss is visible and remains attached to held inspection across a seek', async ({page}) => {
+test('trace loss remains attached to held inspection while a newer chart is browsed', async ({page}) => {
   await page.addInitScript(() => {
     const NativeWorker = window.Worker;
     window.Worker = class extends NativeWorker {
@@ -24,9 +24,19 @@ test('trace loss is visible and remains attached to held inspection across a see
   await expect(page.locator('#trace-warning')).toBeVisible();
   await expect(page.locator('#trace-warning')).toContainText('7 dropped writes');
   await page.locator('#follow-button').click();
+  const selected = await page.locator('#inspection-time').textContent();
+  const writes = await page.locator('#write-list').textContent();
   await page.locator('#seek-slider').fill('10');
   await expect(page.locator('#play-status')).toHaveText('Live SID');
   await expect(page.locator('#trace-warning')).toContainText('7 dropped writes');
+  const scrollbar = page.getByRole('scrollbar', {name:'Browse timeline'});
+  await scrollbar.focus();
+  await scrollbar.press('PageDown');
+  await expect(page.locator('#history-summary')).toHaveAttribute('title', /PREPARED OBSERVATIONS.*0 dropped writes/);
+  await expect(page.locator('#trace-warning')).toBeVisible();
+  await expect(page.locator('#trace-warning')).toHaveText('Held inspection trace incomplete: 7 dropped writes.');
+  await expect(page.locator('#inspection-time')).toHaveText(selected!);
+  await expect(page.locator('#write-list')).toHaveText(writes!);
   await page.locator('#return-button').click();
   await expect(page.locator('#trace-warning')).toBeHidden();
   await page.locator('#play-button').click();
