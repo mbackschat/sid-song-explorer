@@ -223,3 +223,11 @@ The user rejected the right-side catch-up because the notes and playhead moved a
 The restored motion regression failed against the catch-up build before the correction. Its frame-by-frame oracle measures viewport motion against heard progress on both sides and checks paused stability and explicit Follow. Reproduction traces and verification logs use the ignored `build/unified-panel/familiar-motion-` prefix. The earlier convergence tests verified the requested endpoint and rate, but did not establish an acceptable interaction; that distinction is now explicit in the design guidance.
 
 All four focused Chrome/macOS WebKit motion checks passed in 34.0 seconds. Production type checking/build, the browser-policy guard, documentation links and whitespace checks passed. The full suites were not repeated for this bounded correction. This is local automated evidence; the interaction guideline records the user's stated priority, while browser acceptance of the restored behavior remains pending.
+
+### Automatic centering remains required
+
+The user immediately reported that the playhead again failed to return to center. Recording the familiar-UX guideline did not authorize dropping that explicit behavior; the prior correction incorrectly treated the general principle as permission to replace the concrete requirement. The plan, design and contributor guide now distinguish product requirements from the principles used to implement them.
+
+The missing right-side return was reproduced against the current build, then the steady heard-time-based convergence was restored for both sides. The motion guard again requires automatic convergence and verifies the transition rate, paused placement and explicit Follow. This restores the requested behavior only: the user's earlier objection to the relative screen speeds of notes and playhead remains unresolved. Passing these guards does not establish that the motion feels intuitive. Logs and reproduction traces use the ignored `build/unified-panel/required-centering-` prefix.
+
+All four focused Chrome/macOS WebKit centering checks passed in 34.9 seconds. Production type checking/build, the browser-policy guard, documentation links and whitespace checks passed. The full suites were not repeated. These are local software checks; the relative-motion concern remains open for product resolution.

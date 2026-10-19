@@ -811,9 +811,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       if (elapsed < 0 || timelineView === 'fit' && elapsed > 0) seekViewport = null;
       else {
         if (state?.status === 'playing' && elapsed > 0) {
-          // The interaction principle in docs/design/web-player-and-analyser.md excludes catch-up scrolling after a seek.
-          if (seekViewport.heard! > seekViewport.center) seekViewport.center += elapsed;
-          else if (position >= seekViewport.center) seekViewport = null;
+          // TIMELINE-3 in docs/PLAN.md requires automatic centering from either side while keeping the playhead aligned with heard time.
+          const offset = seekViewport.heard! - seekViewport.center;
+          const remaining = Math.max(0, Math.abs(offset) - elapsed);
+          if (remaining === 0) seekViewport = null;
+          else seekViewport.center = position - Math.sign(offset) * remaining;
         }
         if (seekViewport) seekViewport.heard = position;
       }
