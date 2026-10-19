@@ -96,6 +96,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let timelineView: 'scroll' | 'fit' = 'scroll';
   let timelineZoom = TIMELINE_DENSITIES.indexOf(64);
   let timelineSpan = FOLLOW_WINDOW_SECONDS;
+  let seekViewport: {center: number; span: number; heard: number | null} | null = null;
   let cursor = 0;
   let selectedEnd: number | null = null;
   let selectedVoice = 0;
@@ -158,7 +159,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       el('reference-section').hidden = true;
     }
   };
-  const resetInspection = () => { held = null; cursor = 0; selectedEnd = null; exploredUntil = 30; evidenceKey = ''; sourceKey = ''; };
+  const resetInspection = () => { seekViewport = null; held = null; cursor = 0; selectedEnd = null; exploredUntil = 30; evidenceKey = ''; sourceKey = ''; };
   const loadBytes = async (bytes: Uint8Array, entry: Entry | null) => {
     reference.pause();
     const profile = currentProfile();
@@ -269,11 +270,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     if (state?.status === 'playing') controls.pause();
     else { await controls.play(); notice = ''; }
   }); });
-  button('restart-button').addEventListener('click', () => { void run(async () => { reference.pause(); controls.setTimelineCenter(null); await controls.seek(0); notice = ''; }); });
+  button('restart-button').addEventListener('click', () => { seekViewport = null; void run(async () => { reference.pause(); controls.setTimelineCenter(null); await controls.seek(0); notice = ''; }); });
   reference.addEventListener('play', () => { controls.pause(); report('Retained reference playing. Its native transport is independent of live SID time.'); });
   reference.addEventListener('error', () => { if (reference.hasAttribute('src')) report('The retained reference could not be opened. Live SID playback remains available.', true); });
   input('seek-slider').addEventListener('input', () => { seekDragging = true; setText('heard-time', time(Number(input('seek-slider').value))); });
-  input('seek-slider').addEventListener('change', () => { const target = Number(input('seek-slider').value); seekDragging = false; void run(async () => { reference.pause(); notice = ''; controls.setTimelineCenter(null); await controls.seek(target); }); });
+  input('seek-slider').addEventListener('change', () => { seekViewport = null; const target = Number(input('seek-slider').value); seekDragging = false; void run(async () => { reference.pause(); notice = ''; controls.setTimelineCenter(null); await controls.seek(target); }); });
 
   const heardObservations = (): DisplayedObservation => {
     const position = state?.position ?? 0;
@@ -310,16 +311,18 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   };
   const holdAt = (seconds: number, end: number | null = null) => {
     if (!held || state?.timelineCenterSeconds != null) held = copyVisibleHistory();
+    seekViewport = null;
     controls.setTimelineCenter(null);
     cursor = seconds;
     selectedEnd = end;
     draw();
   };
-  const follow = () => { held = null; selectedEnd = null; timelineView = 'scroll'; controls.setTimelineCenter(null); draw(); };
+  const follow = () => { seekViewport = null; held = null; selectedEnd = null; timelineView = 'scroll'; controls.setTimelineCenter(null); draw(); };
   button('follow-button').addEventListener('click', () => holdAt(state?.position ?? 0));
   button('return-button').addEventListener('click', follow);
   for (const mode of ['scroll', 'fit'] as const) button(`timeline-${mode}`).addEventListener('click', () => {
     if (mode === timelineView) return;
+    seekViewport = null;
     timelineView = mode;
     if (held && mode === 'scroll') {
       const window = followingWindow(cursor, timelineSpan);
@@ -337,6 +340,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   const timelineTotal = () => Math.min(state?.duration ?? exploredUntil, MAX_SEEK_SECONDS);
   const browseAtStart = (start: number) => {
     if (!state?.info) return;
+    seekViewport = null;
     const total = timelineTotal();
     const maximum = Math.max(0, total - timelineSpan);
     timelineView = 'scroll';
@@ -388,9 +392,9 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   button('timeline-scroll-forward').addEventListener('click', () => browseAtStart(plotStart + timelineSpan / 10));
   const seekTimeline = (target: number) => {
     if (!state?.info || busy || state.seekTarget !== null || state.status === 'loading') return;
+    seekViewport = {center:(plotStart + plotEnd) / 2, span:plotEnd - plotStart, heard:null};
     held = null;
     selectedEnd = null;
-    timelineView = 'scroll';
     void run(async () => {
       reference.pause();
       notice = '';
@@ -474,6 +478,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   button('clear-loop').addEventListener('click', () => { void run(async () => { await controls.setLoop(null); }); });
 
   const hearPhrase = async (annotation: Annotation) => {
+    seekViewport = null;
     reference.pause();
     controls.setTimelineCenter(null);
     held = copyVisibleHistory();
@@ -783,7 +788,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     button('follow-button').disabled = !loaded;
     button('return-button').hidden = false;
     button('return-button').disabled = !loaded;
-    button('return-button').setAttribute('aria-pressed', String(!held && state?.timelineCenterSeconds == null && timelineView === 'scroll'));
+    button('return-button').setAttribute('aria-pressed', String(!held && !seekViewport && state?.timelineCenterSeconds == null && timelineView === 'scroll'));
     el('view-inspector').hidden = !held;
     for (let voice = 0; voice < 3; voice++) {
       button(`mute-${voice}`).setAttribute('aria-pressed', String(Boolean(state?.muted[voice])));
@@ -801,7 +806,20 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
         held.plotEnd = window.end;
       }
     }
-    if (state?.timelineWindowSeconds !== timelineSpan) controls.setTimelineWindow(timelineSpan);
+    if (seekViewport && !seeking) {
+      const elapsed = seekViewport.heard === null ? 0 : position - seekViewport.heard;
+      if (elapsed < 0 || timelineView === 'fit' && elapsed > 0) seekViewport = null;
+      else {
+        if (state?.status === 'playing' && elapsed > 0) {
+          // The click-position guard in tests/browser/unified-panel.spec.ts requires paused stability and gradual following independent of drawing frequency.
+          seekViewport.center = position + (seekViewport.center - seekViewport.heard!) * Math.exp(-elapsed / .35);
+          if (Math.abs(seekViewport.center - position) * TIMELINE_DENSITIES[timelineZoom]! < .5) seekViewport = null;
+        }
+        if (seekViewport) seekViewport.heard = position;
+      }
+    }
+    const observationSpan = timelineSpan + (seekViewport && timelineView === 'scroll' ? 2 * Math.abs(seekViewport.center - transportPosition) : 0);
+    if (state?.timelineWindowSeconds !== observationSpan) controls.setTimelineWindow(observationSpan);
     const browsing = timelineView === 'scroll' && state?.timelineCenterSeconds != null;
     if (browsing) {
       const total = timelineTotal();
@@ -813,7 +831,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     const {frames, writes, start: historyStart, end: observedUntil} = observations;
     const heardUntil = chartHeld?.heardUntil ?? position;
     const chartEnd = timelineView === 'fit' ? Math.min(observedUntil, heardUntil) : observedUntil;
-    const window = timelineView === 'fit'
+    const window = seekViewport ? followingWindow(seekViewport.center, timelineView === 'fit' ? seekViewport.span : timelineSpan) : timelineView === 'fit'
       ? fittedWindow(historyStart, chartEnd, held ? {start: cursor, end: selectedEnd ?? cursor} : undefined)
       : chartHeld ? {start: chartHeld.plotStart, end: chartHeld.plotEnd} : followingWindow(state?.timelineCenterSeconds ?? position, timelineSpan);
     plotStart = window.start;
@@ -837,7 +855,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     setText('timeline-earlier', browsing ? 'Earlier' : 'Past');
     setText('timeline-later', browsing ? 'Later · prepared' : 'Upcoming · prepared');
     const durationPrecision = timelineSpan < 1 ? 2 : 1;
-    setText('timeline-view-note', timelineView === 'scroll' ? browsing ? 'Browsing · playback position unchanged' : `${Number((timelineSpan / 2).toFixed(durationPrecision))} s past · ${Number((timelineSpan / 2).toFixed(durationPrecision))} s upcoming` : 'All retained heard history');
+    setText('timeline-view-note', seekViewport ? '' : timelineView === 'scroll' ? browsing ? 'Browsing · playback position unchanged' : `${Number((timelineSpan / 2).toFixed(durationPrecision))} s past · ${Number((timelineSpan / 2).toFixed(durationPrecision))} s upcoming` : 'All retained heard history');
     el('timeline-zoom').hidden = timelineView !== 'scroll';
     button('timeline-zoom-out').disabled = timelineZoom === 0;
     button('timeline-zoom-in').disabled = timelineZoom === TIMELINE_DENSITIES.length - 1;
@@ -886,6 +904,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   applyCatalogDefaults();
   updateReference();
   controls.subscribe(next => {
+    if (['loading', 'error'].includes(next.status) || next.status === 'seeking' && seekViewport?.heard != null) seekViewport = null;
     state = next;
     if (next.epoch !== previousEpoch) { previousEpoch = next.epoch; exploredUntil = Math.min(MAX_SEEK_SECONDS, Math.max(30, next.position + 10)); }
     if (!animationFrame) animationFrame = requestAnimationFrame(timestamp => { animationFrame = 0; if (timestamp - lastDraw >= 70 || next.status !== 'playing') { lastDraw = timestamp; draw(); } });
