@@ -1,20 +1,15 @@
 import {test, expect} from './fixtures.ts';
+import {holdWorkerRequest} from './worker-control.ts';
 
 test('voice changes explain the interruption beside the controls and clear feedback on completion or failure', async ({page}) => {
   await page.goto('/');
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
   await page.locator('#play-button').click();
-  await expect(page.locator('#heard-time')).toHaveText('0:01');
-  await page.evaluate(() => {
-    const post = Worker.prototype.postMessage;
-    Worker.prototype.postMessage = function (message, ...options) {
-      if (message.method === 'mute') setTimeout(() => Reflect.apply(post, this, [message, ...options]), 700);
-      else Reflect.apply(post, this, [message, ...options]);
-    };
-  });
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThanOrEqual(1);
   const feedback = page.locator('#voice-mix-status');
   for (const control of ['mute-0', 'solo-1', 'restore-button']) {
+    const releaseMute = await holdWorkerRequest(page, 'mute');
     await page.locator(`#${control}`).click();
     await expect(feedback).toHaveClass(/preparing/);
     await expect(feedback).toHaveAttribute('aria-live', 'polite');
@@ -30,6 +25,7 @@ test('voice changes explain the interruption beside the controls and clear feedb
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.screenshot({path:`build/poc/${test.info().project.name}-voice-feedback.png`, fullPage:true});
     }
+    await releaseMute();
     await expect(page.locator('#play-status')).toHaveText('Live SID');
     await expect(feedback).not.toHaveClass(/preparing/);
     await expect(page.locator('#status-message')).toHaveAttribute('aria-live', 'polite');
@@ -39,22 +35,17 @@ test('voice changes explain the interruption beside the controls and clear feedb
   }
   await page.locator('#play-button').click();
   await page.emulateMedia({reducedMotion:'reduce'});
+  const releasePaused = await holdWorkerRequest(page, 'mute');
   await page.locator('#mute-2').click();
   await expect(feedback).toHaveClass(/preparing/);
   expect(await feedback.evaluate(element => getComputedStyle(element, '::before').animationName)).toBe('none');
+  await releasePaused();
   await expect(page.locator('#play-status')).toHaveText('Paused');
   await expect(feedback).not.toHaveClass(/preparing/);
-  await page.evaluate(() => {
-    const post = Worker.prototype.postMessage;
-    Worker.prototype.postMessage = function (message, ...options) {
-      if (message.method === 'mute') {
-        Worker.prototype.postMessage = post;
-        setTimeout(() => this.dispatchEvent(new MessageEvent('message', {data:{id:message.id,error:'Injected voice-mix failure'}})), 700);
-      } else Reflect.apply(post, this, [message, ...options]);
-    };
-  });
+  const releaseFailure = await holdWorkerRequest(page, 'mute');
   await page.locator('#restore-button').click();
   await expect(feedback).toHaveClass(/preparing/);
+  await releaseFailure('Injected voice-mix failure');
   await expect(feedback).toContainText('Injected voice-mix failure');
   await expect(feedback).not.toHaveClass(/preparing/);
   await expect(page.locator('#mix-controls')).toHaveAttribute('aria-busy', 'false');

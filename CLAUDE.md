@@ -69,6 +69,8 @@ The application uses TypeScript 5.9.3, Vite 7.3.1 and `libsidplayfp-wasm` 1.1.0/
 | Check patch whitespace | `git diff --check` | Whitespace errors in current changes. |
 | Rebuild logo exports | `python3 scripts/render-branding.py` | Raster assets from the selected vector masters; optional tools and visual checks in the [branding guide](assets/branding/README.md). |
 
+Transient browser feedback must use the shared [worker-request gate](tests/browser/worker-control.ts): hold the operation, assert pending UI, release it, then verify real completion or explicit failure. Never synchronize with fixed delays or depend on catching a particular second of advancing playback; poll observable progress instead. [The browser policy guard](tests/browser-policy.test.ts) runs in the unit suite. Keep CPU-heavy engine test files serialized through `pnpm test`, and run them separately from browser emulation. Keep retries disabled; a CI failure requires retained diagnostics and diagnosis before another publication attempt. [The validation record](docs/validation/mono-poc.md#browser-test-synchronization) owns the review and stress-check contract.
+
 Browser automation must be silent: use [the shared test fixture](tests/browser/fixtures.ts), which inserts a zero-gain sink after the analyser and mutes native media. Headless mode alone does not silence WebKit. Do not change system volume for tests.
 
 Use headless Google Chrome for the Chrome target and Playwright WebKit on macOS for automated Safari-engine checks. Linux WebKit is outside the supported matrix; do not spend compatibility work on that port. CI must preserve the browser/platform pairing. Keep real Safari/iOS and human listening claims separate without requiring browser-setting changes to hand off a POC.

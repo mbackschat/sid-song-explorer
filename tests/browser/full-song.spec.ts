@@ -9,9 +9,9 @@ test('uninterrupted full Rambo playback reaches its ending', async ({page}) => {
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
   await page.locator('#play-button').click();
-  await expect(page.locator('#heard-time')).toHaveText('0:02', {timeout:10000});
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number), {timeout:10000}).toBeGreaterThanOrEqual(2);
   await expect(page.locator('#peak-label')).not.toHaveText('−∞ dBFS');
-  await expect(page.locator('#heard-time')).toHaveText('0:12', {timeout:15000});
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number), {timeout:15000}).toBeGreaterThanOrEqual(12);
   await page.screenshot({path:`build/poc/${test.info().project.name}-live.png`,fullPage:true});
   await expect(page.locator('#play-status')).toHaveText('Ended', {timeout:215000});
   await expect(page.locator('#heard-time')).toHaveText('3:13');

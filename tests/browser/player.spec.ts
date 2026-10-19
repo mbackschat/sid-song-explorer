@@ -1,4 +1,5 @@
 import {test, expect} from './fixtures.ts';
+import {holdWorkerRequest} from './worker-control.ts';
 import {resolve} from 'node:path';
 
 const sample = resolve('public/generated/rambo-loader-main.sid');
@@ -17,7 +18,8 @@ test('live audio, held inspection, mute/solo, loop replay and complete ending', 
   await page.screenshot({path:`build/poc/${test.info().project.name}-live.png`,fullPage:true});
   await page.locator('#follow-button').click();
   const held = await page.locator('#inspection-time').textContent();
-  await page.waitForTimeout(1100);
+  const heardWhileHeld = await page.locator('#heard-time').textContent();
+  await expect(page.locator('#heard-time')).not.toHaveText(heardWhileHeld!);
   await expect(page.locator('#inspection-time')).toHaveText(held!);
   await page.locator('#return-button').click();
   await page.locator('#solo-0').click();
@@ -38,7 +40,7 @@ test('live audio, held inspection, mute/solo, loop replay and complete ending', 
     }
   });
   await expect(page.locator('#play-status')).toHaveText('Live SID');
-  await expect(page.locator('#heard-time')).toHaveText('0:03');
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThanOrEqual(3);
   await page.locator('#seek-slider').fill('192.5');
   await expect(page.locator('#play-status')).toContainText('Ended', {timeout: 20000});
   expect(errors).toEqual([]);
@@ -78,7 +80,7 @@ test('a short evidence annotation plays useful context while preserving its exac
   await page.locator('[data-annotation="restored-main-entry"]').click();
   await expect(page.locator('#play-status')).toHaveText('Live SID');
   await expect(page.locator('#loop-end')).toHaveValue('4');
-  await expect(page.locator('#heard-time')).toHaveText('0:02', {timeout:10000});
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number), {timeout:10000}).toBeGreaterThanOrEqual(2);
   await expect(page.locator('#inspector-note')).toContainText('Held');
   await page.screenshot({path:`build/poc/${test.info().project.name}-exploring.png`,fullPage:true});
 });
@@ -155,11 +157,18 @@ test('compact chart controls explain held inspection without moving playback', a
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
   await page.locator('#play-button').click();
-  await expect(page.locator('#heard-time')).toHaveText('0:01');
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThanOrEqual(1);
   const lane = page.locator('#voice-lane-1');
   const box = (await lane.boundingBox())!;
   await lane.click({position:{x:box.width * .05, y:20}});
-  await expect(page.locator('#history-summary')).toContainText(/Inspecting Voice 2 at 0:00\.[45]\d/);
+  await expect(page.locator('#history-summary')).toContainText('Inspecting Voice 2 at');
+  const selectedPosition = await lane.evaluate(element => {
+    const start = Number(element.getAttribute('aria-valuemin'));
+    const end = Number(element.getAttribute('aria-valuemax'));
+    const [minutes, seconds] = document.querySelector('#inspection-time')!.textContent!.split(':').map(Number);
+    return {expected:start + (end - start) * .05, actual:minutes! * 60 + seconds!};
+  });
+  expect(Math.abs(selectedPosition.actual - selectedPosition.expected)).toBeLessThan(.03);
   await expect(page.locator('#history-summary')).toContainText('music continues');
   await expect(page.locator('#inspect-1')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#reg-frequency')).not.toHaveText('—');
@@ -167,7 +176,8 @@ test('compact chart controls explain held inspection without moving playback', a
   await expect(page.locator('#return-button')).toHaveText('Resume live');
   await expect(page.locator('#follow-button')).toBeHidden();
   const selected = await page.locator('#inspection-time').textContent();
-  await expect(page.locator('#heard-time')).toHaveText('0:02');
+  const playbackPosition = Number(await page.locator('#seek-slider').inputValue());
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(playbackPosition + .5);
   await expect(page.locator('#inspection-time')).toHaveText(selected!);
   await page.screenshot({path:`build/poc/${test.info().project.name}-held-feedback.png`,fullPage:true});
   await page.setViewportSize({width:390,height:844});
@@ -185,7 +195,8 @@ test('seek feedback keeps the requested position visible until playback resumes'
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
   await page.locator('#play-button').click();
-  await expect(page.locator('#heard-time')).toHaveText('0:01');
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThanOrEqual(1);
+  const releaseSeek = await holdWorkerRequest(page, 'seek');
   await page.locator('#seek-slider').fill('180');
   await expect(page.locator('#play-status')).toHaveText('Seeking…');
   await expect(page.locator('#play-button')).toHaveText('Seeking…');
@@ -195,20 +206,15 @@ test('seek feedback keeps the requested position visible until playback resumes'
   await expect(page.locator('#seek-slider')).toHaveValue('180');
   await expect(page.locator('#seek-note')).toContainText('Requested position');
   await page.screenshot({path:`build/poc/${test.info().project.name}-seeking-feedback.png`,fullPage:true});
+  await releaseSeek();
   await expect(page.locator('#play-status')).toHaveText('Live SID', {timeout:20000});
   await expect(page.locator('#status-message')).not.toHaveClass(/seeking/);
   await expect(page.locator('#play-button')).toHaveText('Ⅱ Pause');
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(180.5);
-  await page.evaluate(() => {
-    const post = Worker.prototype.postMessage;
-    Worker.prototype.postMessage = function (message, ...options) {
-      if (message.method === 'seek') {
-        Worker.prototype.postMessage = post;
-        setTimeout(() => this.dispatchEvent(new MessageEvent('message', {data:{id:message.id,error:'Injected seek failure'}})), 300);
-      } else Reflect.apply(post, this, [message, ...options]);
-    };
-  });
+  const releaseFailure = await holdWorkerRequest(page, 'seek');
   await page.locator('#seek-slider').fill('90');
+  await expect(page.locator('#play-status')).toHaveText('Seeking…');
+  await releaseFailure('Injected seek failure');
   await expect(page.locator('#status-message')).toContainText('Injected seek failure');
   await expect(page.locator('#status-message')).not.toHaveClass(/seeking/);
   await expect(page.locator('#play-button')).not.toHaveClass(/seeking/);
