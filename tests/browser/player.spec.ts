@@ -160,13 +160,13 @@ test('compact chart controls explain held inspection without moving playback', a
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThanOrEqual(1);
   const lane = page.locator('#voice-lane-1');
   const box = (await lane.boundingBox())!;
-  await lane.click({position:{x:box.width * .05, y:20}});
+  await lane.click({position:{x:box.width * .5, y:20}});
   await expect(page.locator('#history-summary')).toContainText('Inspecting Voice 2 at');
   const selectedPosition = await lane.evaluate(element => {
     const start = Number(element.getAttribute('aria-valuemin'));
     const end = Number(element.getAttribute('aria-valuemax'));
     const [minutes, seconds] = document.querySelector('#inspection-time')!.textContent!.split(':').map(Number);
-    return {expected:start + (end - start) * .05, actual:minutes! * 60 + seconds!};
+    return {expected:start + (end - start) * .5, actual:minutes! * 60 + seconds!};
   });
   expect(Math.abs(selectedPosition.actual - selectedPosition.expected)).toBeLessThan(.03);
   await expect(page.locator('#history-summary')).toContainText('music continues');

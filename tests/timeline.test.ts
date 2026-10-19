@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { positionAt, trimHistory, validateLoop, followingWindow, visibleTimelineFrames, fittedWindow } from '../src/timeline.ts';
+import { positionAt, trimHistory, validateLoop, followingWindow, visibleTimelineFrames, fittedWindow, observationRegistersAt } from '../src/timeline.ts';
 
 test('heard position follows audio time, not the emulation cursor, across a loop', () => {
   const segments = [
@@ -31,11 +31,12 @@ test('loop admission rejects invalid ranges before emulator work', () => {
 });
 
 
-test('the following window keeps ten seconds across startup, long playback and backwards seeks', () => {
+test('the following window centers heard time across startup, ending and backwards seeks', () => {
   for (const position of [0, 5, 10, 30, 193, 2]) {
     const window = followingWindow(position);
     assert.equal(window.end - window.start, 10);
-    assert.equal(window.start, Math.max(0, position - 10));
+    assert.equal(window.start, position - 5);
+    assert.equal((position - window.start) / (window.end - window.start), .5);
     assert.ok(position >= window.start && position <= window.end);
   }
 });
@@ -58,4 +59,24 @@ test('fit history expands with retained playback and includes a held selection',
   assert.deepEqual(fittedWindow(12, 45), {start: 12, end: 45});
   assert.deepEqual(fittedWindow(30, 32), {start: 30, end: 40});
   assert.deepEqual(fittedWindow(30, 40, {start: 5, end: 50}), {start: 5, end: 50});
+});
+
+test('inspection reconstructs ordered settings without extrapolating unavailable preview time', () => {
+  const observation = {
+    start: 10, end: 12, dropped: 0,
+    frames: [{time:10, registers:Array<number>(32).fill(0)}],
+    writes: [
+      {timeSeconds:10.5, cyclePhi1:1, address:4, value:17, sidNumber:0},
+      {timeSeconds:10.5, cyclePhi1:2, address:4, value:33, sidNumber:0},
+      {timeSeconds:11, cyclePhi1:3, address:0xd404, value:65, sidNumber:0},
+    ],
+  };
+  assert.equal(observationRegistersAt(observation, 9), null);
+  assert.equal(observationRegistersAt(observation, 12), null);
+  assert.equal(observationRegistersAt(observation, 13, true), null);
+  assert.equal(observationRegistersAt(observation, 10.4)?.[4], 0);
+  assert.equal(observationRegistersAt(observation, 10.5)?.[4], 33);
+  assert.equal(observationRegistersAt(observation, 11.5)?.[4], 65);
+  assert.equal(observationRegistersAt(observation, 12, true)?.[4], 65);
+  assert.equal(observation.frames[0].registers[4], 0);
 });

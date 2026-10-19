@@ -1,5 +1,6 @@
 import { SAMPLE_RATE, SidSession } from './session.ts';
 import type { LoadResult, MuteMask, PlaybackOptions, PositionResult, RenderResult, SessionOptions, SidWrite } from './session.ts';
+import type { TimelineObservation } from '../player-types.ts';
 
 const DEFAULT_CACHE_BYTES = 32 * 1024 * 1024;
 const REGISTER_BYTES = 32;
@@ -9,6 +10,9 @@ const MAX_RENDER_FRAMES = SAMPLE_RATE * 2;
 const MAX_BLOCK_FRAMES = SAMPLE_RATE / 4;
 const MAX_BLOCKS = 4096;
 const OPERATION_BUDGET_MS = 15000;
+const MAX_OBSERVATION_SECONDS = 11;
+const MAX_OBSERVATION_WRITES = 20_000;
+const OBSERVATION_FRAME_SECONDS = 0.02;
 // SIDLite's PAL/NTSC clocks consume fewer than 25 scheduler cycles per sample.
 // Even one SID bus write per cycle cannot exceed this reservation; actual packed bytes own the cap.
 const RESERVED_BYTES_PER_FRAME = Int16Array.BYTES_PER_ELEMENT + 25 * WRITE_BYTES;
@@ -158,6 +162,64 @@ export class CachedSidSession {
       registers[block.writes[offset + 2]] = block.writes[offset + 3];
     }
     return registers;
+  }
+
+  /** Copy retained observations only; output limits shorten coverage rather than imply missing writes are complete. */
+  observe(startSeconds: number, endSeconds: number): TimelineObservation | null {
+    this.requireLoaded();
+    if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds) || startSeconds < 0 ||
+      endSeconds > 600 || endSeconds <= startSeconds || endSeconds > startSeconds + MAX_OBSERVATION_SECONDS) {
+      throw new Error(`Observation range must be within 0–600 seconds and no longer than ${MAX_OBSERVATION_SECONDS} seconds`);
+    }
+    const start = Math.max(startSeconds, this.cacheStartFrame / SAMPLE_RATE);
+    let end = Math.min(endSeconds, this.frontier / SAMPLE_RATE);
+    if (start >= end) return null;
+    const writes: SidWrite[] = [];
+    for (const block of this.blocks) {
+      if (block.endFrame / SAMPLE_RATE <= start) continue;
+      if (block.startFrame / SAMPLE_RATE >= end) break;
+      for (let offset = 0; offset < block.writes.length; offset += WRITE_FIELDS) {
+        const time = block.writes[offset];
+        if (time >= end) break;
+        if (time < start && start !== 0) continue;
+        if (writes.length === MAX_OBSERVATION_WRITES) {
+          end = Math.max(start, time);
+          break;
+        }
+        writes.push(unpackWrite(block.writes, offset));
+      }
+      if (end <= block.endFrame / SAMPLE_RATE) break;
+    }
+    if (start >= end) return null;
+    while (writes.length && writes.at(-1)!.timeSeconds >= end) writes.pop();
+    const sampleTimes = [start];
+    for (let index = 1; start + index * OBSERVATION_FRAME_SECONDS < end; index++) {
+      sampleTimes.push(start + index * OBSERVATION_FRAME_SECONDS);
+    }
+    sampleTimes.push(end);
+    const frames: TimelineObservation['frames'] = [];
+    let sample = 0;
+    let dropped = 0;
+    for (const block of this.blocks) {
+      if (block.endFrame / SAMPLE_RATE <= start) continue;
+      if (block.startFrame / SAMPLE_RATE >= end) break;
+      dropped += block.dropped;
+      const registers = Array.from(block.registers);
+      let offset = 0;
+      while (sample < sampleTimes.length && sampleTimes[sample] < block.endFrame / SAMPLE_RATE) {
+        const time = sampleTimes[sample++];
+        while (offset < block.writes.length && block.writes[offset] < time) {
+          registers[block.writes[offset + 2]] = block.writes[offset + 3];
+          offset += WRITE_FIELDS;
+        }
+        frames.push({time, registers: registers.slice()});
+      }
+    }
+    if (sample < sampleTimes.length) {
+      // The sample sweep leaves only exact block boundaries; rounding preserves their original PCM frame after the seconds conversion.
+      frames.push({time: end, registers: this.registersAt(Math.round(end * SAMPLE_RATE))});
+    }
+    return {start, end, frames, writes, dropped};
   }
 
   render(frames: number): RenderResult {

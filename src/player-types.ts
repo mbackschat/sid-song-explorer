@@ -26,6 +26,14 @@ export interface WriteObservation {
   sidNumber: number;
 }
 export interface RegisterFrame { time: number; registers: number[] }
+export interface TimelineObservation {
+  /** Actual retained coverage [start, end); the final register frame records state immediately before end. */
+  start: number;
+  end: number;
+  frames: RegisterFrame[];
+  writes: WriteObservation[];
+  dropped: number;
+}
 export type PlayerStatus = 'empty' | 'loading' | 'ready' | 'playing' | 'paused' | 'seeking' | 'ended' | 'error';
 export interface PlayerState {
   status: PlayerStatus;
@@ -33,6 +41,7 @@ export interface PlayerState {
   seekTarget: number | null;
   pendingOperation: 'seek' | 'voice-mix' | null;
   preparedRange: {start: number; end: number} | null;
+  preview: TimelineObservation | null;
   renderedUntil: number;
   duration: number | null;
   error: string | null;

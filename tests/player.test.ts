@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test, type TestContext} from 'node:test';
 import {ExplorerPlayer} from '../src/player.ts';
-import type {PlayerState, TuneDetails} from '../src/player-types.ts';
+import type {PlayerState, TimelineObservation, TuneDetails} from '../src/player-types.ts';
 
 interface PostedRequest { id: number; method: string; payload: Record<string, unknown>; cacheEpoch?: number }
 
@@ -43,12 +43,17 @@ const details: TuneDetails = {
 const position = (seconds: number) => ({frame: Math.floor(seconds * 44100), registers: details.registers.slice()});
 
 function fixture(t: TestContext) {
-  const names = ['Worker', 'requestAnimationFrame', 'cancelAnimationFrame'] as const;
+  const names = ['Worker', 'requestAnimationFrame', 'cancelAnimationFrame', 'setInterval', 'clearInterval'] as const;
   const originals = names.map((name) => Object.getOwnPropertyDescriptor(globalThis, name));
   FakeWorker.instances = [];
   Object.defineProperty(globalThis, 'Worker', {configurable: true, writable: true, value: FakeWorker});
   Object.defineProperty(globalThis, 'requestAnimationFrame', {configurable: true, writable: true, value: () => 1});
   Object.defineProperty(globalThis, 'cancelAnimationFrame', {configurable: true, writable: true, value: () => {}});
+  let interval: (() => void) | undefined;
+  let now = 0;
+  t.mock.method(performance, 'now', () => now);
+  Object.defineProperty(globalThis, 'setInterval', {configurable: true, writable: true, value: (callback: () => void) => { interval = callback; return 1; }});
+  Object.defineProperty(globalThis, 'clearInterval', {configurable: true, writable: true, value: () => { interval = undefined; }});
   const player = new ExplorerPlayer();
   let state!: PlayerState;
   const unsubscribe = player.subscribe((value) => { state = value; });
@@ -61,7 +66,7 @@ function fixture(t: TestContext) {
       else Reflect.deleteProperty(globalThis, name);
     }
   });
-  return {player, get state() { return state; }};
+  return {player, get state() { return state; }, advance(milliseconds: number) { now += milliseconds; interval?.(); }};
 }
 
 async function loaded(t: TestContext) {
@@ -77,6 +82,150 @@ async function loaded(t: TestContext) {
 async function flushReplies() {
   for (let index = 0; index < 4; index++) await Promise.resolve();
 }
+
+const preview = (start: number, end: number): TimelineObservation => ({
+  start, end, frames: [{time: start, registers: details.registers.slice()}, {time: end, registers: details.registers.slice()}], writes: [], dropped: 0,
+});
+
+test('preview requests use a centered bounded window while ready or paused and permit one throttled request', async (t) => {
+  const {value, worker} = await loaded(t);
+  const initial = worker.lastRequest('observe');
+  assert.deepEqual(initial.payload, {startSeconds: 0, endSeconds: 6});
+  value.advance(1000);
+  worker.coverage(1, 30);
+  assert.equal(worker.requests.filter((request) => request.method === 'observe').length, 1);
+  worker.reply(initial, preview(0, 3));
+  await flushReplies();
+  assert.deepEqual(value.state.preview, preview(0, 3));
+  const next = worker.lastRequest('observe');
+  assert.notEqual(next.id, initial.id, 'prefetched observations refresh even before playing');
+  worker.reply(next, preview(0, 6));
+  await flushReplies();
+  const count = worker.requests.filter((request) => request.method === 'observe').length;
+  value.advance(249);
+  assert.equal(worker.requests.filter((request) => request.method === 'observe').length, count);
+  value.advance(1);
+  assert.equal(worker.requests.filter((request) => request.method === 'observe').length, count + 1);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const seeking = value.player.seek(198);
+  assert.equal(value.state.preview, null);
+  worker.reply(worker.lastRequest('seek'), position(198));
+  await seeking;
+  assert.equal(value.state.status, 'paused');
+  const ending = worker.lastRequest('observe');
+  assert.deepEqual(ending.payload, {startSeconds: 193, endSeconds: 200});
+  worker.reply(ending, preview(193, 199));
+  await flushReplies();
+  assert.deepEqual(value.state.preview, preview(193, 199), 'partial prepared coverage remains explicit');
+});
+
+test('seeks and voice changes invalidate previews immediately and reject obsolete window responses', async (t) => {
+  const {value, worker} = await loaded(t);
+  const oldWindow = worker.lastRequest('observe');
+  const seeking = value.player.seek(18);
+  worker.reply(oldWindow, preview(0, 5));
+  await flushReplies();
+  assert.equal(value.state.preview, null);
+  assert.equal(worker.lastRequest('observe').id, oldWindow.id, 'pending transport must not issue a preview');
+  worker.reply(worker.lastRequest('seek'), position(18));
+  await seeking;
+  const seekWindow = worker.lastRequest('observe');
+  assert.deepEqual(seekWindow.payload, {startSeconds: 13, endSeconds: 24});
+  const muting = value.player.setMuted([true, false, false]);
+  worker.reply(seekWindow, preview(13, 24));
+  await flushReplies();
+  assert.equal(value.state.preview, null);
+  worker.reply(worker.lastRequest('mute'), position(18));
+  await flushReplies();
+  worker.reply(worker.lastRequest('seek'), position(18));
+  await muting;
+  const mixWindow = worker.lastRequest('observe');
+  assert.notEqual(mixWindow.id, seekWindow.id);
+  worker.reply(mixWindow, preview(13, 24));
+  await flushReplies();
+  assert.deepEqual(value.state.preview, preview(13, 24));
+  const looping = value.player.setLoop({start: 10, end: 20});
+  assert.equal(value.state.preview, null);
+  worker.reply(worker.lastRequest('seek'), position(18));
+  await looping;
+  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 13, endSeconds: 20});
+});
+
+test('prepared previews cover the moving visible right edge through the refresh interval and RPC delay', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const seeking = value.player.seek(10);
+  worker.reply(worker.lastRequest('seek'), position(10));
+  await seeking;
+  const initial = worker.lastRequest('observe');
+  worker.reply(initial, preview(initial.payload.startSeconds as number, initial.payload.endSeconds as number));
+  await flushReplies();
+  value.state.position = 10.249;
+  value.advance(249);
+  assert.ok(value.state.preview!.end >= value.state.position + 5, 'the accepted snapshot covers the viewport before the next request');
+  value.state.position = 10.25;
+  value.advance(1);
+  const refreshing = worker.lastRequest('observe');
+  assert.notEqual(refreshing.id, initial.id);
+  value.state.position = 10.35;
+  value.advance(100);
+  assert.ok(value.state.preview!.end >= value.state.position + 5, 'the previous snapshot covers the viewport during a 100ms worker round trip');
+  worker.reply(refreshing, preview(refreshing.payload.startSeconds as number, refreshing.payload.endSeconds as number));
+  await flushReplies();
+  assert.ok(value.state.preview!.end >= value.state.position + 5);
+  assert.equal(worker.requests.filter((request) => request.method === 'render').length, 0, 'observation refresh does not schedule audio');
+});
+
+test('replaced, failed and disposed sessions cannot restore preview responses', async (t) => {
+  const {value, worker} = await loaded(t);
+  const stale = worker.lastRequest('observe');
+  const reloading = value.player.load(new Uint8Array([0]), profile);
+  const replacement = FakeWorker.instances.at(-1)!;
+  worker.reply(stale, preview(0, 5));
+  await flushReplies();
+  assert.equal(value.state.preview, null);
+  replacement.reply(replacement.lastRequest('load'), details);
+  await reloading;
+  const active = replacement.lastRequest('observe');
+  replacement.fail('observation worker failed');
+  replacement.reply(active, preview(0, 5));
+  await flushReplies();
+  assert.equal(value.state.status, 'error');
+  assert.equal(value.state.preview, null);
+  const freshLoad = value.player.load(new Uint8Array([0]), profile);
+  const fresh = FakeWorker.instances.at(-1)!;
+  fresh.reply(fresh.lastRequest('load'), details);
+  await freshLoad;
+  const pending = fresh.lastRequest('observe');
+  value.player.dispose();
+  fresh.reply(pending, preview(0, 5));
+  await flushReplies();
+  assert.equal(value.state.preview, null);
+});
+
+test('an idle preview deadline reports the terminated worker instead of leaving a ready session', async (t) => {
+  const deadlines = new Map<number, () => void>();
+  let sequence = 0;
+  t.mock.method(globalThis, 'setTimeout', (callback: () => void) => {
+    const id = ++sequence;
+    deadlines.set(id, callback);
+    return id as unknown as ReturnType<typeof setTimeout>;
+  });
+  t.mock.method(globalThis, 'clearTimeout', (id: ReturnType<typeof setTimeout>) => { deadlines.delete(Number(id)); });
+  const {value, worker} = await loaded(t);
+  const observation = worker.lastRequest('observe');
+  assert.equal(deadlines.size, 1, 'only the idle observation remains pending after load');
+  deadlines.values().next().value!();
+  assert.equal(worker.terminated, true);
+  assert.equal(value.state.status, 'error');
+  assert.match(value.state.error ?? '', /observe exceeded 30 seconds/);
+  worker.reply(observation, preview(0, 5));
+  await flushReplies();
+  assert.equal(value.state.preview, null);
+  assert.equal(deadlines.size, 0, 'fatal termination clears every pending deadline');
+});
 
 test('mute clears prepared audio and rejects coverage from the previous mix epoch', async (t) => {
   const {value, worker} = await loaded(t);

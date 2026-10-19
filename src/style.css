@@ -93,6 +93,10 @@ h3 { font-size: 14px; font-weight: 650; }
 .follow-controls button { font-size: 11px; }
 .history-summary { padding: 11px 17px; font-size: 10px; color: #9aa6c4; line-height: 1.6; background: #101525; }
 .lane-list { padding: 7px 16px 0; }
+.timeline-direction { display: grid; grid-template-columns: 1fr 1fr; padding: 0 0 7px 92px; font-size: 10px; color: #9aa6c4; }
+.timeline-direction span:last-child { text-align: right; }
+.timeline-availability { margin: 0; padding: 0 17px 8px; color: #9aa6c4; font-size: 10px; line-height: 1.6; }
+@media (max-width: 740px) { .timeline-direction { padding-left: 70px; } }
 .voice-lane { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: stretch; border-bottom: 1px solid #29304b; min-height: 75px; }
 .voice-label { display: flex; flex-direction: column; justify-content: center; gap: 7px; font-size: 11px; }
 .voice-label strong { font-size: 12px; color: var(--voice); }

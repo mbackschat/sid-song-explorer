@@ -1,5 +1,5 @@
 import type { CacheCoverage, EngineEvent, EngineReply } from './engine/protocol.ts';
-import type { PlayerControls, PlayerState, Profile, TuneDetails, WriteObservation } from './player-types.ts';
+import type { PlayerControls, PlayerState, Profile, TimelineObservation, TuneDetails, WriteObservation } from './player-types.ts';
 import { positionAt, trimHistory, validateLoop, type AudioSegment } from './timeline.ts';
 
 interface RenderBlock {
@@ -17,9 +17,11 @@ class EngineClient {
   private sequence = 0;
   private cacheEpoch = 0;
   private terminalError: Error | null = null;
+  private readonly onFatal: (error: Error) => void;
   private pending = new Map<number, {resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>}>();
 
   constructor(onCache: (coverage: CacheCoverage) => void, onFatal: (error: Error) => void) {
+    this.onFatal = onFatal;
     this.worker = new Worker(new URL('./engine/worker.ts', import.meta.url), {type: 'module'});
     this.worker.onmessage = (event: MessageEvent<EngineReply | EngineEvent>) => {
       if ('event' in event.data) {
@@ -35,8 +37,7 @@ class EngineClient {
     };
     this.worker.onerror = (event) => {
       const error = new Error(event.message || 'Playback worker failed. Reload the sample to retry.');
-      this.terminate(error);
-      onFatal(error);
+      this.fail(error);
     };
   }
 
@@ -45,10 +46,15 @@ class EngineClient {
     if (method === 'load' || method === 'mute') this.cacheEpoch++;
     const id = ++this.sequence;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.terminate(new Error(`${method} exceeded 30 seconds. Reload the sample to retry.`)), 30_000);
+      const timer = setTimeout(() => this.fail(new Error(`${method} exceeded 30 seconds. Reload the sample to retry.`)), 30_000);
       this.pending.set(id, {resolve: value => resolve(value as T), reject, timer});
       this.worker.postMessage({id, method, payload, cacheEpoch:this.cacheEpoch});
     });
+  }
+
+  private fail(error: Error) {
+    this.terminate(error);
+    this.onFatal(error);
   }
 
   terminate(error = new Error('Playback session replaced.')) {
@@ -71,6 +77,9 @@ export class ExplorerPlayer implements PlayerControls {
   private nextStart = 0;
   private generation = 0;
   private pumping = false;
+  private previewPending = false;
+  private previewRequestedAt = -Infinity;
+  private disposed = false;
   private wantsPlayback = false;
   private frame = 0;
   private boundary: {time: number; loop: boolean} | null = null;
@@ -78,14 +87,14 @@ export class ExplorerPlayer implements PlayerControls {
   private timer: ReturnType<typeof setInterval>;
   private animation = 0;
   private state: PlayerState = {
-    status: 'empty', position: 0, seekTarget: null, pendingOperation: null, preparedRange: null, renderedUntil: 0, duration: null, error: null,
+    status: 'empty', position: 0, seekTarget: null, pendingOperation: null, preparedRange: null, preview: null, renderedUntil: 0, duration: null, error: null,
     info: null, muted: [false, false, false], loop: null, peakDb: -Infinity,
     rmsDb: -Infinity, spectrum: new Uint8Array(512), waveform: new Float32Array(1024),
     frames: [], writes: [], historyStart: 0, dropped: 0, underruns: 0, epoch: 0,
   };
 
   constructor() {
-    this.timer = setInterval(() => { void this.pump(); }, 40);
+    this.timer = setInterval(() => { void this.pump(); this.refreshPreview(); }, 40);
     const tick = () => {
       this.updateHeardState();
       this.emit();
@@ -101,6 +110,36 @@ export class ExplorerPlayer implements PlayerControls {
   }
 
   private emit() { for (const listener of this.listeners) listener(this.state); }
+
+  private invalidatePreview() {
+    this.state.preview = null;
+    this.previewRequestedAt = -Infinity;
+  }
+
+  private refreshPreview() {
+    if (this.disposed || this.previewPending || this.pumping || !this.engine || !this.state.info ||
+      !['ready', 'paused', 'playing', 'ended'].includes(this.state.status) || performance.now() - this.previewRequestedAt < 250) return;
+    const startSeconds = Math.max(0, this.state.position - 5);
+    // The extra second keeps the moving viewport covered between requests (tests/player.test.ts).
+    const endSeconds = Math.min(startSeconds + 11, this.state.position + 6, this.state.duration ?? 600, 600, this.state.loop?.end ?? Infinity);
+    if (startSeconds >= endSeconds) return;
+    const engine = this.engine;
+    const generation = this.generation;
+    this.previewPending = true;
+    this.previewRequestedAt = performance.now();
+    void engine.request<TimelineObservation | null>('observe', {startSeconds, endSeconds}).then(observation => {
+      if (generation !== this.generation || engine !== this.engine || this.disposed) return;
+      this.state.preview = observation;
+      this.emit();
+    }).catch(() => {
+      if (generation !== this.generation || engine !== this.engine || this.disposed) return;
+      this.state.preview = null;
+      this.emit();
+    }).finally(() => {
+      this.previewPending = false;
+      this.refreshPreview();
+    });
+  }
 
   private outputTime(): number {
     if (!this.context) return 0;
@@ -151,6 +190,7 @@ export class ExplorerPlayer implements PlayerControls {
   private fail(error: unknown) {
     this.wantsPlayback = false;
     this.generation++;
+    this.invalidatePreview();
     this.stopSources();
     this.state.status = 'error';
     this.state.preparedRange = null;
@@ -163,12 +203,14 @@ export class ExplorerPlayer implements PlayerControls {
   async load(bytes: Uint8Array, profile: Profile) {
     this.wantsPlayback = false;
     const generation = ++this.generation;
+    this.invalidatePreview();
     this.stopSources();
     this.engine?.terminate();
     const engine = new EngineClient(coverage => {
       if (this.engine !== engine || this.state.status === 'error') return;
       this.state.preparedRange = {start:coverage.startFrame / 44100, end:coverage.endFrame / 44100};
       this.emit();
+      this.refreshPreview();
     }, error => {
       if (this.engine === engine) this.fail(error);
     });
@@ -195,6 +237,7 @@ export class ExplorerPlayer implements PlayerControls {
       this.clearHistory(info.registers);
       this.state.status = 'ready';
       this.emit();
+      this.refreshPreview();
     } catch (error) {
       if (generation === this.generation) this.fail(error);
       throw error;
@@ -235,12 +278,14 @@ export class ExplorerPlayer implements PlayerControls {
     this.state.status = 'paused';
     void this.context?.suspend();
     this.emit();
+    this.refreshPreview();
   }
 
   async seek(seconds: number) {
     if (!this.engine || !this.state.info) throw new Error('Load a SID file first.');
     if (!Number.isFinite(seconds) || seconds < 0 || seconds > (this.state.duration ?? 600)) throw new Error('Seek is outside this tune’s supported range.');
     const generation = ++this.generation;
+    this.invalidatePreview();
     const engine = this.engine;
     this.stopSources();
     this.state.status = 'seeking';
@@ -260,6 +305,7 @@ export class ExplorerPlayer implements PlayerControls {
       this.state.status = this.wantsPlayback ? 'playing' : 'paused';
       this.emit();
       if (this.wantsPlayback) await this.pump();
+      else this.refreshPreview();
     } catch (error) {
       if (generation === this.generation) this.fail(error);
       throw error;
@@ -274,6 +320,7 @@ export class ExplorerPlayer implements PlayerControls {
     const position = this.state.seekTarget ?? this.state.position;
     this.state.preparedRange = null;
     const generation = ++this.generation;
+    this.invalidatePreview();
     const engine = this.engine;
     this.stopSources();
     this.state.status = 'seeking';
@@ -296,6 +343,7 @@ export class ExplorerPlayer implements PlayerControls {
       this.state.status = this.wantsPlayback ? 'playing' : 'paused';
       this.emit();
       if (this.wantsPlayback) await this.pump();
+      else this.refreshPreview();
     } catch (error) { if (generation === this.generation) this.fail(error); throw error; }
   }
 
@@ -362,11 +410,13 @@ export class ExplorerPlayer implements PlayerControls {
         if (this.frame >= Math.round(end * 44100)) this.boundary = {time: contextEnd, loop: Boolean(this.state.loop)};
       }
     } catch (error) { if (generation === this.generation) this.fail(error); }
-    finally { this.pumping = false; }
+    finally { this.pumping = false; this.refreshPreview(); }
   }
 
   dispose() {
+    this.disposed = true;
     this.generation++;
+    this.invalidatePreview();
     clearInterval(this.timer);
     cancelAnimationFrame(this.animation);
     this.stopSources();

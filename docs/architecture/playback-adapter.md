@@ -40,6 +40,7 @@ The session caller must serialize methods. [The worker](../../src/engine/worker.
 | `load` | `{bytes: Uint8Array, options: PlaybackOptions, durationSeconds?: number}` | `LoadResult` |
 | `render` | `{frames: number}` | `RenderResult` |
 | `seek` | `{seconds: number}` | `{frame, registers}` |
+| `observe` | `{startSeconds: number, endSeconds: number}` | `TimelineObservation` or `null` when no retained coverage is available |
 | `mute` | `{mask: [boolean, boolean, boolean]}` | `{frame, registers}` |
 | `dispose` | none | `null` |
 
@@ -78,3 +79,11 @@ The [seeking study](../research/seek-performance.md) owns measured alternatives,
 The default cap is 32 MiB of typed storage: PCM, five Float64 fields per write, block register baselines and frontier registers. Metadata is separately bounded to 4096 blocks; this is not a total JS/WASM process-memory cap. Background preparation produces at most 0.25 seconds per timer turn, yields to queued foreground requests and reserves conservative space before execution. It stops before evicting unread audio. Consumed history may be evicted; the UI reports the actual retained interval. A declared duration caps preparation at that duration or ten minutes; unknown-duration local files prepare at most thirty seconds ahead of the read cursor, within the ten-minute window.
 
 Load/profile and mute changes invalidate cached audio. Mute rebuilds the changed mix only to the logical cursor, not the potentially distant producer frontier. Pending seek destinations survive a concurrent mute change. Coverage events are `{event: 'cache', coverage: {epoch, startFrame, endFrame}}`; the client discards stale configuration epochs and clears the displayed range immediately on invalidation. An idle worker failure enters an explicit error state, and a terminated client rejects subsequent work immediately. Valid cached audio remains readable after a background producer failure, but uncached execution can still fail and require reloading.
+
+## Prepared timeline observations
+
+`observe` reads retained cache data without rendering, seeking, advancing either cursor or copying PCM. Its result contains the actual half-open `[start,end)` interval, sampled register frames, ordered writes and a conservative dropped-write count from intersecting source blocks. The final frame describes state immediately before `end` for drawing; it does not make that endpoint inspectable. An origin query preserves initialization writes with negative calibrated timestamps, matching the existing render contract.
+
+Each query spans at most eleven seconds and returns at most 20,000 writes and 552 register frames. If the write limit is reached, coverage ends at the first omitted timestamp and all writes at that timestamp are excluded. Missing, evicted or unprepared regions remain unavailable. The preview does not alter the cache's 32 MiB typed-storage cap; copied response objects and held UI snapshots are separate bounded memory. [The validation record](../validation/mono-poc.md#centered-timeline-spike) owns measured response sizes and timings.
+
+The player requests five seconds behind and six seconds ahead at most once per 250 ms with one request in flight, after audio scheduling work. The visible window remains five seconds each way; the extra second keeps its moving right edge inside prepared observations between refreshes. Known duration, the ten-minute local limit and an active loop's end bound the requested interval. Seek, mix changes, load, terminal errors and disposal invalidate preview data; replies must still match the active transport generation and engine. Request deadlines notify the fatal-error path even when the request came from idle background inspection. Prepared observations and heard history remain separate in the UI, including held copies; current inspection can use heard history when a dense preview ends before the heard cursor.

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { CachedSidSession } from '../src/engine/cached-session.ts';
 import { SAMPLE_RATE, SidSession } from '../src/engine/session.ts';
 import type { PlaybackOptions, RenderResult } from '../src/engine/session.ts';
+import type { TimelineObservation } from '../src/player-types.ts';
 
 const options: PlaybackOptions = { clock: 'PAL', model: 'MOS6581', subtune: 1 };
 const sample = () => new Uint8Array(readFileSync('public/generated/rambo-loader-main.sid'));
@@ -19,6 +20,199 @@ async function loaded(maxCacheBytes?: number) {
 function sameRender(actual: RenderResult, expected: RenderResult): void {
   assert.deepEqual(actual, expected);
 }
+
+test('prepared observations match continuous rendering without executing or changing the audio cache', async (context) => {
+  const { cached, oracle } = await loaded();
+  const originalRender = SidSession.prototype.render;
+  const originalSeek = SidSession.prototype.seek;
+  try {
+    assert.equal(cached.observe(0, 10), null);
+    for (let index = 0; index < 5; index++) cached.prefetch(11025);
+    const continuous = oracle.render(cached.renderedFrame);
+    const before = [cached.positionFrame, cached.renderedFrame, cached.cacheStartFrame, cached.cacheEndFrame, cached.cacheBytes];
+    SidSession.prototype.render = () => { throw new Error('observation must not render'); };
+    SidSession.prototype.seek = async () => { throw new Error('observation must not seek'); };
+    const started = performance.now();
+    const observation = cached.observe(0.173219, 1.017319);
+    const elapsed = performance.now() - started;
+    assert.ok(observation);
+    assert.equal(observation.start, 0.173219);
+    assert.equal(observation.end, 1.017319);
+    assert.deepEqual(observation.writes, continuous.writes.filter((write) => write.timeSeconds >= observation.start && write.timeSeconds < observation.end));
+    for (const frame of observation.frames) {
+      const registers = Array<number>(32).fill(0);
+      for (const write of continuous.writes) {
+        if (write.timeSeconds >= frame.time) break;
+        registers[write.address] = write.value;
+      }
+      assert.deepEqual(frame.registers, registers, `continuous register state at ${frame.time}`);
+    }
+    assert.equal(observation.frames[0].time, observation.start);
+    assert.equal(observation.frames.at(-1)!.time, observation.end);
+    assert.ok(observation.frames.every((frame, index, frames) => !index || frame.time - frames[index - 1].time <= 0.020001));
+    assert.equal('pcm' in observation, false);
+    assert.deepEqual([cached.positionFrame, cached.renderedFrame, cached.cacheStartFrame, cached.cacheEndFrame, cached.cacheBytes], before);
+    const repeated = structuredClone(observation);
+    observation.frames[0].registers[0] ^= 255;
+    observation.writes[0].value ^= 255;
+    assert.deepEqual(cached.observe(repeated.start, repeated.end), repeated, 'observers own their returned arrays');
+    context.diagnostic(`preview=${elapsed.toFixed(3)}ms; response JSON=${Buffer.byteLength(JSON.stringify(repeated))} bytes; cache=${cached.cacheBytes} bytes`);
+    SidSession.prototype.render = originalRender;
+    SidSession.prototype.seek = originalSeek;
+    sameRender(cached.render(cached.renderedFrame), continuous);
+    sameRender(cached.render(5001), oracle.render(5001));
+  } finally {
+    SidSession.prototype.render = originalRender;
+    SidSession.prototype.seek = originalSeek;
+    cached.dispose();
+    oracle.dispose();
+  }
+});
+
+test('observations advertise only retained coverage and reject invalid or oversized ranges', async () => {
+  const { cached, oracle } = await loaded(8192);
+  try {
+    assert.equal(cached.observe(0, 10), null);
+    cached.prefetch(11025);
+    const partial = cached.observe(0, 10)!;
+    assert.equal(partial.start, 0);
+    assert.equal(partial.end, cached.renderedFrame / SAMPLE_RATE);
+    assert.equal(cached.observe(partial.end, partial.end + 1), null);
+    await cached.seek(0.217319);
+    cached.render(317);
+    assert.ok(cached.cacheStartFrame > 0);
+    const retained = cached.observe(0, 1)!;
+    assert.equal(retained.start, cached.cacheStartFrame / SAMPLE_RATE);
+    assert.equal(retained.end, cached.cacheEndFrame / SAMPLE_RATE);
+    assert.equal(cached.observe(0, retained.start), null);
+    const before = [cached.positionFrame, cached.renderedFrame, cached.cacheBytes];
+    for (const [start, end] of [[-1, 1], [0, 0], [1, 0], [NaN, 1], [0, Infinity], [0, 11.001], [599, 601]]) {
+      assert.throws(() => cached.observe(start, end), /observ|range|seconds/i);
+    }
+    assert.deepEqual([cached.positionFrame, cached.renderedFrame, cached.cacheBytes], before);
+  } finally {
+    cached.dispose();
+    oracle.dispose();
+  }
+  assert.throws(() => cached.observe(0, 1), /disposed/);
+});
+
+test('dense observation responses crop coverage before omitted writes and preserve source drop warnings', async () => {
+  const { cached, oracle } = await loaded();
+  const originalRender = SidSession.prototype.render;
+  try {
+    SidSession.prototype.render = function(frames) {
+      const result = originalRender.call(this, frames);
+      const writes = Array.from({length: 25_000}, (_, index) => ({
+        timeSeconds: (index + 1) / 100_000, cyclePhi1: index, address: 0, value: index % 256, sidNumber: 0,
+      }));
+      return {...result, writes, dropped: 7};
+    };
+    cached.prefetch(11025);
+    const observation: TimelineObservation = cached.observe(0, 1)!;
+    assert.equal(observation.writes.length, 20_000);
+    assert.equal(observation.end, 0.20001);
+    assert.equal(observation.dropped, 7);
+    assert.ok(observation.writes.every((write) => write.timeSeconds < observation.end));
+    assert.ok(observation.frames.length <= 552);
+    assert.equal(observation.frames.at(-1)!.time, observation.end);
+    assert.equal(cached.renderedFrame, 11025, 'response cropping must not crop retained audio');
+  } finally {
+    SidSession.prototype.render = originalRender;
+    cached.dispose();
+    oracle.dispose();
+  }
+});
+
+test('observation endpoint state survives a non-exact PCM-frame seconds round trip', async () => {
+  const { cached, oracle } = await loaded();
+  try {
+    assert.notEqual(13 / SAMPLE_RATE * SAMPLE_RATE, 13);
+    cached.prefetch(13);
+    const continuous = oracle.render(13);
+    const observation = cached.observe(0, 1)!;
+    assert.equal(observation.end, 13 / SAMPLE_RATE);
+    assert.deepEqual(observation.frames.at(-1)!.registers, continuous.registers);
+    assert.deepEqual(observation.writes, continuous.writes, 'initial negative-time writes remain available at the origin');
+  } finally {
+    cached.dispose();
+    oracle.dispose();
+  }
+});
+
+test('centered observations accept floating-point window boundaries without relaxing the range cap', async () => {
+  const cached = await CachedSidSession.create();
+  try {
+    await cached.load(sample(), options);
+    while (cached.renderedFrame < 18 * SAMPLE_RATE) cached.prefetch(11025);
+    const position = 11.68734693877551;
+    const centeredStart = position - 5;
+    const windows = [
+      {start: 6.315827664399093, end: 16.315827664399094, duration: 10},
+      {start: centeredStart, end: Math.min(centeredStart + 10, position + 5), duration: 10},
+      {start: centeredStart, end: Math.min(centeredStart + 11, position + 6), duration: 11},
+    ];
+    for (const {start, end, duration} of windows) {
+      assert.ok(end - start > duration, 'subtraction rounds this centered window above the nominal duration');
+      const observation = cached.observe(start, end)!;
+      assert.equal(observation.start, start);
+      assert.equal(observation.end, end);
+      assert.ok(observation.frames.length <= 552);
+      assert.throws(() => cached.observe(start, start + 11.001), /range|seconds/i);
+    }
+  } finally {
+    cached.dispose();
+  }
+});
+
+test('eleven-second previews copy prepared observations without extra execution or retained storage', async (context) => {
+  const { cached, oracle } = await loaded();
+  const originalRender = SidSession.prototype.render;
+  const originalSeek = SidSession.prototype.seek;
+  try {
+    assert.equal(cached.maxCacheBytes, 32 * 1024 * 1024);
+    SidSession.prototype.render = () => { throw new Error('a cold preview must not execute the producer'); };
+    SidSession.prototype.seek = async () => { throw new Error('a cold preview must not seek the producer'); };
+    assert.equal(cached.observe(0, 11), null);
+    SidSession.prototype.render = originalRender;
+    SidSession.prototype.seek = originalSeek;
+    while (cached.renderedFrame < 12 * SAMPLE_RATE) cached.prefetch(11025);
+    const continuous = Array.from({length: 6}, () => oracle.render(2 * SAMPLE_RATE));
+    const writes = continuous.flatMap((block) => block.writes);
+    const before = [cached.positionFrame, cached.renderedFrame, cached.cacheStartFrame, cached.cacheEndFrame, cached.cacheBytes];
+    SidSession.prototype.render = () => { throw new Error('preview padding must not execute the producer'); };
+    SidSession.prototype.seek = async () => { throw new Error('preview padding must not seek the producer'); };
+    const started = performance.now();
+    const observation = cached.observe(0.173219, 11.173219)!;
+    const elapsed = performance.now() - started;
+    assert.equal(observation.start, 0.173219);
+    assert.equal(observation.end, 11.173219);
+    assert.ok(observation.frames.length <= 552);
+    assert.ok(observation.writes.length <= 20_000);
+    assert.deepEqual(observation.writes, writes.filter((write) => write.timeSeconds >= observation.start && write.timeSeconds < observation.end));
+    for (const frame of observation.frames) {
+      const registers = Array<number>(32).fill(0);
+      for (const write of writes) {
+        if (write.timeSeconds >= frame.time) break;
+        registers[write.address] = write.value;
+      }
+      assert.deepEqual(frame.registers, registers);
+    }
+    assert.equal('pcm' in observation, false);
+    assert.deepEqual([cached.positionFrame, cached.renderedFrame, cached.cacheStartFrame, cached.cacheEndFrame, cached.cacheBytes], before);
+    assert.throws(() => cached.observe(0, 11.001), /range|seconds/i);
+    context.diagnostic(`11-second preview=${elapsed.toFixed(3)}ms; writes=${observation.writes.length}; frames=${observation.frames.length}; response JSON=${Buffer.byteLength(JSON.stringify(observation))} bytes; retained cache=${cached.cacheBytes} bytes`);
+    SidSession.prototype.render = originalRender;
+    SidSession.prototype.seek = originalSeek;
+    for (const block of continuous) sameRender(cached.render(2 * SAMPLE_RATE), block);
+    sameRender(cached.render(1001), oracle.render(1001));
+  } finally {
+    SidSession.prototype.render = originalRender;
+    SidSession.prototype.seek = originalSeek;
+    cached.dispose();
+    oracle.dispose();
+  }
+});
 
 test('cached backward, repeated and non-block seeks preserve PCM, raw writes and register baselines', async () => {
   const { cached, oracle } = await loaded();
@@ -214,6 +408,18 @@ test('the default cache retains the complete cleared sample for instant late bac
       assert.ok(cached.cacheBytes <= cached.maxCacheBytes);
     }
     assert.equal(cached.cacheStartFrame, 0);
+    const bytes = cached.cacheBytes;
+    for (const start of [0, 90, 180]) {
+      const previewStarted = performance.now();
+      const observation = cached.observe(start, start + 11)!;
+      const previewMs = performance.now() - previewStarted;
+      assert.equal(observation.start, start);
+      assert.equal(observation.end, start + 11);
+      assert.ok(observation.writes.length <= 20_000);
+      assert.ok(observation.frames.length <= 552);
+      assert.equal(cached.cacheBytes, bytes);
+      context.diagnostic(`11-second preview start=${start}; ${previewMs.toFixed(3)}ms; writes=${observation.writes.length}; frames=${observation.frames.length}; response JSON=${Buffer.byteLength(JSON.stringify(observation))} bytes; retained cache=${bytes} bytes`);
+    }
     const cachedStart = performance.now();
     const position = await cached.seek(177.731234);
     const cachedMs = performance.now() - cachedStart;

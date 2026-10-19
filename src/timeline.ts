@@ -1,3 +1,5 @@
+import type { TimelineObservation } from './player-types.ts';
+
 export interface AudioSegment {
   contextStart: number;
   contextEnd: number;
@@ -34,7 +36,7 @@ export function validateLoop(loop: {start: number; end: number} | null, duration
 export const FOLLOW_WINDOW_SECONDS = 10;
 
 export function followingWindow(position: number) {
-  const start = Math.max(0, position - FOLLOW_WINDOW_SECONDS);
+  const start = position - FOLLOW_WINDOW_SECONDS / 2;
   return {start, end: start + FOLLOW_WINDOW_SECONDS};
 }
 
@@ -56,4 +58,21 @@ export function visibleTimelineFrames<T extends {time: number}>(frames: readonly
 export function fittedWindow(historyStart: number, observedUntil: number, selection?: {start: number; end: number}) {
   const start = Math.min(historyStart, selection?.start ?? historyStart);
   return {start, end: Math.max(start + FOLLOW_WINDOW_SECONDS, observedUntil, selection?.end ?? 0)};
+}
+
+export function observationRegistersAt(observation: TimelineObservation, seconds: number, includeEnd = false): number[] | null {
+  if (seconds < observation.start || seconds > observation.end || (!includeEnd && seconds === observation.end)) return null;
+  let frame;
+  for (let index = observation.frames.length - 1; index >= 0; index--) {
+    if (observation.frames[index].time <= seconds) { frame = observation.frames[index]; break; }
+  }
+  if (!frame) return null;
+  const registers = [...frame.registers];
+  for (const write of observation.writes) {
+    if (write.timeSeconds > seconds) break;
+    if (write.timeSeconds < frame.time || write.sidNumber !== 0) continue;
+    const offset = write.address >= 0xd400 ? write.address - 0xd400 : write.address;
+    if (offset >= 0 && offset < registers.length) registers[offset] = write.value;
+  }
+  return registers;
 }
