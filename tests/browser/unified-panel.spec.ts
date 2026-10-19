@@ -248,7 +248,7 @@ test('timeline seeking keeps chart and toolbar geometry stable while feedback is
   }
 });
 
-for (const fraction of [.8, .2]) test(`timeline click on the ${fraction > .5 ? 'right' : 'left'} uses normal playback motion after seeking`, async ({page}) => {
+for (const fraction of [.8, .2]) test(`timeline click on the ${fraction > .5 ? 'right' : 'left'} returns to center at a steady playback-linked speed`, async ({page}) => {
   await openPaused(page);
   await page.locator('#seek-slider').fill('30');
   const lane = page.locator('#voice-lane-0');
@@ -282,10 +282,10 @@ for (const fraction of [.8, .2]) test(`timeline click on the ${fraction > .5 ? '
   expect(frames.at(-1)!.heard).toBeGreaterThan(startHeard + Math.abs(initialOffset));
   for (const frame of frames) {
     const elapsed = frame.heard - startHeard;
-    const expectedOffset = initialOffset > 0 ? initialOffset : Math.min(0, initialOffset + elapsed);
-    expect(Math.abs(frame.heard - frame.center - expectedOffset), 'left clicks advance toward center; right clicks retain their screen position at normal scrolling speed').toBeLessThan(.03);
+    const expectedOffset = Math.sign(initialOffset) * Math.max(0, Math.abs(initialOffset) - elapsed);
+    expect(Math.abs(frame.heard - frame.center - expectedOffset), 'each second heard must close one timeline second of distance to center').toBeLessThan(.03);
   }
-  await expect(page.locator('#return-button')).toHaveAttribute('aria-pressed', initialOffset > 0 ? 'false' : 'true');
+  await expect(page.locator('#return-button')).toHaveAttribute('aria-pressed','true');
   await page.locator('#play-button').click();
   await expect(page.locator('#play-status')).toHaveText('Paused');
   const paused = await window();

@@ -811,9 +811,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       if (elapsed < 0 || timelineView === 'fit' && elapsed > 0) seekViewport = null;
       else {
         if (state?.status === 'playing' && elapsed > 0) {
-          // The normal-motion guards in tests/browser/unified-panel.spec.ts prohibit scrolling faster than heard playback after a seek.
-          if (seekViewport.heard! > seekViewport.center) seekViewport.center += elapsed;
-          else if (position >= seekViewport.center) seekViewport = null;
+          // TIMELINE-3 in docs/PLAN.md requires one second of convergence per second heard, so right-side returns temporarily scroll at twice playback speed.
+          const offset = seekViewport.heard! - seekViewport.center;
+          const remaining = Math.max(0, Math.abs(offset) - elapsed);
+          if (remaining === 0) seekViewport = null;
+          else seekViewport.center = position - Math.sign(offset) * remaining;
         }
         if (seekViewport) seekViewport.heard = position;
       }
