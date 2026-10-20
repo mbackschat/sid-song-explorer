@@ -1,6 +1,6 @@
 # Online SID library picker
 
-Research date: 2026-10-20. This record owns source comparisons, provider evidence and the limits of the integration check. [Plan item `LIBRARY-1`](../PLAN.md#online-sid-library-picker-library-1) owns the proposed interaction and completion gates. Explorer integration has not been implemented.
+Research date: 2026-10-20. This record owns source comparisons, provider evidence and the limits of the integration check. [Plan item `LIBRARY-1`](../PLAN.md#online-sid-library-picker-library-1) owns the interaction and completion gates. The [integration validation](../validation/library-picker.md) tracks the subsequently authorized Explorer implementation.
 
 ## Goal and recommendation
 
@@ -59,6 +59,6 @@ Embedding permission does not grant music rights. HVSC likewise states that the 
 
 ## Integration boundary and remaining evidence
 
-Explorer would own the dialog, a bounded message receiver, existing SID loading and credited metadata display. SIDquake continues to own discovery, search, its index and file delivery. The receiver must validate origin, sending frame, message shape, file size and current dialog lifetime before loading; provider text must remain inert text. Closing or reopening the dialog must not allow an obsolete selection to replace the current tune.
+Explorer owns the dialog, a bounded message receiver, existing SID loading and credited metadata display. SIDquake continues to own discovery, search, its index and file delivery. The receiver must validate origin, sending frame, message shape, file size and current dialog lifetime before loading; provider text must remain inert text. Closing or reopening the dialog must not allow an obsolete selection to replace the current tune.
 
-Outstanding checks are the complete Explorer flow, compatibility/error handling, cancellation and keyboard/focus behavior, narrow layout and attribution visibility, unavailable-service recovery, metadata presentation, supported Chrome/macOS WebKit behavior, and actual Safari/iPhone use. Durations or provider-selected subtunes would require a separate scope decision. No engine, cache, voice-switching or local-file privacy change is needed for this proposed feature.
+Explorer integration now has local automated evidence for loading/playback, compatibility/error handling, cancellation and keyboard/focus behavior, narrow layout and attribution, failure recovery and metadata presentation in Chrome/macOS WebKit. Actual Safari/iPhone use and the deployed origin remain unverified; the [integration record](../validation/library-picker.md) owns exact results and the cross-origin Escape limitation. Durations or provider-selected subtunes would require a separate scope decision. No engine, cache, voice-switching or local-file privacy change is needed for this feature.

@@ -61,6 +61,12 @@ h3 { font-size: 14px; font-weight: 650; }
 .library-mark small { display: block; color: #b1a8c5; font-size: 10px; margin-top: 4px; }
 .local-section { border-top: 1px solid var(--line); padding-top: 23px; }
 .file-button { display: block; text-align: center; width: 100%; }
+.library-browse { width: 100%; margin-top: 8px; }
+.library-info { margin-top: 10px; color: #b0bad3; font-size: 12px; }
+.library-info summary { cursor: pointer; color: #c2b2e1; padding: 5px 0; }
+.library-info dl { margin: 8px 0; }
+.library-info dd { margin: 3px 0 0; overflow-wrap: anywhere; }
+.library-info pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; font: inherit; }
 .file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 .file-input:focus-visible + .file-button { outline: 2px solid #82e4ed; outline-offset: 4px; }
 .privacy-note { font-size: 11px; color: #9ca8c3; line-height: 1.7; margin-top: 11px; }

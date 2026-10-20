@@ -5,7 +5,7 @@ declare global {
   interface Window {__explorerWorkerGate?: WorkerGate}
 }
 
-export async function holdWorkerRequest(page: Page, method: 'mute' | 'seek') {
+export async function holdWorkerRequest(page: Page, method: 'load' | 'mute' | 'seek') {
   await page.evaluate(method => {
     if (window.__explorerWorkerGate) throw new Error('A worker request gate is already armed');
     const gate: WorkerGate = {};
