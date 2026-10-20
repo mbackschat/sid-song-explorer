@@ -19,8 +19,8 @@ export default defineConfig({
   } : {}),
   use: {baseURL: publishedUrl ?? localUrl, viewport: {width: 1440, height: 1100}, trace: 'retain-on-failure'},
   projects: [
-    {name: 'chrome', use: {browserName: 'chromium', channel: 'chrome'}},
-    ...(process.platform === 'darwin' ? [{name: 'webkit', use: {browserName: 'webkit' as const}}] : []),
+    {name: 'chrome', ...(releaseCheck ? {grep: /@poc\b/} : {}), use: {browserName: 'chromium', channel: 'chrome'}},
+    ...(process.platform === 'darwin' ? [{name: 'webkit', ...(releaseCheck ? {grep: /@webkit-compat\b/} : {}), use: {browserName: 'webkit' as const}}] : []),
   ],
   webServer: publishedUrl ? undefined : {command: `pnpm preview --port ${port} --strictPort`, url: localUrl, reuseExistingServer: !releaseCheck && !readmeCapture && !process.env.CI, timeout: 30_000},
 });

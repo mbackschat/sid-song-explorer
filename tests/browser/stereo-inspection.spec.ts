@@ -12,7 +12,7 @@ async function loadStereo(page: Page): Promise<void> {
   await expect(page.locator('#play-button')).toBeEnabled();
 }
 
-test('dual-SID inspection and seeking retain chip ownership across responsive layout and mono replacement', async ({page}) => {
+test('dual-SID inspection and seeking retain chip ownership across responsive layout and mono replacement', {tag: '@poc'}, async ({page}) => {
   await loadStereo(page);
   await expect(page.locator('#chip-profile-badge')).toHaveText('2 SIDs · $D400 / $D420 · stereo');
   await expect(page.locator('#routing-badge')).toHaveText('Player routing · SID 1 left / SID 2 right');

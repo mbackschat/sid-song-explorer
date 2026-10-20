@@ -14,7 +14,7 @@ This file owns scope, priorities and completion. [The founding design](design/we
 | `CATALOG-1`: normalized producer/consumer | Implemented | [Pinned integration contract](integration/crafter-handoff.md#normalized-catalog-integration). |
 | `LIBRARY-1`: online SID selection | Implemented; actual Safari/iPhone review open | [Picker scope](#online-sid-library-picker-library-1), [validation](validation/library-picker.md). |
 | `COMPOSITION-1`: Rambo parts and programs | Implemented; usefulness review open | [Design](design/composition-exploration.md), [review route](validation/composition-exploration.md). |
-| Release validation | Implemented | [Candidate identity, complete preflight and publication gates](validation/mono-poc.md#release-validation); exact-commit results remain in CI. |
+| Release validation | Implemented | [Candidate identity, POC smoke/compatibility checks and publication gates](validation/mono-poc.md#release-validation); broader browser regressions run when relevant to a change. Exact-commit results remain in CI. |
 | `VOICE-1`: gapless voice switching | Deferred; existing pause-and-rebuild controls retained | [Cost decision and retained experiments](#gapless-voice-follow-up-spike). |
 | `ANALYSIS-1`: generic headless analysis | Parked; no production integration | [Retained spike](#headless-sid-analysis-spike-analysis-1). |
 | Broader catalog/profiles, stereo/Bach composition packages, deeper inspection | Unscheduled | Define bounded scope before implementation. |
@@ -54,6 +54,8 @@ The retained [native gain trial](research/seek-performance.md#bounded-live-gain-
 1. Review the Rambo composition explanation: passages, part/program selection, timeline highlights and comparison, using the [prepared review route](validation/composition-exploration.md).
 2. Review the library picker on actual Safari/iPhone, separately from accepted stereo playback, using its [validation gates](validation/library-picker.md).
 3. For each authorized release, require exact-commit CI and verify the hosted app's assets/routes. Report results through CI and the release response rather than appending them to this plan.
+
+Targeted WebKit follow-up: investigate transient upcoming-coverage loss in the dense Bach [preview regression](../tests/browser/timeline-preview.spec.ts) and the cumulative underrun assertion in the [ruler-drag regression](../tests/browser/unified-panel.spec.ts). These broader checks remain available outside the POC release selection; reducing the release scope does not resolve their failures.
 
 No additional feature is automatically scheduled by closing these gates. Generic analysis and gapless switching remain deferred.
 

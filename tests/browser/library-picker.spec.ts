@@ -240,7 +240,7 @@ test('provider loading and failures expose retry and leave local opening availab
   await expect(page.locator('#play-button')).toBeEnabled();
 });
 
-test('library search, folder and result position survive closing and selecting within the tab', async ({page}) => {
+test('library search, folder and result position survive closing and selecting within the tab', {tag: '@poc'}, async ({page}) => {
   const provider = await installLibraryProvider(page);
   await loadPausedSample(page);
   await openLibrary(page);

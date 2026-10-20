@@ -3,7 +3,7 @@ import {holdWorkerRequest} from './worker-control.ts';
 import {resolve} from 'node:path';
 
 const sample = resolve('public/generated/rambo-loader-main.sid');
-test('live audio, held inspection, mute/solo, loop replay and complete ending', async ({page}) => {
+test('live audio, held inspection, mute/solo, loop replay and complete ending', {tag: ['@poc', '@webkit-compat']}, async ({page}) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
@@ -48,7 +48,7 @@ test('live audio, held inspection, mute/solo, loop replay and complete ending', 
   await page.screenshot({path: `build/poc/${test.info().project.name}-ending.png`, fullPage: true});
 });
 
-test('local file stays local and profile changes invalidate authored annotations', async ({page, baseURL}) => {
+test('local file stays local and profile changes invalidate authored annotations', {tag: ['@poc', '@webkit-compat']}, async ({page, baseURL}) => {
   const remoteRequests: string[] = [];
   const origin = new URL(baseURL!).origin;
   page.on('request', request => {
@@ -119,7 +119,7 @@ test('voice activity follows playback at a fixed density and freezes its held wi
   await expect.poll(async () => (await range()).start).toBeGreaterThan(heldRange.start);
 });
 
-test('timeline switches between scrolling and fitted song without changing playback or held inspection', async ({page}) => {
+test('timeline switches between scrolling and fitted song without changing playback or held inspection', {tag: '@poc'}, async ({page}) => {
   await page.goto('/');
   await expect(page.locator('#timeline-scroll')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('#load-button').click();

@@ -94,7 +94,7 @@ async function installSignals(page: Page) {
   });
 }
 
-test('stereo meters, waveforms and shared spectrum retain independent channel signals', async ({page}) => {
+test('stereo meters, waveforms and shared spectrum retain independent channel signals', {tag: ['@poc', '@webkit-compat']}, async ({page}) => {
   await installSignals(page);
   await page.goto('/');
   await page.locator('#sample-select').selectOption('bach-toccata-stereo');

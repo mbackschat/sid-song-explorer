@@ -38,7 +38,7 @@ function downloadsCandidate(name: string): void {
 test('the release matrix covers every native shard with its supported browser and host', () => {
   const matrix = releaseBrowserMatrix();
   assert.equal(UNIT_SHARDS, 7);
-  assert.ok(Number.isSafeInteger(BROWSER_SHARDS) && BROWSER_SHARDS > 0);
+  assert.equal(BROWSER_SHARDS, 1, 'POC release checks need one runner per browser');
   assert.ok(BROWSER_GLOBAL_TIMEOUT_MS < 180_000);
   assert.equal(matrix.include.length, BROWSER_SHARDS * 2);
   for (const [project, os, install] of [['chrome', 'ubuntu-24.04', 'chrome'], ['webkit', 'macos-26', 'webkit']]) {
