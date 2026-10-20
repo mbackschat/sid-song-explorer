@@ -1,6 +1,6 @@
 # Headless SID analysis proposal
 
-Status: proposed product scope; the user authorized the bounded spike on 2026-10-20. The [executed spike](../validation/headless-sid-analysis-spike.md) passed its mechanical checks; usefulness review and production integration remain open. [The research](../research/sid-analysis-capabilities.md) establishes the available evidence and limitations. [The plan](../PLAN.md) owns adoption and completion.
+Status: deferred by the user on 2026-10-20 after the bounded spike. Preserve the proposal, [research](../research/sid-analysis-capabilities.md), [executed spike](../validation/headless-sid-analysis-spike.md) and implementation for possible later use. No further analysis work or Explorer integration is scheduled; resume only when the user reopens it. [The plan](../PLAN.md) owns adoption and completion.
 
 ## Purpose
 

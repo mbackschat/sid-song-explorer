@@ -181,7 +181,7 @@ Status: implemented locally following the user’s authorization on 2026-10-20. 
 
 On 2026-10-20 the user requested a proposal followed by a spike, preserving a headless analyser with UI layered on top. [The proposal](design/headless-sid-analysis.md) owns the bounded scope and review criteria; [the research](research/sid-analysis-capabilities.md) owns source evidence. The spike evaluates navigable changes, voice/chip summaries and PCM statistics using the existing session, a Node JSON runner and a thin report viewer. Production Explorer integration and broader musical inference are not yet accepted.
 
-Status: the [bounded spike is complete](validation/headless-sid-analysis-spike.md), with 23 passing guards, three real mono/stereo runs and a JSON-backed review UI. The headless/UI separation is established. Initial retrigger-heavy findings prompted one tested sustained-waveform refinement; selection remains heuristic. Human usefulness review and production integration are open. Recommend retaining the architecture and reviewing the results before adding an Explorer adapter.
+Status: deferred by the user on 2026-10-20 (“Park proposal, maybe later”). The [bounded spike is complete](validation/headless-sid-analysis-spike.md), with 23 passing guards, three real mono/stereo runs and a JSON-backed review UI. Preserve the proposal, research, implementation and evidence, including the headless/UI boundary and retrigger-selection refinement. Human usefulness review and production integration are not accepted or scheduled. Do not continue this work unless the user reopens it.
 
 ## Excluded scope
 

@@ -6,7 +6,7 @@ Date: 2026-10-20. [The proposal](../design/headless-sid-analysis.md) owns scope,
 
 The headless boundary works: a pure streaming accumulator consumes existing session observations, a Node host executes the SID and writes JSON, and a separate report viewer renders that JSON. The viewer contains no SID execution or finding-selection logic. The existing emulator, production playback and cache were not modified.
 
-Recommend retaining this architecture and advancing voice/chip summaries into a later integration proposal. The findings list is a promising review aid, not a finished “interesting passages” detector. Its first version selected repetitive retrigger writes; the bounded refinement below produced more informative waveform changes, but representative gate edges and overlapping changes on multiple voices still need product judgment. Production UI integration and human usefulness acceptance remain open.
+The spike recommendation was to retain this architecture and consider voice/chip summaries for later integration. The user subsequently deferred the proposal on 2026-10-20; no further work is scheduled. The findings list is a promising review aid, not a finished “interesting passages” detector. Its first version selected repetitive retrigger writes; the bounded refinement below produced more informative waveform changes, but representative gate edges and overlapping changes on multiple voices still need product judgment. Preserve these results without treating them as production UI or human usefulness acceptance.
 
 ## What was executed
 
@@ -48,8 +48,8 @@ Dropped writes invalidate derived register metrics rather than presenting false 
 
 An independent source review found no remaining blocking issue in numerical accounting, per-chip ownership, bounded retention, process deadlines or UI separation. Type checking passed. The report viewer's embedded JavaScript syntax and all three report payloads were checked from the terminal. Browser tools were unavailable during the attempted review; after the user requested no computer use, no further computer/browser interaction was performed. No rendered UI, Safari or human usefulness acceptance is claimed.
 
-## Review and next decision
+## Deferred decision
 
 The thin viewer is available at [localhost port 4180](http://127.0.0.1:4180/) while its local server runs. It allows selection among the three reports, inspection of finding evidence, comparison of voice/chip statistics and expansion of provenance. It does not play audio or seek Explorer. The Node JSON reports remain usable without it.
 
-Review whether the waveform changes and voice summaries help identify passages worth exploring. Recommended next scope, if accepted: expose the same report through an Explorer adapter and connect selected findings to its existing seek/inspection actions. Keep ranking improvements in the headless core and evaluate them on representative examples before describing findings as musical structure. Do not expand to note/instrument recovery, motif detection or broader format support as part of this spike.
+The user parked the proposal after reviewing the spike handoff. Keep its code, reports and evidence for possible later use; do not proceed with integration or further ranking work now. If explicitly reopened, first review whether the waveform changes and voice summaries help exploration. The retained architectural recommendation is a headless core with an Explorer adapter consuming its report, rather than moving analysis rules into the UI.
