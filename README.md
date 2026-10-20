@@ -93,14 +93,14 @@ Browser checks use Google Chrome on Linux and macOS, plus Playwright WebKit on m
 
 [SID Song Crafter](https://github.com/mbackschat/sid-song-crafter) owns composition tools, instrument programs, musical studies, sample generation and publication clearance. Explorer owns browser playback and presentation of matching evidence.
 
-Both repositories can be worked on together in one agent session, with coordinated changes and separate commits. Explorer remains independently cloneable and buildable. This POC consumes an interim pinned [catalog snapshot](config/catalog.json) with a strict versioned parser; it does not implement the future Crafter-owned normalized catalog producer. [The shared-knowledge guide](docs/integration/crafter-handoff.md) defines ownership and coordinated development, and [the POC source record](docs/integration/poc-sources.md) defines this bounded import.
+Both repositories can be worked on together in one agent session, with coordinated changes and separate commits. Explorer remains independently cloneable and buildable. The app consumes a pinned [runtime catalog](config/catalog.json) with a strict versioned parser. A Crafter-owned normalized producer and verified Explorer importer are implemented locally; [activation awaits producer publication](docs/integration/crafter-handoff.md#normalized-catalog-integration), with the current catalog preserved exactly. [The shared-knowledge guide](docs/integration/crafter-handoff.md) defines ownership and coordinated development, and [the POC source record](docs/integration/poc-sources.md) defines this bounded import.
 
 ## Documentation
 
 - [Plan](docs/PLAN.md): current scope and next development task.
 - [Playback adapter](docs/architecture/playback-adapter.md): app-base choice, engine boundary and timing limits.
 - [Mono POC validation](docs/validation/mono-poc.md): technical evidence, Safari/listening acceptance and remaining limitations.
-- [Dual-SID validation](docs/validation/stereo.md): local raw-routing implementation, execution status and outstanding stereo acceptance.
+- [Dual-SID validation](docs/validation/stereo.md): local raw-routing implementation, execution evidence and Safari/iPhone acceptance.
 - [Sample snapshot](docs/integration/poc-sources.md): pinned assets, rights and annotation scope.
 - [Founding design](docs/design/web-player-and-analyser.md): product contracts and verification gates.
 - [Application research](docs/research/web-music-explorers.md): dated comparisons and reuse alternatives.

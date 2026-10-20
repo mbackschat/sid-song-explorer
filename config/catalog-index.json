@@ -1,0 +1,548 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "https://github.com/mbackschat/sid-song-crafter",
+    "revision": "3db086b6963676ef75f34d7f77c3b67232a777fb"
+  },
+  "entries": [
+    {
+      "id": "rambo-loader-main",
+      "title": "Rambo loader — main music",
+      "description": "Martin Galway's 1985 loading music, independently reconstructed by SID Song Crafter as an editable symbolic score and computed C64 player. This main-music entry omits the Morse introduction and retains the original ending.",
+      "durationSeconds": 193.35884353741497,
+      "files": {
+        "sid": {
+          "path": "samples/rambo-loader/rambo-loader-main.sid",
+          "filename": "rambo-loader-main.sid",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "99c61d30de4a27e800d185709192de0af92e6d1f2b2350ff8b80f47d8dc4a8cc",
+          "bytes": 6580
+        },
+        "reference": {
+          "path": "samples/rambo-loader/rambo-loader-main.wav",
+          "filename": "rambo-loader-main.wav",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "4d3f3c78a89a384a14244f4ca6a36efe0022ea2f636327619ebc00be93909544",
+          "bytes": 17054294
+        },
+        "license": {
+          "path": "samples/rambo-loader/LICENSE",
+          "filename": "rambo-loader-LICENSE.txt",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "bytes": 35149
+        }
+      },
+      "target": {
+        "clock": "PAL",
+        "model": "MOS6581",
+        "sidCount": 1,
+        "baseAddress": 54272,
+        "subtune": 1,
+        "routing": "mono"
+      },
+      "rights": {
+        "license": "GPL-3.0-only",
+        "attribution": "Composed, arranged and programmed by Martin Galway, 1985; historical credit: (C) Ocean Software 1985. Galway's upstream README dated 2026-04-14 states that he acquired the music/programming rights from Infogrames. Modified version: SID Song Crafter's independent symbolic-score/computed-player reconstruction, packaged 2026-10-15, with the main-entry modification dated 2026-10-16. The combined score, SID and generated WAV are distributed under GNU GPL version 3, without warranty; separately used independently authored tools retain their MIT license.",
+        "sourcePath": "samples/rambo-loader/README.md",
+        "licensePath": "samples/rambo-loader/LICENSE"
+      },
+      "listening": {
+        "status": "Underlying characteristic phrase and natural ending accepted",
+        "scope": "On 2026-10-13 the listener heard no audible difference in the characteristic phrase and natural ending comparisons of the complete reconstruction. This is not a full-song perceptual comparison, PCM identity or hardware equivalence. The new cold-start entrance is not separately listening-reviewed. The reference WAV is a render of this reconstructed main-entry SID, not an original recording.",
+        "sourcePath": "samples/rambo-loader/README.md#main-music-demo-2026-10-16"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": [
+          {
+            "id": "restored-main-entry",
+            "startSeconds": 0,
+            "endSeconds": 0.019950294553405162,
+            "title": "Restored main entry",
+            "description": "Entry time zero corresponds to source play call 1586. The computed score and sound-program state are retained; SID envelopes, oscillators and filter history start fresh. The package records the lead starting on the next frame. This is a newly initialized performance, not a crop of the complete WAV.",
+            "evidenceLevel": "derived",
+            "voices": [
+              1,
+              2,
+              3
+            ],
+            "sourcePath": "samples/rambo-loader/README.md#main-music-demo-2026-10-16"
+          },
+          {
+            "id": "score-returns",
+            "startSeconds": 178.71473860940344,
+            "endSeconds": 179.05389361681134,
+            "title": "The score streams return",
+            "description": "Source calls 10544, 10559 and 10560 end the score streams for physical voices 2, 3 and 1. Returning from the score clears its active bit; each voice's separate sound lifetime continues to be processed. Times are rebased from source call 1586 at the declared PAL cadence.",
+            "evidenceLevel": "derived",
+            "voices": [
+              1,
+              2,
+              3
+            ],
+            "sourcePath": "docs/research/composition/rambo-preparation.md#finite-traversal-and-natural-stop"
+          },
+          {
+            "id": "sound-lifetimes",
+            "startSeconds": 179.03394332225793,
+            "endSeconds": 184.12126843337623,
+            "title": "Sound processing continues after the score",
+            "description": "Final register stores for physical voices 1, 2 and 3 occur at source calls 10660, 10799 and 10814; the source stops producing SID stores from call 10815. The lifetime path can continue pitch and pulse motion after score return. These execution facts do not measure the audible release or prove an isolated stem.",
+            "evidenceLevel": "derived",
+            "voices": [
+              1,
+              2,
+              3
+            ],
+            "sourcePath": "docs/research/composition/rambo-preparation.md#ongoing-sound-lifetime-and-programmed-motion"
+          }
+        ],
+        "sidSha256": "99c61d30de4a27e800d185709192de0af92e6d1f2b2350ff8b80f47d8dc4a8cc"
+      },
+      "stereo": {
+        "sid": {
+          "path": "samples/rambo-stereo/rambo-stereo-main.sid",
+          "filename": "rambo-stereo-main.sid",
+          "transport": "raw",
+          "delivery": "link-only",
+          "sha256": "0998646302f2f89090976b0d2cfee6b141885f378c10242c3a009ce5741d3727",
+          "bytes": 17937
+        },
+        "reference": {
+          "path": "samples/rambo-stereo/rambo-stereo-main.wav",
+          "filename": "rambo-stereo-main.wav",
+          "transport": "raw",
+          "delivery": "link-only",
+          "sha256": "496aee23cca4b8aaaac9cf0f92ec333ac8509f5dd97469accbfd707feda46950",
+          "bytes": 34108544
+        }
+      },
+      "publication": "cleared"
+    },
+    {
+      "id": "bach-toccata",
+      "title": "Bach Toccata — complete Toccata section",
+      "description": "J. S. Bach’s BWV 565 Toccata, reduced to three SID voices with moving pulse instruments and driven organ phrasing; ends before the Fugue.",
+      "durationSeconds": 88.12292517006803,
+      "files": {
+        "sid": {
+          "path": "samples/bach-toccata/bach-toccata.sid",
+          "filename": "bach-toccata.sid",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "2578a1b96eb0338a50c6b926f60c806f79e9567b8a933274763d46fb0f17e761",
+          "bytes": 8898
+        },
+        "reference": {
+          "path": "samples/bach-toccata/bach-toccata.wav",
+          "filename": "bach-toccata.wav",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "86e10f2cfe1341eb60d27f03e071dffb34181666bd605353378d5b48e0523b89",
+          "bytes": 7772486
+        },
+        "license": {
+          "path": "LICENSE",
+          "filename": "bach-toccata-LICENSE.txt",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "11890fae1065b64e4f3a65e82ac5c20f29407325a1ed5b48ad7c252b8acec062",
+          "bytes": 1073
+        },
+        "notices": {
+          "path": "THIRD_PARTY_NOTICES.md",
+          "filename": "bach-toccata-THIRD-PARTY-NOTICES.md",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "ba3e3c7edfc5b6d5ee1245f870211805427f8cbafbe20babbd4a9dc887d4816a",
+          "bytes": 16043
+        }
+      },
+      "stereo": {
+        "sid": {
+          "path": "samples/bach-toccata/bach-toccata-stereo.sid",
+          "filename": "bach-toccata-stereo.sid",
+          "transport": "raw",
+          "delivery": "link-only",
+          "sha256": "96ba9684c3eea789bab1262bfd233ec87666791d40e8d8ccf8aaeb7a9e151bc4",
+          "bytes": 9602
+        },
+        "reference": {
+          "path": "samples/bach-toccata/bach-toccata-stereo.wav",
+          "filename": "bach-toccata-stereo.wav",
+          "transport": "raw",
+          "delivery": "link-only",
+          "sha256": "51796c32439bf93c20d0aa85fcb91e76cdf3e4150bcbe4beb6370ce9953a835c",
+          "bytes": 15544928
+        }
+      },
+      "target": {
+        "clock": "PAL",
+        "model": "MOS8580",
+        "sidCount": 1,
+        "baseAddress": 54272,
+        "subtune": 1,
+        "routing": "mono"
+      },
+      "rights": {
+        "license": "MIT; separate SID-Wizard player declaration",
+        "attribution": "J. S. Bach, BWV 565, public-domain composition. Anonymous Mutopia 1780 typesetting from Bach-Gesellschaft Ausgabe (1867), dedicated to the public domain. Original SID arrangement, patches and generated performance: SID Song Crafter, Copyright (c) 2026 Martin Backschat, MIT to the extent the project holds rights. Embedded SID-Wizard 1.97 player by Hermit Software / Mihaly Horvath, with help from Soci of Singular Crew, retains the upstream WTF-licensed declaration reproduced in the accompanying third-party notices; no formal SPDX identifier is inferred.",
+        "sourcePath": "samples/bach-toccata/README.md",
+        "licensePath": "LICENSE"
+      },
+      "listening": {
+        "status": "Accepted complete mono interpretation",
+        "scope": "Accepted on 2026-10-14: source quarter positions 0–118, measures 1–29 and measure 30 beats 1–2, ending before the Fugue. The 88.12292517006803-second file includes release and verification silence. The WAV is the retained generated SID performance, not an organ recording.",
+        "sourcePath": "samples/bach-toccata/manifest.json"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": [],
+        "sidSha256": "2578a1b96eb0338a50c6b926f60c806f79e9567b8a933274763d46fb0f17e761"
+      },
+      "publication": "cleared"
+    },
+    {
+      "id": "mozart-minuet",
+      "title": "Mozart Minuet and Trio — K. 525, movement III",
+      "description": "Complete Menuetto and Trio from Eine kleine Nachtmusik: a lively PAL three-voice reduction retaining the written repeats and Menuetto return.",
+      "durationSeconds": 146.37780045351474,
+      "files": {
+        "sid": {
+          "path": "samples/mozart-minuet/mozart-minuet-mono.sid",
+          "filename": "mozart-minuet-mono.sid",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "d86258302ae42fbed806103892439eea307a7cad30dd47181d065aa3bfc41bb6",
+          "bytes": 6639
+        },
+        "reference": {
+          "path": "samples/mozart-minuet/mozart-minuet-mono.wav",
+          "filename": "mozart-minuet-mono.wav",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "2809f404df4361177b62467103f2d1bc6a9c859425792a75a50564788e7359bf",
+          "bytes": 12910566
+        },
+        "license": {
+          "path": "LICENSE",
+          "filename": "mozart-minuet-LICENSE.txt",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "11890fae1065b64e4f3a65e82ac5c20f29407325a1ed5b48ad7c252b8acec062",
+          "bytes": 1073
+        },
+        "notices": {
+          "path": "THIRD_PARTY_NOTICES.md",
+          "filename": "mozart-minuet-THIRD-PARTY-NOTICES.md",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "ba3e3c7edfc5b6d5ee1245f870211805427f8cbafbe20babbd4a9dc887d4816a",
+          "bytes": 16043
+        }
+      },
+      "stereo": {
+        "sid": {
+          "path": "samples/mozart-minuet/mozart-minuet-stereo.sid",
+          "filename": "mozart-minuet-stereo.sid",
+          "transport": "raw",
+          "delivery": "link-only",
+          "sha256": "a81428916de8dfa2c055998927b98d3382dc6f1b8112d2a87d8b0aead1b1f6fa",
+          "bytes": 8659
+        },
+        "reference": {
+          "path": "samples/mozart-minuet/mozart-minuet-stereo.wav",
+          "filename": "mozart-minuet-stereo.wav",
+          "transport": "raw",
+          "delivery": "link-only",
+          "sha256": "339bf260000597357c37cbd96273ca66e7009cfc371ab3340fea832dfda2dda4",
+          "bytes": 25821088
+        }
+      },
+      "target": {
+        "clock": "PAL",
+        "model": "MOS8580",
+        "sidCount": 1,
+        "baseAddress": 54272,
+        "subtune": 1,
+        "routing": "mono"
+      },
+      "rights": {
+        "license": "MIT; separate SID-Wizard player declaration",
+        "attribution": "W. A. Mozart, Eine kleine Nachtmusik, K. 525, movement III, public-domain composition. Mike Blackstock’s Mutopia 2230 typesetting from Breitkopf & Härtel (1883), dedicated to the public domain. Project arrangement, configuration and tools: Copyright (c) 2026 Martin Backschat, MIT to the extent the project holds rights. Embedded SID-Wizard 1.97 player by Hermit Software / Mihaly Horvath, with help from Soci of Singular Crew, retains the upstream WTF-licensed declaration reproduced in the accompanying third-party notices; no formal SPDX identifier is inferred.",
+        "sourcePath": "samples/mozart-minuet/README.md",
+        "licensePath": "LICENSE"
+      },
+      "listening": {
+        "status": "Accepted complete PAL mono rendition and ending",
+        "scope": "Complete PAL MOS8580 single-SID and dual-SID performances, stereo Trio richness and space, and ending accepted. NTSC has technical validation only. The matching WAV is the accepted complete mono SID render, not an orchestral recording.",
+        "sourcePath": "samples/mozart-minuet/manifest.json"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": [],
+        "sidSha256": "d86258302ae42fbed806103892439eea307a7cad30dd47181d065aa3bfc41bb6"
+      },
+      "publication": "cleared"
+    },
+    {
+      "id": "instrument-mix",
+      "title": "Original instrument mix — three-part demo",
+      "description": "Original 10-second SID Song Crafter phrase combining a moving-pulse lead, pluck and bass; a short three-voice instrument demonstration.",
+      "durationSeconds": 10.0,
+      "files": {
+        "sid": {
+          "path": "samples/instrument-mix/instrument-mix.sid",
+          "filename": "instrument-mix.sid",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "911ea1f5f780de971ceb28dbbe7fcafaa27dc680d1182bfa367c78ff28454bc1",
+          "bytes": 3365
+        },
+        "reference": {
+          "path": "samples/instrument-mix/instrument-mix.wav",
+          "filename": "instrument-mix.wav",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "730940dae1ebdd0d722f0f14b0031390058de2b499e1d848306b1ae161fb8f48",
+          "bytes": 882044
+        },
+        "license": {
+          "path": "LICENSE",
+          "filename": "instrument-mix-LICENSE.txt",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "11890fae1065b64e4f3a65e82ac5c20f29407325a1ed5b48ad7c252b8acec062",
+          "bytes": 1073
+        },
+        "notices": {
+          "path": "THIRD_PARTY_NOTICES.md",
+          "filename": "instrument-mix-THIRD-PARTY-NOTICES.md",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "ba3e3c7edfc5b6d5ee1245f870211805427f8cbafbe20babbd4a9dc887d4816a",
+          "bytes": 16043
+        }
+      },
+      "stereo": {
+        "sid": {
+          "path": "samples/instrument-mix/instrument-mix-stereo.sid",
+          "filename": "instrument-mix-stereo.sid",
+          "transport": "raw",
+          "delivery": "link-only",
+          "sha256": "6de38d8bbf5bf8e7fcdc1ec01b2b6c0c9d30e4f37721a66ec4fc64d175afb65b",
+          "bytes": 4049
+        },
+        "reference": {
+          "path": "samples/instrument-mix/instrument-mix-stereo.wav",
+          "filename": "instrument-mix-stereo.wav",
+          "transport": "raw",
+          "delivery": "link-only",
+          "sha256": "0d392beeae19da609097bd9ec93fd91043fa588b6525cf8d42968ec7ea786f3c",
+          "bytes": 1764044
+        }
+      },
+      "target": {
+        "clock": "PAL",
+        "model": "MOS8580",
+        "sidCount": 1,
+        "baseAddress": 54272,
+        "subtune": 1,
+        "routing": "mono"
+      },
+      "rights": {
+        "license": "MIT; separate SID-Wizard player declaration",
+        "attribution": "Original SID Song Crafter short phrase and patches, designed 2026-10-12; no example instrument or tune bytes copied. Copyright (c) 2026 Martin Backschat, MIT to the extent the project holds rights. Embedded SID-Wizard 1.97 player by Hermit Software / Mihaly Horvath, with help from Soci of Singular Crew, retains the upstream WTF-licensed declaration reproduced in the accompanying third-party notices; no formal SPDX identifier is inferred.",
+        "sourcePath": "samples/instrument-mix/README.md",
+        "licensePath": "LICENSE"
+      },
+      "listening": {
+        "status": "Initial mix-level acceptance",
+        "scope": "On 2026-10-12 the listener said “mix sounds ok” for the candidate three-voice mix. No hardware, editor/export or individual-instrument acceptance is inferred. The matching WAV is the generated mono SID performance.",
+        "sourcePath": "samples/instrument-mix/manifest.json"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": [],
+        "sidSha256": "911ea1f5f780de971ceb28dbbe7fcafaa27dc680d1182bfa367c78ff28454bc1"
+      },
+      "publication": "cleared"
+    },
+    {
+      "id": "rambo-stereo-main",
+      "title": "Rambo loader — main music, stereo",
+      "description": "Martin Galway's loading music in SID Song Crafter's centered-lead two-SID arrangement, with independent accompaniment on each chip. The main entry omits the original introduction and retains the ending; SID A goes left and SID B goes right.",
+      "durationSeconds": 193.35884353741497,
+      "files": {
+        "sid": {
+          "path": "samples/rambo-stereo/rambo-stereo-main.sid",
+          "filename": "rambo-stereo-main.sid",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "0998646302f2f89090976b0d2cfee6b141885f378c10242c3a009ce5741d3727",
+          "bytes": 17937
+        },
+        "license": {
+          "path": "samples/rambo-stereo/LICENSE",
+          "filename": "rambo-stereo-LICENSE.txt",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "bytes": 35149
+        }
+      },
+      "target": {
+        "clock": "PAL",
+        "model": "MOS6581",
+        "sidCount": 2,
+        "baseAddress": 54272,
+        "secondSidAddress": 54304,
+        "subtune": 1,
+        "routing": "sid-a-left-sid-b-right"
+      },
+      "rights": {
+        "license": "GPL-3.0-only",
+        "attribution": "Composed, arranged and programmed by Martin Galway, 1985; historical credit: (C) Ocean Software 1985. Galway's upstream README dated 2026-04-14 states that he acquired the music/programming rights from Infogrames. Modified version: SID Song Crafter's independent symbolic score and computed two-SID player, packaged 2026-10-15, with source-derived held harmony, a duplicated native lead and bounded sync/ring modulator handoffs; the main-entry modification is dated 2026-10-16. The combined score, SID and generated WAV are distributed under GNU GPL version 3, without warranty; separately used independently authored tools retain their MIT license.",
+        "sourcePath": "samples/rambo-stereo/README.md",
+        "licensePath": "samples/rambo-stereo/LICENSE"
+      },
+      "listening": {
+        "status": "Main-entry stereo release accepted on 2026-10-16; complete arrangement verdict retained",
+        "scope": "On 2026-10-16 the listener accepted the presented trimmed Rambo stereo WAV alongside the complete Bach Toccata stereo WAV. This main-entry release has fresh SID envelopes, oscillators and filter history and is not promised to match a crop of the complete render. The reference is the generated two-SID performance; this source verdict does not establish Explorer or hardware playback acceptance.",
+        "sourcePath": "samples/rambo-stereo/main-manifest.json"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": [],
+        "sidSha256": "0998646302f2f89090976b0d2cfee6b141885f378c10242c3a009ce5741d3727"
+      },
+      "publication": "cleared",
+      "externalReference": {
+        "path": "samples/rambo-stereo/rambo-stereo-main.wav",
+        "filename": "rambo-stereo-main.wav",
+        "transport": "raw",
+        "delivery": "link-only",
+        "sha256": "496aee23cca4b8aaaac9cf0f92ec333ac8509f5dd97469accbfd707feda46950",
+        "bytes": 34108544
+      }
+    },
+    {
+      "id": "bach-toccata-stereo",
+      "title": "Bach Toccata — complete Toccata section, stereo",
+      "description": "The complete BWV 565 Toccata section redistributed across two SID chips: the melody is duplicated at center, bass goes left and harmony goes right. Notes, instruments and timing retain the mono arrangement; SID A goes left and SID B goes right.",
+      "durationSeconds": 88.12292517006803,
+      "files": {
+        "sid": {
+          "path": "samples/bach-toccata/bach-toccata-stereo.sid",
+          "filename": "bach-toccata-stereo.sid",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "96ba9684c3eea789bab1262bfd233ec87666791d40e8d8ccf8aaeb7a9e151bc4",
+          "bytes": 9602
+        },
+        "reference": {
+          "path": "samples/bach-toccata/bach-toccata-stereo.wav",
+          "filename": "bach-toccata-stereo.wav",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "51796c32439bf93c20d0aa85fcb91e76cdf3e4150bcbe4beb6370ce9953a835c",
+          "bytes": 15544928
+        },
+        "license": {
+          "path": "LICENSE",
+          "filename": "bach-toccata-stereo-LICENSE.txt",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "11890fae1065b64e4f3a65e82ac5c20f29407325a1ed5b48ad7c252b8acec062",
+          "bytes": 1073
+        },
+        "notices": {
+          "path": "THIRD_PARTY_NOTICES.md",
+          "filename": "bach-toccata-stereo-THIRD-PARTY-NOTICES.md",
+          "transport": "raw",
+          "delivery": "prepared",
+          "sha256": "ba3e3c7edfc5b6d5ee1245f870211805427f8cbafbe20babbd4a9dc887d4816a",
+          "bytes": 16043
+        }
+      },
+      "target": {
+        "clock": "PAL",
+        "model": "MOS8580",
+        "sidCount": 2,
+        "baseAddress": 54272,
+        "secondSidAddress": 54304,
+        "subtune": 1,
+        "routing": "sid-a-left-sid-b-right"
+      },
+      "rights": {
+        "license": "MIT; separate SID-Wizard player declaration",
+        "attribution": "J. S. Bach, BWV 565, public-domain composition. Anonymous Mutopia 1780 typesetting from Bach-Gesellschaft Ausgabe (1867), dedicated to the public domain. Original SID arrangement, patches and generated performance: SID Song Crafter, Copyright (c) 2026 Martin Backschat, MIT to the extent the project holds rights. Embedded SID-Wizard 1.97 player by Hermit Software / Mihaly Horvath, with help from Soci of Singular Crew, retains the upstream WTF-licensed declaration reproduced in the accompanying third-party notices; no formal SPDX identifier is inferred.",
+        "sourcePath": "samples/bach-toccata/README.md",
+        "licensePath": "LICENSE"
+      },
+      "listening": {
+        "status": "Stereo presentation accepted on 2026-10-16; mono verdict retained",
+        "scope": "On 2026-10-16 the listener accepted the presented complete Bach Toccata stereo WAV alongside the trimmed Rambo stereo WAV. The matching WAV is rendered directly from the two-SID file at unity gain and is not duplicated mono audio or an organ recording. This source verdict does not establish Explorer or hardware playback acceptance.",
+        "sourcePath": "samples/bach-toccata/stereo-manifest.json"
+      },
+      "analysis": {
+        "schemaVersion": 1,
+        "subtune": 1,
+        "clock": "PAL",
+        "timeBasis": "seconds-from-init",
+        "annotations": [],
+        "sidSha256": "96ba9684c3eea789bab1262bfd233ec87666791d40e8d8ccf8aaeb7a9e151bc4"
+      },
+      "publication": "cleared"
+    }
+  ],
+  "materials": [
+    {
+      "id": "moon-river",
+      "title": "Moon River",
+      "description": "Local mono/stereo builds; accepted first statement and stereo placement/balance. SID/WAV redistribution rights remain unresolved.",
+      "sourcePath": "samples/moon-river/README.md",
+      "publication": "materials-only"
+    },
+    {
+      "id": "pink-panther",
+      "title": "Pink Panther",
+      "description": "Local mono/stereo builds; accepted complete arrangement and stereo placement/balance. SID/WAV redistribution rights remain unresolved.",
+      "sourcePath": "samples/pink-panther/README.md",
+      "publication": "materials-only"
+    },
+    {
+      "id": "axel-f",
+      "title": "Axel F",
+      "description": "Local mono build; accepted complete performance with the selected shorter ending. No completed stereo rendition; SID/WAV redistribution rights remain unresolved.",
+      "sourcePath": "songs/axel-f/README.md",
+      "publication": "materials-only"
+    },
+    {
+      "id": "ghostbusters",
+      "title": "Ghostbusters",
+      "description": "Local native title with speech and selected stereo version; the stereo accompaniment reservation remains. SID/WAV redistribution rights remain unresolved.",
+      "sourcePath": "songs/studies/ghostbusters-stereo/README.md",
+      "publication": "materials-only"
+    }
+  ]
+}

@@ -9,6 +9,7 @@
     "node": ">=24.12"
   },
   "scripts": {
+    "catalog:check": "node --experimental-strip-types scripts/import-catalog.ts --pin config/catalog-pin.json --index config/catalog-index.json --output config/catalog.json --check",
     "prepare:samples": "node --experimental-strip-types scripts/prepare-samples.ts",
     "prepare:engine": "python3 scripts/experiments/stereo/run.py prepare && python3 scripts/experiments/stereo/run.py red && python3 scripts/experiments/stereo/run.py toolchain && python3 scripts/experiments/stereo/run.py build && python3 scripts/experiments/stereo/run.py verify",
     "dev": "vite --host 127.0.0.1",

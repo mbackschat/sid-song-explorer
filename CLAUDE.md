@@ -51,7 +51,7 @@ Keep source inspection, executed behavior, rendered audio and human listening ve
 
 Preserve each chip's shared filter, mono output and ring/sync dependencies. Muting is a labelled intervention, not a guaranteed isolated stem. State-preserving seeking includes CPU, oscillator, envelope and filter history. The design owns detailed contracts and the required stereo/Safari gates.
 
-Local SID opening must remain device-local, including file hashes and metadata lookup. Publish only material with recorded composition, arrangement and player rights. Never commit reference SIDs, private audio, ROMs, secrets or downloaded engines. Hashes and public URLs do not grant rights. Prepare cleared catalog files with verified hashes into ignored deployment assets; [the POC snapshot](docs/integration/poc-sources.md) records the bounded import and does not replace Crafter's future producer.
+Local SID opening must remain device-local, including file hashes and metadata lookup. Publish only material with recorded composition, arrangement and player rights. Never commit reference SIDs, private audio, ROMs, secrets or downloaded engines. Hashes and public URLs do not grant rights. Prepare cleared catalog files with verified hashes into ignored deployment assets; [the POC snapshot](docs/integration/poc-sources.md) records source provenance; [the catalog integration](docs/integration/crafter-handoff.md#normalized-catalog-integration) owns its migration to Crafter's producer.
 
 Original work is GPL-3.0-or-later; retain MIT notices for transferred documentation. The POC adopts `libsidplayfp-wasm` 1.1.0 under GPL-2.0-or-later and its SIDLite build. Run asset preparation before a distribution build so the engine license, third-party notices, modifications and complete source accompany it. [Third-party notices](THIRD_PARTY_NOTICES.md) owns the adopted terms; research observations about other candidates do not authorize their reuse.
 
@@ -63,6 +63,7 @@ The application uses TypeScript 5.9.3, Vite 7.3.1 and `libsidplayfp-wasm` 1.1.0/
 | --- | --- | --- |
 | Install pinned dependencies | `pnpm install --frozen-lockfile` | Standalone lockfile installation; no sibling source dependency. |
 | Build the raw-chip engine | `pnpm prepare:engine` | Pinned source build and real-WASM raw routing/mono equality gate; bounded stages and retained logs in ignored `build/stereo-gate/`. |
+| Verify the catalog migration candidate | `pnpm catalog:check` | Pinned index bytes and unchanged runtime catalog; [activation gate](docs/integration/crafter-handoff.md#normalized-catalog-integration). |
 | Prepare deployment assets | `pnpm prepare:assets` | Verified sample files and verified custom engine/runtime/license/notices/modifications/complete source in ignored `public/generated/`. |
 | Start development | `pnpm dev` | Local Vite application; playback requires user interaction. |
 | Check focused software behavior | `pnpm test` | Catalog, engine and timeline guards; no human listening verdict. |

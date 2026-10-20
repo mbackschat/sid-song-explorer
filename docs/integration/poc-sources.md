@@ -2,7 +2,7 @@
 
 [The POC catalog](../../config/catalog.json) is a bounded, manually assembled consumer snapshot of SID Song Crafter at public revision [`3db086b6963676ef75f34d7f77c3b67232a777fb`](https://github.com/mbackschat/sid-song-crafter/tree/3db086b6963676ef75f34d7f77c3b67232a777fb). Rambo mono main music remains the default. The bounded 2026-10-20 `STEREO-1` addition retains the mono entries and adds active Rambo main-music and Bach Toccata stereo targets at the same revision; the tables below own their exact files and listening scopes. Source and catalog verification of these additions does not establish browser stereo playback or complete the dual-SID adoption gate. Other stereo versions remain pinned external downloads, while uncleared titles expose materials only.
 
-The app requires no sibling checkout. This snapshot is not the normalized Crafter-owned catalog producer described by [the handoff](crafter-handoff.md); that producer and its final shared schema remain separate work. Crafter retains authority for the score, rights, evidence, musical interpretation and listening verdicts. Advance the snapshot deliberately against its pinned owners rather than inferring a new canonical producer contract from this POC.
+The app requires no sibling checkout. The [normalized producer/consumer migration](crafter-handoff.md#normalized-catalog-integration) is implemented as an unpublished candidate and preserves this snapshot exactly; activation awaits public availability of the pinned producer. Crafter retains authority for the score, rights, evidence, musical interpretation and listening verdicts. Advance the snapshot deliberately against its pinned owners rather than inferring a new canonical producer contract from this POC.
 
 ## Prepare and verify the samples
 
