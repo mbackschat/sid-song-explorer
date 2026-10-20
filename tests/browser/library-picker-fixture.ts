@@ -25,6 +25,9 @@ function providerHtml(parentOrigin: string, autoReady: boolean): string {
   }).replaceAll('<', '\\u003c');
   return `<!doctype html><html><head><title>Deterministic SID picker provider</title></head><body>
     <p>Provider contract fixture · <a href="https://sidquake.c64demo.com/">SIDquake / HVSC</a></p>
+    <label>Search <input id="fixture-search"></label>
+    <label>Folder <select id="fixture-folder"><option>HVSC</option><option>MUSICIANS/H</option></select></label>
+    <div id="fixture-results" style="height:80px;overflow:auto"><div style="height:1000px">Library results</div></div>
     <button data-choice="valid" disabled>Choose valid SID</button>
     <button data-choice="missing-metadata" disabled>Choose SID without metadata</button>
     <button data-choice="malformed" disabled>Send malformed selection</button>
@@ -126,12 +129,11 @@ async function waitForFixture(frame: Frame): Promise<void> {
   await frame.waitForFunction(() => typeof (window as unknown as FixtureWindow).libraryFixtureChoose === 'function');
 }
 
-export async function reopenBeforeQueuedSelection(page: Page): Promise<void> {
-  // LIBRARY-1 rejects a queued selection from a superseded frame; capture advances the lifecycle before app delivery.
+export async function reloadBeforeQueuedSelection(page: Page): Promise<void> {
+  // Capture replaces the frame before delivery to test a genuinely discarded sender.
   await page.evaluate(() => {
     (window as unknown as FixtureWindow).libraryFixtureBeforeSelection = () => {
-      document.querySelector<HTMLButtonElement>('[aria-label="Close library browser"]')!.click();
-      document.querySelector<HTMLButtonElement>('#browse-library')!.click();
+      document.querySelector<HTMLButtonElement>('#library-retry')!.click();
     };
   });
 }

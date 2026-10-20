@@ -95,7 +95,7 @@ function setup(t: TestContext) {
   const selected: LibrarySelection[] = [];
   const picker = mountLibraryPicker(container as unknown as HTMLElement, trigger as unknown as HTMLButtonElement, value => {
     assert.equal(dialog().open, false);
-    assert.equal(frame(), undefined);
+    assert.notEqual(frame(), undefined);
     selected.push(value);
   });
   t.after(() => picker.dispose());
@@ -132,9 +132,10 @@ test('the dialog lazily opens one file-mode provider frame with its own playback
   assert.equal(frame.getAttribute('allow'), "autoplay 'none'");
 });
 
-test('a valid file handoff closes and removes the frame before returning bytes and inert metadata', t => {
+test('a valid file handoff hides the retained frame before returning bytes and inert metadata', t => {
   const fixture = setup(t);
   fixture.open();
+  const frame = fixture.frame();
   fixture.send({type: 'hvsc:ready', mode: 'file'});
   const message = selection({title: '<img src=x onerror=alert(1)>', author: '<script>example</script>'});
   fixture.send(message);
@@ -146,6 +147,9 @@ test('a valid file handoff closes and removes the frame before returning bytes a
   assert.equal('url' in fixture.selected[0], false);
   assert.equal(fixture.document.activeElement, fixture.trigger);
   assert.equal(find(fixture.container, element => element.tagName === 'img'), undefined);
+  fixture.open();
+  assert.equal(fixture.frame(), frame);
+  assert.match(fixture.byId('library-status')?.textContent ?? '', /search|select|choose/i);
 });
 
 test('untrusted origins and unrelated windows cannot alter or complete the active picker', t => {
@@ -202,6 +206,10 @@ test('missing optional metadata becomes empty and the receiver leaves RSID profi
   assert.equal(fixture.selected[0].bytes.length, 65_662);
   assert.equal(String.fromCharCode(...fixture.selected[0].bytes.slice(0, 4)), 'RSID');
   for (const field of ['title', 'author', 'released', 'stil'] as const) assert.equal(fixture.selected[0][field], '');
+  const frame = fixture.frame();
+  t.mock.timers.tick(20_000);
+  fixture.open();
+  assert.equal(fixture.frame(), frame);
 });
 
 test('provider readiness cancels the bounded startup deadline', t => {
@@ -226,15 +234,24 @@ test('a startup timeout removes the pending frame and exposes retry without load
   assert.equal(fixture.byId('library-retry')?.hidden, false);
 });
 
-test('provider errors discard token-bearing diagnostics and retry rejects the old frame', t => {
+test('selection errors preserve provider state and discard token-bearing diagnostics until an explicit reload', t => {
   const fixture = setup(t);
   fixture.open();
-  const oldWindow = fixture.frame()!.contentWindow;
+  fixture.send({type: 'hvsc:ready', mode: 'file'});
+  const oldFrame = fixture.frame()!;
+  const oldWindow = oldFrame.contentWindow;
   fixture.send({type: 'hvsc:error', message: 'Fetch failed: https://example.test?token=private'});
-  assert.equal(fixture.frame(), undefined);
+  assert.equal(fixture.frame(), oldFrame);
   assert.equal(fixture.byId('library-status')?.textContent.includes('private'), false);
+  assert.equal(fixture.byId('library-retry')?.hidden, false);
+  assert.equal(fixture.byId('library-retry')?.textContent, 'Reload library');
+  fixture.picker.close();
+  fixture.open();
+  assert.equal(fixture.frame(), oldFrame);
+  assert.equal(fixture.byId('library-retry')?.hidden, false);
   fixture.click(fixture.byId('library-retry')!);
   assert.notEqual(fixture.frame()!.contentWindow, oldWindow);
+  assert.equal(oldFrame.parentElement, null);
   fixture.send(selection(), oldWindow);
   assert.equal(fixture.selected.length, 0);
   fixture.send(selection());
@@ -252,20 +269,25 @@ test('iframe load errors stop the current load and leave a closable retry state'
   assert.equal(fixture.document.activeElement, fixture.trigger);
 });
 
-test('cancel and reopening reject stale selections and a queued old close event', t => {
+test('cancel and reopening retain one provider window despite queued native close events', t => {
   const fixture = setup(t);
   fixture.open();
-  const oldWindow = fixture.frame()!.contentWindow;
+  const frame = fixture.frame()!;
   fixture.dialog().dispatchEvent(new Event('cancel', {cancelable: true}));
   assert.equal(fixture.dialog().open, false);
-  assert.equal(fixture.frame(), undefined);
+  assert.equal(fixture.frame(), frame);
   assert.equal(fixture.document.activeElement, fixture.trigger);
-  fixture.open();
-  const newFrame = fixture.frame();
-  fixture.dialog().dispatchEvent(new Event('close'));
-  fixture.send(selection(), oldWindow);
+  fixture.send(selection());
   assert.equal(fixture.selected.length, 0);
-  assert.equal(fixture.frame(), newFrame);
+  fixture.dialog().dispatchEvent(new Event('close'));
+  assert.equal(fixture.frame(), frame);
+  fixture.open();
+  assert.equal(fixture.frame(), frame);
+  fixture.dialog().dispatchEvent(new Event('close'));
+  assert.equal(fixture.selected.length, 0);
+  assert.equal(fixture.dialog().open, true);
+  assert.equal(fixture.frame(), frame);
+  assert.equal(fixture.document.activeElement?.getAttribute('aria-label'), 'Close library browser');
   fixture.send(selection());
   assert.equal(fixture.selected.length, 1);
 });
@@ -276,11 +298,14 @@ test('the labelled close button closes without selecting and disposal unregister
   const close = find(fixture.container, element => element.getAttribute('aria-label') === 'Close library browser')!;
   fixture.click(close);
   assert.equal(fixture.dialog().open, false);
-  assert.equal(fixture.frame(), undefined);
+  const retainedFrame = fixture.frame()!;
+  assert.notEqual(retainedFrame, undefined);
   assert.equal(fixture.selected.length, 0);
   fixture.open();
+  assert.equal(fixture.frame(), retainedFrame);
   const oldWindow = fixture.frame()!.contentWindow;
   fixture.picker.dispose();
+  assert.equal(retainedFrame.parentElement, null);
   fixture.open();
   fixture.send(selection(), oldWindow);
   t.mock.timers.tick(20_000);
@@ -289,15 +314,80 @@ test('the labelled close button closes without selecting and disposal unregister
   fixture.picker.dispose();
 });
 
-test('a closed picker ignores a queued retry and cancelling its deadline preserves the next session', t => {
+test('a closed picker ignores a queued reload and reopening does not extend the startup deadline', t => {
   const fixture = setup(t);
   fixture.open();
+  const frame = fixture.frame();
   t.mock.timers.tick(19_999);
   fixture.picker.close();
   fixture.click(fixture.byId('library-retry')!);
-  assert.equal(fixture.frame(), undefined);
+  assert.equal(fixture.frame(), frame);
   fixture.open();
-  const newFrame = fixture.frame();
+  assert.equal(fixture.frame(), frame);
   t.mock.timers.tick(1);
-  assert.equal(fixture.frame(), newFrame);
+  assert.equal(fixture.frame(), undefined);
+  assert.equal(fixture.byId('library-retry')?.hidden, false);
+});
+
+test('valid provider readiness while hidden settles the original startup deadline', t => {
+  const fixture = setup(t);
+  fixture.open();
+  const frame = fixture.frame();
+  t.mock.timers.tick(19_999);
+  fixture.picker.close();
+  fixture.send({type: 'hvsc:ready', mode: 'file'});
+  t.mock.timers.tick(20_000);
+  assert.equal(fixture.dialog().open, false);
+  assert.equal(fixture.frame(), frame);
+  fixture.open();
+  assert.equal(fixture.frame(), frame);
+  assert.equal(fixture.byId('library-retry')?.hidden, true);
+  assert.match(fixture.byId('library-status')?.textContent ?? '', /search|select|choose/i);
+});
+
+test('hidden selections, errors and malformed payloads cannot complete or alter the retained picker', t => {
+  const fixture = setup(t);
+  fixture.open();
+  fixture.send({type: 'hvsc:ready', mode: 'file'});
+  const frame = fixture.frame();
+  const status = fixture.byId('library-status')?.textContent;
+  fixture.picker.close();
+  for (const message of [selection(), {type: 'hvsc:error'}, null, [], {}, {type: 'hvsc:ready', mode: 'play'}, selection({bytes: sidBytes('TEXT')})]) fixture.send(message);
+  assert.equal(fixture.selected.length, 0);
+  assert.equal(fixture.frame(), frame);
+  assert.equal(fixture.byId('library-status')?.textContent, status);
+  assert.equal(fixture.byId('library-retry')?.hidden, true);
+  fixture.open();
+  fixture.send(selection());
+  assert.equal(fixture.selected.length, 1);
+});
+
+test('a retained picker accepts another selection after a provider selection error', t => {
+  const fixture = setup(t);
+  fixture.open();
+  fixture.send({type: 'hvsc:ready', mode: 'file'});
+  const frame = fixture.frame();
+  fixture.send({type: 'hvsc:error'});
+  fixture.send(selection());
+  assert.equal(fixture.selected.length, 1);
+  fixture.open();
+  assert.equal(fixture.frame(), frame);
+  assert.equal(fixture.byId('library-retry')?.hidden, true);
+  assert.match(fixture.byId('library-status')?.textContent ?? '', /search|select|choose/i);
+});
+
+test('reloading rejects readiness and load errors from the discarded frame without extending the new deadline', t => {
+  const fixture = setup(t);
+  fixture.open();
+  const oldFrame = fixture.frame()!;
+  fixture.send({type: 'hvsc:error'});
+  fixture.click(fixture.byId('library-retry')!);
+  const frame = fixture.frame();
+  oldFrame.dispatchEvent(new Event('error'));
+  fixture.send({type: 'hvsc:ready', mode: 'file'}, oldFrame.contentWindow);
+  assert.equal(fixture.frame(), frame);
+  assert.equal(fixture.byId('library-retry')?.hidden, true);
+  t.mock.timers.tick(20_000);
+  assert.equal(fixture.frame(), undefined);
+  assert.equal(fixture.byId('library-retry')?.hidden, false);
 });

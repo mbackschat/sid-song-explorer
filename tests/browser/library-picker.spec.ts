@@ -2,7 +2,7 @@ import {test, expect} from './fixtures.ts';
 import {holdWorkerRequest} from './worker-control.ts';
 import {
   addFixtureSender, clearedSidTitle, dropBeforeQueuedSelection, installLibraryProvider, libraryAuthor, libraryOrigin,
-  libraryPath, libraryReleased, libraryStil, libraryTitle, reopenBeforeQueuedSelection, selectionMessageCount, sendFixtureMessage,
+  libraryPath, libraryReleased, libraryStil, libraryTitle, reloadBeforeQueuedSelection, selectionMessageCount, sendFixtureMessage,
 } from './library-picker-fixture.ts';
 import {resolve} from 'node:path';
 import type {Page} from '@playwright/test';
@@ -68,7 +68,7 @@ test('library browser is lazy and cancellation preserves playback and focus', as
   await expect(page.locator('#track-title')).toHaveText(title!);
   await expect(page.locator('#play-status')).toHaveText('Live SID');
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(position);
-  expect(provider.requests()).toBe(2);
+  expect(provider.requests()).toBe(1);
 });
 
 test('selected SID uses the existing pending loader and keeps provider metadata inert', async ({page}) => {
@@ -148,7 +148,9 @@ test('malformed, unrelated and superseded iframe messages cannot replace the cur
   await sendFixtureMessage(page, 'valid', '#wrong-window-frame');
   await expect(page.getByRole('dialog', {name: 'Browse SID library'})).toBeVisible();
   await expect(page.locator('#track-title')).toHaveText(title!);
-  await reopenBeforeQueuedSelection(page);
+  await sendFixtureMessage(page, 'error');
+  await expect(page.locator('#library-retry')).toBeVisible();
+  await reloadBeforeQueuedSelection(page);
   await sendFixtureMessage(page, 'valid');
   await expect.poll(provider.requests).toBe(4);
   await expect(page.getByRole('dialog', {name: 'Browse SID library'})).toBeVisible();
@@ -204,4 +206,48 @@ test('provider loading and failures expose retry and leave local opening availab
   await page.locator('#local-file').setInputFiles(sample);
   await expect(page.locator('#source-kind')).toContainText('Local file');
   await expect(page.locator('#play-button')).toBeEnabled();
+});
+
+test('library search, folder and result position survive closing and selecting within the tab', async ({page}) => {
+  const provider = await installLibraryProvider(page);
+  await loadPausedSample(page);
+  await openLibrary(page);
+  const widget = page.frameLocator('#library-frame');
+  await widget.locator('#fixture-search').fill('hülsbeck');
+  await widget.locator('#fixture-folder').selectOption('MUSICIANS/H');
+  await widget.locator('#fixture-results').evaluate(element => { element.scrollTop = 240; });
+  const retainedFrame = await page.locator('#library-frame').elementHandle();
+  const verifyState = async () => {
+    expect(await retainedFrame!.evaluate(element => element === document.querySelector('#library-frame'))).toBe(true);
+    expect(provider.requests()).toBe(1);
+    await expect(widget.locator('#fixture-search')).toHaveValue('hülsbeck');
+    await expect(widget.locator('#fixture-folder')).toHaveValue('MUSICIANS/H');
+    expect(await widget.locator('#fixture-results').evaluate(element => element.scrollTop)).toBe(240);
+  };
+  await page.getByRole('button', {name: 'Close library browser'}).click();
+  await expect(page.locator('#library-frame')).toHaveCount(1);
+  await sendFixtureMessage(page, 'valid');
+  await expect(page.locator('#source-kind')).toHaveText('From the sample library');
+  await openLibrary(page);
+  await verifyState();
+  await widget.getByRole('button', {name: 'Choose valid SID', exact: true}).click();
+  await expectLibraryLoaded(page);
+  await openLibrary(page);
+  await verifyState();
+  await sendFixtureMessage(page, 'error');
+  await expect(page.locator('#library-retry')).toHaveText('Reload library');
+  await page.getByRole('button', {name: 'Close library browser'}).click();
+  await openLibrary(page);
+  await verifyState();
+  await page.reload();
+  await expect(page.locator('#library-frame')).toHaveCount(0);
+  await openLibrary(page);
+  await expect(widget.locator('#fixture-search')).toHaveValue('');
+  await expect(widget.locator('#fixture-folder')).toHaveValue('HVSC');
+  expect(provider.requests()).toBe(2);
+  await page.getByRole('button', {name: 'Close library browser'}).click();
+  await page.locator('#load-button').click();
+  await expect(page.locator('#play-button')).toBeEnabled();
+  await page.locator('#play-button').click();
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(0);
 });

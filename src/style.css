@@ -230,12 +230,13 @@ button.seeking::before, #voice-mix-status.preparing::before { margin-right: 8px;
 .lane-mix button.small { min-height: 26px; min-width: 27px; padding: 2px 6px; font-size: 11px; }
 .lane-mix button[aria-pressed="true"] { color: var(--voice); border-color: var(--voice); background: #243044; }
 .timeline-ruler { position: relative; margin-left: 92px; cursor: crosshair; }
-.timeline-ruler .timeline-key { padding: 10px 0; pointer-events: none; }
+.timeline-ruler .timeline-key { padding: 5px 3px; background: #101525; border-bottom: 1px solid #45516e; pointer-events: none; }
 .timeline-ruler #seek-slider { position: absolute; inset: 0; margin: 0; width: 100%; height: 100%; opacity: 0; cursor: crosshair; touch-action: none; }
 .timeline-ruler:focus-within { outline: 2px solid #b7a1f2; outline-offset: 2px; }
-.timeline-scrollbar { display: flex; align-items: stretch; gap: 3px; margin: 0 0 8px 92px; height: 28px; }
+.timeline-scrollbar { display: grid; grid-template-columns: 28px minmax(0, 1fr) 28px; grid-template-rows: 28px auto; gap: 2px 3px; margin: 6px 0 7px 92px; }
 .timeline-scrollbar button.small { min-width: 28px; min-height: 28px; padding: 0; font-size: 10px; }
-#timeline-scroll-track { position: relative; flex: 1; min-width: 0; border: 1px solid #45516e; border-radius: 3px; background: repeating-linear-gradient(135deg, #141a29 0 3px, #1c2436 3px 5px); touch-action: none; cursor: pointer; }
+.timeline-scroll-range { grid-column: 2; display: flex; justify-content: space-between; gap: 8px; color: #8c98b7; font-size: 10px; line-height: 14px; white-space: nowrap; }
+#timeline-scroll-track { position: relative; min-width: 0; border: 1px solid #45516e; border-radius: 3px; background: repeating-linear-gradient(135deg, #141a29 0 3px, #1c2436 3px 5px); touch-action: none; cursor: pointer; }
 #timeline-scroll-track:focus-visible { outline: 2px solid #b7a1f2; outline-offset: 2px; }
 #timeline-scroll-track[aria-disabled="true"] { opacity: .45; cursor: default; }
 #timeline-scroll-thumb { position: absolute; top: 2px; bottom: 2px; background: #8c7caf; border-radius: 2px; box-shadow: inset 0 1px #c4b3e5, inset 0 -1px #584a78; cursor: grab; }
@@ -258,6 +259,6 @@ button.seeking::before, #voice-mix-status.preparing::before { margin-right: 8px;
   .timeline-ruler, .timeline-scrollbar { margin-left: 70px; }
   .unified-heading { padding: 8px 10px 0; }
   .timeline-key { font-size: 9px; }
-  .timeline-scrollbar { height: 34px; }
+  .timeline-scrollbar { grid-template-rows: 34px auto; }
   .lane-mix button.small { min-height: 30px; }
 }

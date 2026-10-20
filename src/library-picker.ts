@@ -65,7 +65,7 @@ export function mountLibraryPicker(container: HTMLElement, trigger: HTMLButtonEl
   const retry = document.createElement('button');
   retry.id = 'library-retry';
   retry.type = 'button';
-  retry.textContent = 'Retry';
+  retry.textContent = 'Reload library';
   retry.hidden = true;
   feedback.append(status, retry);
 
@@ -91,22 +91,36 @@ export function mountLibraryPicker(container: HTMLElement, trigger: HTMLButtonEl
   function removeFrame(): void {
     activeWindow = null;
     cancelDeadline();
+    activeFrame?.removeEventListener('error', frameFailed);
     activeFrame?.remove();
     activeFrame = null;
   }
 
   function close(): void {
-    removeFrame();
     if (!dialog.open) return;
     dialog.close();
     trigger.setAttribute('aria-expanded', 'false');
     trigger.focus({preventScroll: true});
   }
 
-  function fail(message: string): void {
-    removeFrame();
+  function showFailure(message: string): void {
     status.textContent = message;
     retry.hidden = false;
+  }
+
+  function fail(message: string): void {
+    removeFrame();
+    showFailure(message);
+  }
+
+  function markReady(): void {
+    cancelDeadline();
+    status.textContent = 'Search the library, then select a SID to open in Explorer.';
+    retry.hidden = true;
+  }
+
+  function frameFailed(event: Event): void {
+    if (activeFrame === event.currentTarget) fail('The SID library could not load. Reload the library or close the browser.');
   }
 
   function loadFrame(): void {
@@ -125,14 +139,12 @@ export function mountLibraryPicker(container: HTMLElement, trigger: HTMLButtonEl
       url.searchParams.set(key, value);
     }
     frame.src = url.href;
-    frame.addEventListener('error', () => {
-      if (activeFrame === frame) fail('The SID library could not load. Retry or close the browser.');
-    });
+    frame.addEventListener('error', frameFailed);
     activeFrame = frame;
     frameContainer.append(frame);
     activeWindow = frame.contentWindow;
     readyTimeout = view!.setTimeout(() => {
-      if (activeFrame === frame) fail('The SID library did not respond. Retry or close the browser.');
+      if (activeFrame === frame) fail('The SID library did not respond. Reload the library or close the browser.');
     }, READY_TIMEOUT_MS);
   }
 
@@ -140,42 +152,43 @@ export function mountLibraryPicker(container: HTMLElement, trigger: HTMLButtonEl
     if (disposed || dialog.open) return;
     dialog.showModal();
     trigger.setAttribute('aria-expanded', 'true');
-    loadFrame();
+    if (!activeFrame) loadFrame();
     closeButton.focus({preventScroll: true});
   }
 
   function receive(event: MessageEvent<unknown>): void {
-    if (!dialog.open || !activeWindow || event.origin !== PROVIDER_ORIGIN || event.source !== activeWindow) return;
+    if (!activeWindow || event.origin !== PROVIDER_ORIGIN || event.source !== activeWindow) return;
     const data = event.data;
     if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-      fail('The SID library returned an invalid selection. Retry or close the browser.');
+      if (dialog.open) fail('The SID library returned an invalid selection. Reload the library or close the browser.');
       return;
     }
     const message = data as Record<string, unknown>;
+    if (!dialog.open && (message.type !== 'hvsc:ready' || message.mode !== 'file')) return;
     switch (message.type) {
       case 'hvsc:ready':
         if (message.mode !== 'file') {
-          fail('The SID library returned an invalid response. Retry or close the browser.');
+          fail('The SID library returned an invalid response. Reload the library or close the browser.');
           return;
         }
-        cancelDeadline();
-        status.textContent = 'Search the library, then select a SID to open in Explorer.';
+        markReady();
         break;
       case 'hvsc:selected': {
         const selection = parseSelection(message);
         if (!selection) {
-          fail('The SID library returned an invalid selection. Retry or close the browser.');
+          fail('The SID library returned an invalid selection. Reload the library or close the browser.');
           return;
         }
+        markReady();
         close();
         onSelect(selection);
         break;
       }
       case 'hvsc:error':
-        fail('The SID library could not return this selection. Retry or close the browser.');
+        showFailure('The SID library could not return this selection. Try another selection or reload the library.');
         break;
       default:
-        if (typeof message.type !== 'string') fail('The SID library returned an invalid response. Retry or close the browser.');
+        if (typeof message.type !== 'string') fail('The SID library returned an invalid response. Reload the library or close the browser.');
     }
   }
 
@@ -186,7 +199,6 @@ export function mountLibraryPicker(container: HTMLElement, trigger: HTMLButtonEl
 
   function closed(): void {
     if (dialog.open) return;
-    removeFrame();
     trigger.setAttribute('aria-expanded', 'false');
     trigger.focus({preventScroll: true});
   }
@@ -204,6 +216,7 @@ export function mountLibraryPicker(container: HTMLElement, trigger: HTMLButtonEl
       if (disposed) return;
       disposed = true;
       close();
+      removeFrame();
       trigger.removeEventListener('click', open);
       closeButton.removeEventListener('click', close);
       retry.removeEventListener('click', loadFrame);
