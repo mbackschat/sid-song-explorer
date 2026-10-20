@@ -1,6 +1,38 @@
 import {test, expect} from './fixtures.ts';
 import {holdWorkerRequest} from './worker-control.ts';
 
+test('first Fit song view late in stereo Rambo retains the rendered beginning after audio eviction', async ({page}) => {
+  await page.goto('/');
+  await page.locator('#sample-select').selectOption('rambo-stereo-main');
+  await page.locator('#load-button').click();
+  await expect(page.locator('#play-button')).toBeEnabled();
+  await page.locator('#play-button').click();
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(.1);
+  await page.locator('#play-button').click();
+  await expect(page.locator('#timeline-scroll')).toHaveAttribute('aria-pressed', 'true');
+  const release = await holdWorkerRequest(page, 'seek');
+  await page.locator('#seek-slider').fill('146.26');
+  await expect(page.locator('#play-status')).toHaveText('Seeking…');
+  await release();
+  await expect(page.locator('#play-status')).toHaveText('Paused', {timeout:20000});
+  await expect(page.locator('#render-lead')).not.toContainText('Prepared 0:00');
+  await page.locator('#timeline-fit').click();
+  const lane = page.locator('#voice-lane-0');
+  await expect(lane).toHaveAttribute('data-observed-start', '0');
+  await expect.poll(() => lane.getAttribute('data-observed-until').then(Number)).toBeGreaterThanOrEqual(146.26);
+  const earlyPitchPixels = await lane.evaluate(element => {
+    const canvas = element as HTMLCanvasElement;
+    const pixels = canvas.getContext('2d')!.getImageData(0, 0, Math.floor(canvas.width / 4), canvas.height).data;
+    let count = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index + 1]! > 130 && pixels[index + 2]! > 130 && pixels[index]! < pixels[index + 1]! * .7) count++;
+    }
+    return count;
+  });
+  expect(earlyPitchPixels).toBeGreaterThan(100);
+  await page.screenshot({path:`build/fit-song/${test.info().project.name}-late-rambo.png`, fullPage:true});
+});
+
 test('Fit song keeps the full range through seeks and playback and inspects prepared future activity', async ({page}) => {
   await page.goto('/');
   await page.locator('#sample-select').selectOption('bach-toccata-stereo');

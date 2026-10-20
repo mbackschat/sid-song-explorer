@@ -680,7 +680,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     const heardPosition = state?.position ?? 0;
     const seekMarker = seekViewport?.marker ?? null;
     const linePosition = seekMarker ?? heardPosition;
-    const heardX = Math.min(width, Math.max(0, x(chartHeld?.heardUntil ?? heardPosition)));
+    const heardX = Math.min(width, Math.max(0, x(heardPosition)));
     ctx.fillStyle = '#20344740';
     ctx.fillRect(heardX, 0, width - heardX, height);
     ctx.strokeStyle = '#222c44';

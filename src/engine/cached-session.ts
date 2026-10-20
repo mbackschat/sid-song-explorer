@@ -13,6 +13,9 @@ const OPERATION_BUDGET_MS = 15000;
 const MAX_OBSERVATION_INTERVALS = 1000;
 const MAX_OBSERVATION_WRITES = 20_000;
 const OBSERVATION_FRAME_SECONDS = 0.02;
+const OVERVIEW_SAMPLE_FRAMES = SAMPLE_RATE * OBSERVATION_FRAME_SECONDS;
+const MAX_OVERVIEW_FRAME = SAMPLE_RATE * 600;
+const OVERVIEW_SAMPLES = MAX_OVERVIEW_FRAME / OVERVIEW_SAMPLE_FRAMES + 1;
 // SIDLite's PAL/NTSC clocks consume fewer than 25 scheduler cycles per sample.
 // Even one SID bus write per cycle cannot exceed this reservation; actual packed bytes own the cap.
 const RESERVED_WRITE_BYTES_PER_FRAME = 25 * WRITE_BYTES;
@@ -27,6 +30,15 @@ interface CachedBlock {
   pcm: Int16Array;
   writes: Float64Array;
   registers: Uint8Array;
+  dropped: number;
+}
+
+interface OverviewHistory {
+  startFrame: number;
+  endFrame: number;
+  registers: Uint8Array;
+  startRegisters: Uint8Array;
+  endRegisters: Uint8Array;
   dropped: number;
 }
 
@@ -67,6 +79,7 @@ export class CachedSidSession {
   private readonly source: SidSession;
   private blocks: CachedBlock[] = [];
   private frontierRegisters = new Uint8Array(REGISTER_BYTES);
+  private overviewHistory: OverviewHistory | null = null;
   private bytes = REGISTER_BYTES;
   private cursor = 0;
   private frontier = 0;
@@ -92,6 +105,10 @@ export class CachedSidSession {
   get cacheEndFrame(): number { return this.frontier; }
   get cacheStartFrame(): number { return this.blocks[0]?.startFrame ?? this.frontier; }
   get cacheBytes(): number { return this.bytes; }
+  get overviewBytes(): number {
+    const history = this.overviewHistory;
+    return history ? history.registers.byteLength + history.startRegisters.byteLength + history.endRegisters.byteLength : 0;
+  }
 
   private requireAlive(): void {
     if (this.disposed) throw new Error('SID session has been disposed');
@@ -115,6 +132,7 @@ export class CachedSidSession {
 
   async load(bytes: Uint8Array, options: PlaybackOptions): Promise<LoadResult> {
     this.requireAlive();
+    this.overviewHistory = null;
     const info = await this.source.load(bytes, options);
     this.requireAlive();
     if (info.registers.length > this.maxCacheBytes) {
@@ -145,6 +163,7 @@ export class CachedSidSession {
     }
     this.frontier = result.endFrame;
     this.frontierRegisters.set(result.registers);
+    this.retainOverview(block);
     if (required + this.frontierRegisters.byteLength <= this.maxCacheBytes) {
       this.blocks.push(block);
       this.bytes += required;
@@ -154,6 +173,49 @@ export class CachedSidSession {
       this.bytes = this.frontierRegisters.byteLength;
     }
     return result;
+  }
+
+  private retainOverview(block: CachedBlock): void {
+    const startFrame = block.startFrame;
+    const endFrame = Math.min(block.endFrame, MAX_OVERVIEW_FRAME);
+    if (startFrame >= endFrame) return;
+    const width = block.registers.length;
+    let history = this.overviewHistory;
+    if (!history || startFrame > history.endFrame || endFrame < history.startFrame) {
+      // advanceTo() observes forward seeks; a disconnected producer range cannot certify the skipped interval.
+      history = this.overviewHistory = {
+        startFrame, endFrame, registers: new Uint8Array(OVERVIEW_SAMPLES * width),
+        startRegisters: new Uint8Array(width), endRegisters: new Uint8Array(width), dropped: block.dropped,
+      };
+    } else if (startFrame < history.startFrame || endFrame > history.endFrame) {
+      history.dropped += block.dropped;
+    } else {
+      history.dropped = Math.max(history.dropped, block.dropped);
+    }
+    const registers = block.registers.slice();
+    let offset = 0;
+    const applyWritesBefore = (frame: number) => {
+      const time = frame / SAMPLE_RATE;
+      while (offset < block.writes.length && block.writes[offset] < time) {
+        registers[block.writes[offset + 4] * REGISTER_BYTES + block.writes[offset + 2]] = block.writes[offset + 3];
+        offset += WRITE_FIELDS;
+      }
+    };
+    applyWritesBefore(startFrame);
+    if (startFrame <= history.startFrame) {
+      history.startFrame = startFrame;
+      history.startRegisters.set(registers);
+    }
+    for (let sample = Math.ceil(startFrame / OVERVIEW_SAMPLE_FRAMES);
+      sample * OVERVIEW_SAMPLE_FRAMES <= endFrame; sample++) {
+      applyWritesBefore(sample * OVERVIEW_SAMPLE_FRAMES);
+      history.registers.set(registers, sample * width);
+    }
+    if (endFrame >= history.endFrame) {
+      applyWritesBefore(endFrame);
+      history.endFrame = endFrame;
+      history.endRegisters.set(registers);
+    }
   }
 
   private blockAt(frame: number): CachedBlock | undefined {
@@ -172,20 +234,58 @@ export class CachedSidSession {
     return registers;
   }
 
-  private retainedObservationRange(startSeconds: number, endSeconds: number): {start: number; end: number} | null {
+  private validateObservationRange(startSeconds: number, endSeconds: number): void {
     this.requireLoaded();
     if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds) || startSeconds < 0 ||
       endSeconds > 600 || endSeconds <= startSeconds) {
       throw new Error('Observation range must be within 0–600 seconds');
     }
+  }
+
+  private retainedObservationRange(startSeconds: number, endSeconds: number): {start: number; end: number} | null {
+    this.validateObservationRange(startSeconds, endSeconds);
     const start = Math.max(startSeconds, this.cacheStartFrame / SAMPLE_RATE);
     const end = Math.min(endSeconds, this.frontier / SAMPLE_RATE);
     return start < end ? {start, end} : null;
   }
 
   overview(startSeconds: number, endSeconds: number): TimelineOverview | null {
-    const range = this.retainedObservationRange(startSeconds, endSeconds);
-    return range ? this.sampleOverview(range.start, range.end) : null;
+    this.validateObservationRange(startSeconds, endSeconds);
+    const history = this.overviewHistory;
+    if (!history) return null;
+    const start = Math.max(startSeconds, history.startFrame / SAMPLE_RATE);
+    const end = Math.min(endSeconds, history.endFrame / SAMPLE_RATE);
+    if (start >= end) return null;
+    if (start >= this.cacheStartFrame / SAMPLE_RATE && end <= this.frontier / SAMPLE_RATE) {
+      return this.sampleOverview(start, end);
+    }
+    const width = history.startRegisters.length;
+    let firstSample = Math.ceil(start * SAMPLE_RATE / OVERVIEW_SAMPLE_FRAMES);
+    let lastSample = Math.floor(end * SAMPLE_RATE / OVERVIEW_SAMPLE_FRAMES);
+    // PCM-frame seconds do not always round-trip exactly; compare the original sample times before excluding a boundary.
+    if ((firstSample - 1) * OVERVIEW_SAMPLE_FRAMES / SAMPLE_RATE >= start) firstSample--;
+    if (firstSample * OVERVIEW_SAMPLE_FRAMES / SAMPLE_RATE < start) firstSample++;
+    if ((lastSample + 1) * OVERVIEW_SAMPLE_FRAMES / SAMPLE_RATE <= end) lastSample++;
+    if (lastSample * OVERVIEW_SAMPLE_FRAMES / SAMPLE_RATE > end) lastSample--;
+    const includeStart = history.startFrame / SAMPLE_RATE === start && history.startFrame % OVERVIEW_SAMPLE_FRAMES !== 0;
+    const includeEnd = history.endFrame / SAMPLE_RATE === end && history.endFrame % OVERVIEW_SAMPLE_FRAMES !== 0;
+    const gridSamples = Math.max(0, lastSample - firstSample + 1);
+    const samples = gridSamples + Number(includeStart) + Number(includeEnd);
+    if (samples < 2) return null;
+    const count = Math.min(samples, MAX_OBSERVATION_INTERVALS + 1);
+    const frames = Array.from({length: count}, (_, index) => {
+      const ordinal = Math.floor(index * (samples - 1) / (count - 1));
+      if (includeStart && ordinal === 0) {
+        return {time: start, registers: Array.from(history.startRegisters)};
+      }
+      if (includeEnd && ordinal === samples - 1) {
+        return {time: end, registers: Array.from(history.endRegisters)};
+      }
+      const sample = firstSample + ordinal - Number(includeStart);
+      return {time: sample * OVERVIEW_SAMPLE_FRAMES / SAMPLE_RATE,
+        registers: Array.from(history.registers.subarray(sample * width, (sample + 1) * width))};
+    });
+    return {start: frames[0].time, end: frames.at(-1)!.time, frames, dropped: history.dropped};
   }
 
   /** Copy retained observations only; output limits shorten coverage rather than imply missing writes are complete. */
@@ -346,6 +446,7 @@ export class CachedSidSession {
       throw new Error(`mute mask must contain exactly ${this.channels * 3} booleans (true means muted)`);
     }
     const frame = this.cursor;
+    this.overviewHistory = null;
     // Rebuilding muted history to the read cursor avoids replaying the producer's potentially long lead.
     await this.source.seek(0);
     const origin = await this.source.mute(mask);
@@ -359,6 +460,7 @@ export class CachedSidSession {
     this.disposed = true;
     this.loaded = false;
     this.blocks = [];
+    this.overviewHistory = null;
     this.frontierRegisters = new Uint8Array();
     this.bytes = 0;
     this.source.dispose();
