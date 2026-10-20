@@ -1,11 +1,20 @@
 import {createHash} from 'node:crypto';
 import {test, expect} from './fixtures.ts';
-import {fixtureSidBytes, installLibraryProvider} from './library-picker-fixture.ts';
+import {chooseFixtureWithPointer, fixtureSidBytes, installLibraryProvider, libraryPointerDiagnostics} from './library-picker-fixture.ts';
 import type {Page} from '@playwright/test';
+
+test.afterEach(async ({page}, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    await testInfo.attach('library-pointer-events', {
+      body: JSON.stringify(await libraryPointerDiagnostics(page), null, 2),
+      contentType: 'application/json',
+    });
+  }
+});
 
 async function openSelection(page: Page) {
   await page.locator('#browse-library').click();
-  await page.frameLocator('#library-frame').getByRole('button', {name:'Choose valid SID', exact:true}).click();
+  await chooseFixtureWithPointer(page, 'valid');
   await expect(page.locator('#play-button')).toBeEnabled();
   await expect(page.locator('#source-kind')).toHaveText('SIDquake · HVSC');
 }

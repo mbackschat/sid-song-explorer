@@ -1,7 +1,7 @@
 import {test, expect} from './fixtures.ts';
 import {holdWorkerRequest} from './worker-control.ts';
 import {
-  addFixtureSender, clearedSidTitle, differentLibraryPath, differentSidTitle, dropBeforeQueuedSelection, installLibraryProvider, libraryAuthor, libraryOrigin,
+  addFixtureSender, chooseFixtureWithPointer, clearedSidTitle, differentLibraryPath, differentSidTitle, dropBeforeQueuedSelection, installLibraryProvider, libraryAuthor, libraryOrigin,
   libraryPath, libraryPointerDiagnostics, libraryReleased, libraryStil, libraryTitle, reloadBeforeQueuedSelection, selectionMessageCount, sendFixtureMessage,
 } from './library-picker-fixture.ts';
 import {resolve} from 'node:path';
@@ -85,7 +85,7 @@ test('selected SID uses the existing pending loader and keeps provider metadata 
   await loadPausedSample(page);
   await openLibrary(page);
   const releaseLoad = await holdWorkerRequest(page, 'load');
-  await page.frameLocator('#library-frame').getByRole('button', {name: 'Choose valid SID', exact: true}).click();
+  await chooseFixtureWithPointer(page, 'valid');
   await expect(page.getByRole('dialog', {name: 'Browse SID library'})).toBeHidden();
   await expect(page.locator('#play-status')).toHaveText('Loading…');
   await expect(page.locator('#status-message')).toContainText('Opening SID from SIDquake…');
@@ -115,7 +115,7 @@ test('missing metadata falls back to the SID and local or sample loading clears 
   await installLibraryProvider(page);
   await loadPausedSample(page);
   await openLibrary(page);
-  await page.frameLocator('#library-frame').getByRole('button', {name: 'Choose SID without metadata'}).click();
+  await chooseFixtureWithPointer(page, 'missing-metadata');
   await expectLibraryLoaded(page);
   await expect(page.locator('#track-title')).toHaveText(clearedSidTitle);
   await page.locator('#library-info > summary').click();
@@ -128,7 +128,7 @@ test('missing metadata falls back to the SID and local or sample loading clears 
   await expect(page.locator('#library-path')).toBeEmpty();
   await expect(page.locator('#library-stil')).toBeEmpty();
   await openLibrary(page);
-  await page.frameLocator('#library-frame').getByRole('button', {name: 'Choose valid SID', exact: true}).click();
+  await chooseFixtureWithPointer(page, 'valid');
   await expect.poll(() => selectionMessageCount(page)).toBe(2);
   await expectLibraryLoaded(page);
   await page.locator('#use-sample-button').click();
@@ -144,15 +144,14 @@ test('another song from the retained library replaces the playing bytes and head
   await loadPausedSample(page);
   await openLibrary(page);
   const retainedFrame = await page.locator('#library-frame').elementHandle();
-  const widget = page.frameLocator('#library-frame');
-  await widget.getByRole('button', {name: 'Choose SID without metadata', exact: true}).click();
+  await chooseFixtureWithPointer(page, 'missing-metadata');
   await expectLibraryLoaded(page);
   await expect(page.locator('#track-title')).toHaveText(clearedSidTitle);
   await page.locator('#play-button').click();
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(.25);
   await openLibrary(page);
   expect(await retainedFrame!.evaluate(element => element === document.querySelector('#library-frame'))).toBe(true);
-  await widget.getByRole('button', {name: 'Choose different SID without metadata', exact: true}).click();
+  await chooseFixtureWithPointer(page, 'different');
   await expectLibraryLoaded(page);
   await expect(page.locator('#track-title')).toHaveText(differentSidTitle);
   await expect(page.locator('#library-path')).toHaveText(differentLibraryPath);
@@ -205,10 +204,10 @@ test('unsupported library profiles report errors without replacing current playb
   await page.locator('#play-button').click();
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(.25);
   const title = await page.locator('#track-title').textContent();
-  for (const [choice, error] of [['Choose RSID', 'RSID'], ['Choose third-chip SID', 'third chip']] as const) {
+  for (const [choice, error] of [['rsid', 'RSID'], ['third-chip', 'third chip']] as const) {
     const position = Number(await page.locator('#seek-slider').inputValue());
     await openLibrary(page);
-    await page.frameLocator('#library-frame').getByRole('button', {name: choice, exact: true}).click();
+    await chooseFixtureWithPointer(page, choice);
     await expect(page.getByRole('dialog', {name: 'Browse SID library'})).toBeHidden();
     await expect(page.locator('#status-message')).toContainText(error);
     await expect(page.locator('#status-message')).toHaveClass(/error/);
@@ -263,7 +262,7 @@ test('library search, folder and result position survive closing and selecting w
   await expect(page.locator('#source-kind')).toHaveText('From the sample library');
   await openLibrary(page);
   await verifyState();
-  await widget.getByRole('button', {name: 'Choose valid SID', exact: true}).click();
+  await chooseFixtureWithPointer(page, 'valid');
   await expectLibraryLoaded(page);
   await openLibrary(page);
   await verifyState();

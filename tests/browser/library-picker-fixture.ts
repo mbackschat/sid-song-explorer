@@ -1,5 +1,5 @@
 import {readFileSync} from 'node:fs';
-import type {Frame, Page} from '@playwright/test';
+import {expect, type Frame, type Page} from '@playwright/test';
 
 export const libraryOrigin = 'https://sidquake.c64demo.com';
 export const libraryPath = 'C64Music/MUSICIANS/F/Fixture/Rambo.sid';
@@ -19,7 +19,7 @@ type FixtureWindow = Window & {
   libraryFixtureCheckpoints: string[];
   libraryFixtureMessages: string[];
   libraryFixtureBeforeSelection?: () => void;
-  libraryFixturePointerEvents: unknown[];
+  libraryFixturePointerEvents: {type: string; at: number; trusted: boolean; tag: string; id: string; choice?: string; x?: number; y?: number}[];
 };
 
 export function fixtureSidBytes(subtunes = 1): Buffer {
@@ -94,7 +94,7 @@ export async function installLibraryProvider(page: Page, options: {autoReady?: b
   await page.addInitScript(() => {
     const fixture = window as unknown as FixtureWindow;
     fixture.libraryFixturePointerEvents = [];
-    for (const type of ['pointerdown', 'pointerup', 'click', 'focusin']) {
+    for (const type of ['pointerover', 'pointermove', 'pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'click', 'focusin']) {
       document.addEventListener(type, event => {
         const pointer = event as PointerEvent;
         const target = event.target as HTMLElement;
@@ -131,6 +131,20 @@ export async function installLibraryProvider(page: Page, options: {autoReady?: b
 }
 
 let checkpointCount = 0;
+export async function chooseFixtureWithPointer(page: Page, choice: FixtureChoice): Promise<void> {
+  const button = page.frameLocator('#library-frame').locator(`button[data-choice="${choice}"]`);
+  await expect(button).toBeEnabled();
+  const started = await button.evaluate(() => performance.now());
+  // A shown OOPIF can receive native events on its parent iframe until hit testing catches up; see docs/validation/library-picker.md#verification-boundaries.
+  await expect.poll(async () => {
+    await button.hover();
+    return button.evaluate((element, since) => (window as unknown as FixtureWindow).libraryFixturePointerEvents.some(event =>
+      event.at >= since && event.trusted && (event.type === 'pointerover' || event.type === 'pointermove') && event.choice === element.dataset.choice), started);
+  }, {message: 'the provider button must receive trusted pointer movement before selection'}).toBe(true);
+  await page.mouse.down();
+  await page.mouse.up();
+}
+
 export async function sendFixtureMessage(page: Page, choice: FixtureChoice, selector = '#library-frame'): Promise<void> {
   const handle = await page.locator(selector).elementHandle();
   const frame = await handle!.contentFrame();
@@ -164,7 +178,12 @@ export async function libraryPointerDiagnostics(page: Page): Promise<unknown[]> 
     try {
       return await frame.evaluate(() => {
         const fixture = window as unknown as FixtureWindow;
-        return {origin: location.origin, timeOrigin: performance.timeOrigin, events: fixture.libraryFixturePointerEvents, messages: fixture.libraryFixtureMessages};
+        const active = document.activeElement as HTMLElement | null;
+        return {
+          origin: location.origin, timeOrigin: performance.timeOrigin, hasFocus: document.hasFocus(),
+          active: active ? {tag: active.tagName, id: active.id, choice: active.dataset?.choice} : null,
+          events: fixture.libraryFixturePointerEvents, messages: fixture.libraryFixtureMessages,
+        };
       });
     } catch {
       return {url: frame.url(), detached: frame.isDetached()};
