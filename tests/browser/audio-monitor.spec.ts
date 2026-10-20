@@ -131,9 +131,10 @@ test('stereo meters, waveforms and shared spectrum retain independent channel si
       if (active) {
         await expect.poll(async () => Math.max(...(await renderedBars()).slice(channel === 0 ? 6 : 14, channel === 0 ? 11 : 19))).toBeGreaterThan(40);
         await expect.poll(async () => Math.max(...(await renderedBars()).slice(channel === 0 ? 14 : 6, channel === 0 ? 19 : 11))).toBeLessThan(3);
-        const crossings = (await monitorAudit(page)).waveforms[waveformId]!.crossings;
-        expect(crossings).toBeGreaterThanOrEqual(channel === 0 ? 14 : 62);
-        expect(crossings).toBeLessThanOrEqual(channel === 0 ? 18 : 66);
+        await expect.poll(async () => {
+          const waveform = (await monitorAudit(page)).waveforms[waveformId]!;
+          return waveform.range > 3 && waveform.crossings >= (channel === 0 ? 14 : 62) && waveform.crossings <= (channel === 0 ? 18 : 66);
+        }, {message: `Channel ${channel + 1} renders the expected waveform amplitude and frequency together`}).toBe(true);
       } else {
         await expect.poll(async () => {
           const rendered = await renderedBars();
