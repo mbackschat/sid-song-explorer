@@ -87,6 +87,8 @@ Transient browser feedback must use the shared [worker-request gate](tests/brows
 
 Browser automation must be silent: use [the shared test fixture](tests/browser/fixtures.ts), which inserts a zero-gain sink after the analyser and mutes native media. Headless mode alone does not silence WebKit. Do not change system volume for tests.
 
+CI distributes independent browser tests across runners at test granularity, with one worker per runner. When changing partitions, verify complete nonoverlapping coverage and budget against measured durations with runner overhead; equal test counts alone do not balance emulation work. Keep the runner's global deadline below the CI step deadline so failures can retain diagnostics.
+
 Use headless Google Chrome for the Chrome target and Playwright WebKit on macOS for automated Safari-engine checks. Linux WebKit is outside the supported matrix; do not spend compatibility work on that port. CI must preserve the browser/platform pairing. Keep real Safari/iOS and human listening claims separate without requiring browser-setting changes to hand off a POC.
 
 Keep all README content left-aligned, including images, buttons and captions; never center it. For README visual changes, show the rendered preview and wait for the user's review before committing or pushing.
