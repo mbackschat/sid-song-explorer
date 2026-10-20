@@ -71,7 +71,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
           <div class="inspection-sidebar"><aside class="panel inspector" aria-labelledby="inspector-title"><div class="panel-header"><h2 id="inspector-title" tabindex="-1">Sound inspector</h2><span id="inspection-time" class="inspection-time mono">0:00.00</span></div><div class="inspector-body"><p id="inspector-note" class="inspector-note">Following heard playback. Register settings are derived observations, not recovered instruments or measured envelope amplitude.</p><div class="voice-tabs" role="group" aria-label="Inspect voice">${VOICES.map(voice => `<button id="inspect-${voice}" class="small" aria-pressed="${voice === 0}"${voice >= 3 ? ' hidden' : ''}>Voice ${voice + 1}</button>`).join('')}</div>
             <dl class="register-grid"><div><dt>Frequency register</dt><dd id="reg-frequency">—</dd></div><div><dt>Derived oscillator Hz</dt><dd id="reg-hz">—</dd></div><div class="wide"><dt>Waveform selection</dt><dd id="reg-waveform">—</dd></div><div><dt>Gate / Test</dt><dd id="reg-gate">—</dd></div><div><dt>Pulse width · 12-bit</dt><dd id="reg-pulse">—</dd></div><div><dt>AD / SR settings</dt><dd id="reg-adsr">—</dd></div><div><dt>Ring / Sync</dt><dd id="reg-coupling">—</dd></div></dl>
             <h3 id="filter-title" class="inspector-subhead">One filter · all three voices</h3><div id="filter-details" class="shared-filter">No observed register frame.</div><details class="inspector-writes"><summary>Ordered writes ≤ cursor</summary><ol id="write-list" class="write-list"><li class="write-empty">Load and play to collect writes.</li></ol></details></div></aside>
-          <section class="panel" aria-labelledby="output-title"><div class="panel-header"><h2 id="output-title">Audio output</h2><span id="output-profile-badge" class="badge">PCM · mono</span></div><div class="audio-body"><p id="analysis-monitor" class="audio-monitor" hidden>Mono monitor · (L + R) / 2</p><div class="meter-label"><span id="peak-title">Peak · measured PCM</span><span id="peak-label" class="mono">−∞ dBFS</span></div><div class="meter-track"><span id="peak-meter" class="meter-level"></span></div><div class="meter-label"><span id="rms-title">RMS</span><span id="rms-label" class="mono">−∞ dBFS</span></div><canvas id="waveform-plot" class="audio-plot" aria-label="Actual output waveform"></canvas><div class="plot-caption"><span>WAVEFORM</span><span id="waveform-source">Audio output</span></div><canvas id="spectrum-plot" class="audio-plot" aria-label="Actual output frequency spectrum"></canvas><div class="plot-caption"><span>SPECTRUM</span><span id="spectrum-range">0 → Nyquist</span></div></div><div id="reference-section" class="reference-body"><h3>Retained reference · WAV</h3><p id="reference-scope">Load a catalog sample for its retained listening reference.</p><audio id="reference-audio" controls preload="none" aria-label="Retained reference recording"></audio></div></section>
+          <section class="panel" aria-labelledby="output-title"><div class="panel-header"><h2 id="output-title">Audio output</h2><span id="output-profile-badge" class="badge">PCM · mono</span></div><div class="audio-body">
+            <div id="audio-channel-left" class="audio-channel audio-left" role="group"><span id="audio-channel-label-left" class="audio-channel-name mono" aria-label="Left channel" hidden>L</span><div class="meter-label peak-reading"><span id="peak-title">Peak · measured PCM</span><span id="peak-label" class="mono">−∞ dBFS</span></div><div class="meter-track"><span id="peak-meter" class="meter-level"></span></div><div class="meter-label rms-reading"><span id="rms-title">RMS</span><span id="rms-label" class="mono">−∞ dBFS</span></div><canvas id="waveform-plot" class="audio-plot" aria-label="Actual output waveform"></canvas><div class="plot-caption"><span>WAVEFORM</span><span id="waveform-source">Audio output</span></div></div>
+            <div id="audio-channel-right" class="audio-channel audio-right" role="group" hidden><span class="audio-channel-name mono" aria-label="Right channel">R</span><div class="meter-label peak-reading"><span>Peak</span><span id="peak-label-right" class="mono">−∞ dBFS</span></div><div class="meter-track"><span id="peak-meter-right" class="meter-level"></span></div><div class="meter-label rms-reading"><span>RMS</span><span id="rms-label-right" class="mono">−∞ dBFS</span></div><canvas id="waveform-plot-right" class="audio-plot" aria-label="Actual right output waveform"></canvas></div>
+            <div class="audio-spectrum"><p id="analysis-monitor" class="audio-monitor" hidden><span class="audio-left">L · Left</span><span class="audio-right">R · Right</span></p><canvas id="spectrum-plot" class="audio-plot" aria-label="Actual output frequency spectrum"></canvas><div class="plot-caption"><span>SPECTRUM</span><span id="spectrum-range">0 → Nyquist</span></div></div>
+          </div><div id="reference-section" class="reference-body"><h3>Retained reference · WAV</h3><p id="reference-scope">Load a catalog sample for its retained listening reference.</p><audio id="reference-audio" controls preload="none" aria-label="Retained reference recording"></audio></div></section>
           </div>
           <section class="panel evidence-panel" aria-labelledby="evidence-title"><div class="panel-header"><h2 id="evidence-title">Listen a little closer</h2><span class="badge">Linked evidence</span></div><div class="evidence-body"><p id="evidence-scope" class="evidence-scope">Authored annotations apply only to their exact catalog file, clock, chip model and subtune.</p><div id="evidence-cards"></div></div></section>
         </div>
@@ -732,29 +736,38 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     canvas.setAttribute('aria-valuetext', `${time(held ? cursor : linePosition, true)} ${held ? 'held inspection' : seekMarker !== null ? 'seek point' : 'heard playback'}`);
   };
   const drawAudio = () => {
-    const waveform = canvasContext('waveform-plot');
-    if (waveform) {
+    const stereoOutput = state?.info?.channels === 2;
+    const channelCount = stereoOutput ? 2 : 1;
+    for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
+      const waveform = canvasContext(channelIndex === 0 ? 'waveform-plot' : 'waveform-plot-right');
+      if (!waveform) continue;
       const { ctx, width, height } = waveform;
+      const samples = state?.audioChannels[channelIndex]?.waveform;
       ctx.strokeStyle = '#27324b'; ctx.beginPath(); ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2); ctx.stroke();
-      if (state?.waveform.length) {
-        ctx.strokeStyle = '#7dd7d4'; ctx.lineWidth = 1;
+      if (samples?.length) {
+        ctx.strokeStyle = stereoOutput ? COLORS[channelIndex]! : '#7dd7d4'; ctx.lineWidth = 1;
         ctx.beginPath();
-        for (let x = 0; x < width; x++) { const amplitude = state.waveform[Math.floor(x / width * state.waveform.length)] ?? 0; const y = height / 2 - amplitude * height * .45; if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+        for (let x = 0; x < width; x++) { const amplitude = samples[Math.floor(x / width * samples.length)] ?? 0; const y = height / 2 - amplitude * height * .45; if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
         ctx.stroke();
       }
     }
     const spectrum = canvasContext('spectrum-plot');
-    if (spectrum && state?.spectrum.length) {
-      const { ctx, width, height } = spectrum;
-      const bins = Math.min(64, state.spectrum.length);
-      ctx.fillStyle = '#ac96ed';
+    if (!spectrum) return;
+    const { ctx, width, height } = spectrum;
+    for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
+      const frequencies = state?.audioChannels[channelIndex]?.spectrum;
+      if (!frequencies?.length) continue;
+      const bins = Math.min(64, frequencies.length);
+      const slotWidth = width / bins;
+      const channelWidth = slotWidth / channelCount;
+      ctx.fillStyle = stereoOutput ? COLORS[channelIndex]! : '#ac96ed';
       for (let index = 0; index < bins; index++) {
-        const start = Math.floor((index / bins) ** 2 * state.spectrum.length);
-        const end = Math.max(start + 1, Math.floor(((index + 1) / bins) ** 2 * state.spectrum.length));
+        const start = Math.floor((index / bins) ** 2 * frequencies.length);
+        const end = Math.max(start + 1, Math.floor(((index + 1) / bins) ** 2 * frequencies.length));
         let maximum = 0;
-        for (let bin = start; bin < end; bin++) maximum = Math.max(maximum, state.spectrum[bin] ?? 0);
+        for (let bin = start; bin < end; bin++) maximum = Math.max(maximum, frequencies[bin] ?? 0);
         const bar = maximum / 255 * (height - 5);
-        ctx.fillRect(index / bins * width, height - bar, Math.max(1, width / bins - 2), bar);
+        ctx.fillRect(index * slotWidth + channelIndex * channelWidth, height - bar, Math.max(1, channelWidth - (stereoOutput ? 1 : 2)), bar);
       }
     }
   };
@@ -841,13 +854,18 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     setText('output-profile-badge', `PCM · ${state?.info?.channels === 2 ? 'stereo' : 'mono'}`);
     setText('chip-model-label', stereo ? 'Chip model · both chips' : 'Chip model');
     el('routing-badge').hidden = !stereo;
-    // AnalyserNode analyzes mono while passing output unchanged: https://www.w3.org/TR/webaudio-1.0/#AnalyserNode.
-    el('analysis-monitor').hidden = !stereo;
-    setText('peak-title', stereo ? 'Peak · mono monitor' : 'Peak · measured PCM');
-    setText('rms-title', stereo ? 'RMS · mono monitor' : 'RMS');
-    setText('waveform-source', stereo ? 'Mono monitor' : 'Audio output');
-    el('waveform-plot').setAttribute('aria-label', stereo ? 'Mono monitor waveform: left plus right divided by two' : 'Actual output waveform');
-    el('spectrum-plot').setAttribute('aria-label', stereo ? 'Mono monitor frequency spectrum: left plus right divided by two' : 'Actual output frequency spectrum');
+    const stereoOutput = state?.info?.channels === 2;
+    root.querySelector('.audio-body')!.classList.toggle('stereo', stereoOutput);
+    el('audio-channel-left').setAttribute('aria-label', stereoOutput ? 'Left channel output' : 'Mono output');
+    el('audio-channel-right').setAttribute('aria-label', 'Right channel output');
+    el('audio-channel-right').hidden = !stereoOutput;
+    el('audio-channel-label-left').hidden = !stereoOutput;
+    el('analysis-monitor').hidden = !stereoOutput;
+    setText('peak-title', stereoOutput ? 'Peak' : 'Peak · measured PCM');
+    setText('rms-title', 'RMS');
+    setText('waveform-source', stereoOutput ? 'Left output' : 'Audio output');
+    el('waveform-plot').setAttribute('aria-label', stereoOutput ? 'Actual left output waveform' : 'Actual output waveform');
+    el('spectrum-plot').setAttribute('aria-label', stereoOutput ? 'Actual left and right output frequency spectrum' : 'Actual output frequency spectrum');
     const seeking = state?.seekTarget != null;
     const preparingVoices = seeking && state?.pendingOperation === 'voice-mix';
     const preparationLabel = preparingVoices ? 'Preparing voices…' : 'Seeking…';
@@ -1021,9 +1039,13 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     }
     for (let chip = 0; chip < chipCount(); chip++) drawLane(filterLaneId(chip), plotFrames, writes, null, chip, chartEnd, historyStart);
     renderInspector(inspection, registers);
-    setText('peak-label', db(state?.peakDb ?? -Infinity));
-    setText('rms-label', db(state?.rmsDb ?? -Infinity));
-    el('peak-meter').style.width = `${Math.min(100, Math.max(0, ((state?.peakDb ?? -60) + 60) / 60 * 100))}%`;
+    for (let channelIndex = 0; channelIndex < (stereoOutput ? 2 : 1); channelIndex++) {
+      const suffix = channelIndex === 0 ? '' : '-right';
+      const channel = state?.audioChannels[channelIndex];
+      setText(`peak-label${suffix}`, db(channel?.peakDb ?? -Infinity));
+      setText(`rms-label${suffix}`, db(channel?.rmsDb ?? -Infinity));
+      el(`peak-meter${suffix}`).style.width = `${Math.min(100, Math.max(0, ((channel?.peakDb ?? -60) + 60) / 60 * 100))}%`;
+    }
     setText('spectrum-range', state?.info ? `0 → ${(state.info.sampleRate / 2000).toFixed(1)} kHz · frequency bins` : '0 → Nyquist');
     setText('audio-diagnostics', state?.info ? `${state.info.sampleRate.toLocaleString()} Hz PCM · ${state.underruns} buffer underruns · ${state.info.channels === 2 ? 'stereo' : 'mono'}` : 'Device-local playback · no backend');
     drawAudio();

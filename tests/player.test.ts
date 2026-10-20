@@ -696,7 +696,9 @@ test('dual-SID load exposes six controls and delivers each interleaved chip to i
     destination = {};
     async resume() {}
     async close() {}
-    createAnalyser() { return {connect() {}, getByteFrequencyData() {}, getFloatTimeDomainData() {}}; }
+    createGain() { return {gain:{value:1}, connect() {}, disconnect() {}}; }
+    createChannelSplitter() { return {connect() {}, disconnect() {}}; }
+    createAnalyser() { return {connect() {}, disconnect() {}, getByteFrequencyData() {}, getFloatTimeDomainData() {}}; }
     createBuffer(channels: number, frames: number, rate: number) {
       const buffer = {channels: Array.from({length: channels}, () => new Float32Array(frames)), rate};
       created.push(buffer);

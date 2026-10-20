@@ -1,3 +1,4 @@
+import {AudioMonitor, createAudioChannels} from './audio-monitor.ts';
 import type { CacheCoverage, EngineEvent, EngineReply } from './engine/protocol.ts';
 import { collectObservationWindow } from './engine/observation-window.ts';
 import type { PlayerControls, PlayerState, Profile, TimelineObservation, TimelineOverview, TuneDetails, WriteObservation } from './player-types.ts';
@@ -75,7 +76,7 @@ class EngineClient {
 export class ExplorerPlayer implements PlayerControls {
   private engine: EngineClient | null = null;
   private context: AudioContext | null = null;
-  private analyser: AnalyserNode | null = null;
+  private monitor: AudioMonitor | null = null;
   private listeners = new Set<(state: PlayerState) => void>();
   private segments: ScheduledSegment[] = [];
   private nextStart = 0;
@@ -97,8 +98,7 @@ export class ExplorerPlayer implements PlayerControls {
   private animation = 0;
   private state: PlayerState = {
     status: 'empty', position: 0, seekTarget: null, pendingOperation: null, preparedRange: null, preview: null, overview: null, timelineWindowSeconds: 10, timelineCenterSeconds: null, renderedUntil: 0, duration: null, error: null,
-    info: null, muted: [false, false, false], loop: null, peakDb: -Infinity,
-    rmsDb: -Infinity, spectrum: new Uint8Array(512), waveform: new Float32Array(1024),
+    info: null, muted: [false, false, false], loop: null, audioChannels:createAudioChannels(1),
     frames: [], writes: [], historyStart: 0, dropped: 0, underruns: 0, epoch: 0,
   };
 
@@ -208,14 +208,7 @@ export class ExplorerPlayer implements PlayerControls {
     const outputTime = this.outputTime();
     this.state.position = positionAt(this.segments, outputTime, this.state.position);
     while (this.segments.length > 2 && this.segments[1].contextEnd < outputTime) this.segments.shift();
-    if (this.analyser) {
-      this.analyser.getByteFrequencyData(this.state.spectrum as Uint8Array<ArrayBuffer>);
-      this.analyser.getFloatTimeDomainData(this.state.waveform as Float32Array<ArrayBuffer>);
-      let peak = 0, squares = 0;
-      for (const value of this.state.waveform) { peak = Math.max(peak, Math.abs(value)); squares += value * value; }
-      this.state.peakDb = 20 * Math.log10(peak);
-      this.state.rmsDb = 20 * Math.log10(Math.sqrt(squares / this.state.waveform.length));
-    }
+    this.monitor?.read(this.state.audioChannels);
     if (this.boundary && outputTime >= this.boundary.time) {
       const loop = this.boundary.loop;
       this.boundary = null;
@@ -277,6 +270,7 @@ export class ExplorerPlayer implements PlayerControls {
     this.state.pendingOperation = null;
     this.state.error = null;
     this.state.info = null;
+    this.state.audioChannels = createAudioChannels(1);
     this.state.position = 0;
     this.state.timelineCenterSeconds = null;
     this.state.renderedUntil = 0;
@@ -291,6 +285,7 @@ export class ExplorerPlayer implements PlayerControls {
       const info = await engine.request<TuneDetails>('load', {bytes, options: profile, durationSeconds:profile.durationSeconds});
       if (generation !== this.generation) return;
       this.state.info = info;
+      this.state.audioChannels = createAudioChannels(info.channels);
       this.state.muted = Array<boolean>(info.installedSids * 3).fill(false);
       this.clearHistory(info.registers);
       this.state.status = 'ready';
@@ -307,9 +302,7 @@ export class ExplorerPlayer implements PlayerControls {
     if (['loading', 'seeking', 'error'].includes(this.state.status)) return;
     if (!this.context) {
       this.context = new AudioContext({sampleRate: 44100, latencyHint: 'interactive'});
-      this.analyser = this.context.createAnalyser();
-      this.analyser.fftSize = 1024;
-      this.analyser.connect(this.context.destination);
+      this.monitor = new AudioMonitor(this.context);
     }
     const engine = this.engine;
     const generation = this.generation;
@@ -475,7 +468,7 @@ export class ExplorerPlayer implements PlayerControls {
   }
 
   private async pump() {
-    if (this.pumping || this.state.status !== 'playing' || !this.engine || !this.context || !this.analyser || this.boundary) return;
+    if (this.pumping || this.state.status !== 'playing' || !this.engine || !this.context || !this.monitor || this.boundary) return;
     this.pumping = true;
     const generation = this.generation;
     try {
@@ -500,7 +493,7 @@ export class ExplorerPlayer implements PlayerControls {
         }
         const source = this.context.createBufferSource();
         source.buffer = buffer;
-        source.connect(this.analyser);
+        source.connect(this.monitor.input);
         source.onended = () => source.disconnect();
         if (this.nextStart < this.context.currentTime) {
           this.state.underruns++;
@@ -526,6 +519,7 @@ export class ExplorerPlayer implements PlayerControls {
     cancelAnimationFrame(this.animation);
     this.stopSources();
     this.engine?.terminate();
+    this.monitor?.dispose();
     void this.context?.close();
     this.listeners.clear();
   }

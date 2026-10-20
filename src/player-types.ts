@@ -45,6 +45,12 @@ export interface TimelineObservation {
   continuationStart?: number;
 }
 export type PlayerStatus = 'empty' | 'loading' | 'ready' | 'playing' | 'paused' | 'seeking' | 'ended' | 'error';
+export interface AudioChannelAnalysis {
+  peakDb: number;
+  rmsDb: number;
+  spectrum: Uint8Array;
+  waveform: Float32Array;
+}
 export interface PlayerState {
   status: PlayerStatus;
   position: number;
@@ -61,10 +67,7 @@ export interface PlayerState {
   info: TuneDetails | null;
   muted: boolean[];
   loop: {start: number; end: number} | null;
-  peakDb: number;
-  rmsDb: number;
-  spectrum: Uint8Array;
-  waveform: Float32Array;
+  audioChannels: AudioChannelAnalysis[];
   frames: RegisterFrame[];
   writes: WriteObservation[];
   historyStart: number;

@@ -140,12 +140,26 @@ h3 { font-size: 14px; font-weight: 650; }
 .evidence-tag.verified { color: #83d0bd; }
 .evidence-tag.derived { color: #e2bf83; }
 .audio-body { padding: 15px 17px; }
-.audio-monitor { grid-column: 1 / -1; color: #a4b0cd; font-size: 11px; margin-bottom: 10px; }
+.audio-channel, .audio-spectrum { display: contents; }
+.audio-left { color: var(--cyan); }
+.audio-right { color: var(--yellow); }
+.audio-monitor { grid-column: 1 / -1; display: flex; gap: 18px; font-size: 10px; margin-top: 12px; }
 .meter-label { display: flex; justify-content: space-between; font-size: 10px; color: #a4b0cd; margin-bottom: 8px; }
 .meter-track { height: 7px; border-radius: 2px; background: #0b1120; overflow: hidden; margin-bottom: 12px; }
 .meter-level { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #6abfc0 0%, #8be4cc 75%, #efbf78 90%, #fc8c96 100%); transition: width .08s linear; }
 .audio-plot { width: 100%; height: 70px; background: #0e1424; margin-top: 9px; border-radius: 4px; }
 .plot-caption { font-size: 9px; color: #8797b7; margin-top: 6px; display: flex; justify-content: space-between; }
+.audio-body.stereo { display: block; }
+.audio-body.stereo .audio-channel { display: grid; grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1fr); gap: 5px 8px; align-items: center; }
+.audio-body.stereo .audio-channel + .audio-channel { margin-top: 12px; }
+.audio-channel-name { grid-column: 1; grid-row: 1 / span 3; font-size: 12px; font-weight: 700; }
+.audio-body.stereo .meter-label { font-size: 9px; margin: 0; gap: 4px; white-space: nowrap; }
+.audio-body.stereo .peak-reading { grid-column: 2; grid-row: 1; }
+.audio-body.stereo .rms-reading { grid-column: 3; grid-row: 1; }
+.audio-body.stereo .meter-track { grid-column: 2 / -1; grid-row: 2; height: 4px; margin: 0; }
+.audio-body.stereo .audio-channel .audio-plot { grid-column: 2 / -1; grid-row: 3; height: 36px; margin: 0; }
+.audio-body.stereo .audio-channel .plot-caption { display: none; }
+.audio-body.stereo .audio-spectrum { display: block; }
 .reference-body { padding: 16px 18px; border-top: 1px solid var(--line); }
 .reference-body h3 { font-size: 12px; }
 .reference-body p { font-size: 10px; line-height: 1.7; color: #a7b2ce; margin: 7px 0 11px; }
@@ -154,7 +168,8 @@ audio { display: block; width: 100%; height: 36px; color-scheme: dark; }
 .source-links { display: flex; flex-wrap: wrap; gap: 13px; }
 .drop-active { outline: 2px dashed #bca6ff; outline-offset: -5px; }
 @media (min-width: 1500px) { .workspace { padding: 34px 40px 25px; } .inspection-grid { grid-template-columns: minmax(0, 1fr) 350px; } }
-@media (max-width: 1180px) { .app-shell { grid-template-columns: 210px minmax(0, 1fr); } .sidebar { padding: 25px 16px; } .workspace { padding: 25px 20px; } .inspection-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; } .inspection-sidebar { grid-column: auto; grid-row: auto; } .inspector-body { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; } .inspector-note, .voice-tabs { grid-column: 1 / -1; } .inspector-body > .inspector-subhead { margin-top: 0; } .shared-filter { grid-column: 2; grid-row: 3; align-self: start; } .inspector-writes { grid-column: 2; } .register-grid { grid-row: 3 / 6; margin-top: 0; } .audio-body { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 20px; } .audio-body > .meter-label, .audio-body > .meter-track { grid-column: 1 / -1; } .audio-body .plot-caption { display: none; } }
+@media (max-width: 1180px) { .app-shell { grid-template-columns: 210px minmax(0, 1fr); } .sidebar { padding: 25px 16px; } .workspace { padding: 25px 20px; } .inspection-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; } .inspection-sidebar { grid-column: auto; grid-row: auto; } .inspector-body { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; } .inspector-note, .voice-tabs { grid-column: 1 / -1; } .inspector-body > .inspector-subhead { margin-top: 0; } .shared-filter { grid-column: 2; grid-row: 3; align-self: start; } .inspector-writes { grid-column: 2; } .register-grid { grid-row: 3 / 6; margin-top: 0; } .audio-body { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 20px; } .audio-body .meter-label, .audio-body .meter-track { grid-column: 1 / -1; } .audio-body .plot-caption { display: none; } }
+@media (min-width: 741px) and (max-width: 1180px) { .audio-body.stereo { display: grid; } .audio-body.stereo .audio-channel { grid-column: 1; } .audio-body.stereo .audio-channel + .audio-channel { margin-top: 0; } .audio-body.stereo .audio-spectrum { grid-column: 2; grid-row: 1 / span 2; } .audio-body.stereo .audio-monitor { margin-top: 0; } }
 @media (max-width: 740px) { .app-header { height: 77px; padding: 0 17px; } .brand img { width: 43px; height: 43px; } .brand-name { font-size: 16px; } .header-note .mono { display: none; } .app-shell { display: block; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); padding: 18px; flex-direction: row; gap: 20px; align-items: start; } .sidebar > section { flex: 1; min-width: 0; } .sidebar .eyebrow, .sidebar .library-mark, .sidebar .library-summary, .sidebar h2, .sidebar-footer { display: none; } .sidebar .library-select { margin: 0; } .sidebar .local-section { border: 0; padding: 0; } .privacy-note { font-size: 9px; margin-top: 7px; } .workspace { padding: 22px 15px; } .track-heading { gap: 10px; } .track-heading > .badge { display: none; } .track-description { font-size: 12px; } .time-display { font-size: 16px; } .settings { padding: 15px; gap: 9px; } .settings-note { width: 100%; flex-basis: 100%; } .voice-lane { grid-template-columns: 70px minmax(0, 1fr); } .timeline-key { padding-left: 70px; } .panel-header { padding: 14px; flex-wrap: wrap; } .follow-controls button { font-size: 10px; padding: 6px; } .inspector-body { display: block; } .register-grid { display: grid; } .inspector-body > .inspector-subhead { margin-top: 12px; } .evidence-card { gap: 8px; } .evidence-card button { max-width: 75px; white-space: normal; } .audio-body { display: block; } .source-footer { font-size: 10px; } }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
 
