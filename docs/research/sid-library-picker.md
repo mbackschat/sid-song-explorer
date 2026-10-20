@@ -36,7 +36,7 @@ The live embed page returned HTTP 200 without an observed framing restriction. I
 
 On 2026-10-20, a separate local parent page embedded the live widget with its actual localhost origin, file mode and the initial query `commando`. The test selected Rob Hubbard’s result through the existing widget UI and clicked its Select button. The parent accepted only messages from `https://sidquake.c64demo.com` whose sending window matched the embedded frame.
 
-One silent headless Google Chrome test passed in 5.9 seconds using Chrome `155.0.8059.85`, Node.js 24.18.0, pnpm 11.20.0 and the [shared silent fixture](../../tests/browser/fixtures.ts). The test used observable UI/message conditions, no retries and a 60-second global limit. It reported no page errors. Download acceptance, trace, video and screenshots were disabled; the SID bytes and short-lived download URL were not persisted. The provider’s attribution remained visible.
+The live handoff was verified in headless Chrome `155.0.8059.85` using the [shared silent fixture](../../tests/browser/fixtures.ts), observable UI/message conditions, no retries and a 60-second global limit. No page errors were observed. Download acceptance, trace, video and screenshots were disabled; the SID bytes and short-lived download URL were not persisted. The provider’s attribution remained visible.
 
 | Received fact | Observed value |
 | --- | --- |

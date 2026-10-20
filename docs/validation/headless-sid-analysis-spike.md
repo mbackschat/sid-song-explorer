@@ -6,7 +6,7 @@ Date: 2026-10-20. [The proposal](../design/headless-sid-analysis.md) owns scope,
 
 The headless boundary works: a pure streaming accumulator consumes existing session observations, a Node host executes the SID and writes JSON, and a separate report viewer renders that JSON. The viewer contains no SID execution or finding-selection logic. The existing emulator, production playback and cache were not modified.
 
-The spike recommendation was to retain this architecture and consider voice/chip summaries for later integration. The user subsequently deferred the proposal on 2026-10-20; no further work is scheduled. The findings list is a promising review aid, not a finished “interesting passages” detector. Its first version selected repetitive retrigger writes; the bounded refinement below produced more informative waveform changes, but representative gate edges and overlapping changes on multiple voices still need product judgment. Preserve these results without treating them as production UI or human usefulness acceptance.
+The user deferred the proposal on 2026-10-20; no integration or further ranking work is scheduled. The findings list remains an experimental review aid. Representative gate edges and overlapping changes on multiple voices need product judgment; executed reports do not establish human usefulness.
 
 ## What was executed
 
@@ -22,13 +22,11 @@ All three delivered the complete requested frame interval with zero dropped writ
 
 The CLI bounds input to 65,662 bytes, duration to 600 seconds, reports to 4 MiB and worker execution to 45 seconds. The worker renders 16,384-frame consumer blocks through the unchanged session partition. A parent process can terminate synchronous work; a blocked-worker test verified deadline termination and reaping. Signal handlers exist, but signal-specific cancellation was not separately tested. The spike remains repository-local and requires the prepared runtime; it is not a distributed standalone package.
 
-## Findings and the failed first approach
+## Finding selection and limits
 
-The initial Rambo mono scan selected twelve waveform-to-zero changes at regularly spaced times. Inspection of the report showed only about 10 ms of total “no waveform selected” time on voice 2 across the 30-second interval. Those brief resets were real writes but poor navigation suggestions. The initial report remains in ignored `build/sid-analysis/rambo-mono-30-initial.json`.
+Waveform nominations compare settings sustained for at least 20 ms. Brief real resets can be poor navigation suggestions: the Rambo mono scan contains repeated waveform-to-zero writes but only about 10 ms of total waveform-off time on voice 2 in 30 seconds. Short intermediate settings remain in counts, ranges and occupancy metrics; only nomination omits them. Before/after values are successive sustained settings rather than necessarily adjacent writes. This heuristic is recorded in the report; other finding kinds retain direct register-change semantics.
 
-The refined selector compares waveform settings held for at least 20 ms. Short intermediate settings remain fully represented in write counts, ranges and occupancy metrics; only finding nomination omits them. Before/after values in a waveform finding are successive sustained settings, not necessarily adjacent register writes. The threshold is explicitly heuristic and recorded in the report. Other finding kinds retain direct register-change semantics.
-
-Representative final observations:
+Representative observations from the 2026-10-20 reports:
 
 - Rambo voice 2 changes from sustained sawtooth to pulse at approximately **12.795 s**. Its first 30 seconds contain approximately 12.79 seconds of sawtooth selection and 17.20 seconds of pulse selection; these describe programmed waveform bits, not inferred instruments.
 - The stereo Rambo report identifies SID 2 voices 2 and 3 enabling sustained triangle and pulse settings around **15.358–15.359 s**, while keeping their statistics separate from SID 1.
@@ -38,18 +36,16 @@ The selector suppresses its first 0.25 seconds, keeps bounded candidates across 
 
 ## Correctness and separation evidence
 
-The final focused suite passed **23 tests**: seventeen independent handwritten trace/PCM cases, four host/worker cases and two real-WASM diagnostic cases. Red/green logs are retained under ignored `build/sid-analysis/`.
+[The handwritten oracles](../../scripts/experiments/sid-analysis/analysis.test.ts) cover redundant writes versus elapsed time, rapid gate events hidden by a final snapshot, same-time ordering, nonzero initial state, time-zero and terminal boundaries, chip ownership, signed-16-bit PCM scaling, overlapping waveform bits, loss invalidation, bounded temporal selection, brief waveform resets and sustained-state confirmation. Short and partitioned loss-free streams produce identical full reports.
 
-The handwritten oracles cover redundant writes versus elapsed time, rapid gate events hidden by a final snapshot, same-time ordering, nonzero initial state, time-zero and terminal boundaries, chip ownership, signed-16-bit PCM scaling, overlapping waveform bits, loss invalidation, bounded temporal selection, brief waveform resets and sustained-state confirmation. Short and partitioned loss-free streams produce identical full reports.
-
-The real-WASM oracle derives gate/waveform expectations from the diagnostic program, checks active-chip PCM against an independently rendered relocated mono program, and compares PCM statistics with independent formulas. A separate real session partition check produces identical reports. Inactive-channel metrics are checked without assuming digital silence; independent inactive-channel equality is not claimed.
+[The real-WASM oracle](../../scripts/experiments/sid-analysis/engine.test.ts) derives gate/waveform expectations from the diagnostic program, checks active-chip PCM against an independently rendered relocated mono program, and compares PCM statistics with independent formulas. A separate real session partition check produces identical reports. Inactive-channel metrics are checked without assuming digital silence; independent inactive-channel equality is not claimed.
 
 Dropped writes invalidate derived register metrics rather than presenting false precision. Observed counts remain incomplete, PCM remains measurable and only findings before the affected block survive. With loss, the reliable prefix, dropped-block count and retained findings can depend on the delivery partition; the full-report invariance claim applies only to loss-free streams.
 
-An independent source review found no remaining blocking issue in numerical accounting, per-chip ownership, bounded retention, process deadlines or UI separation. Type checking passed. The report viewer's embedded JavaScript syntax and all three report payloads were checked from the terminal. Browser tools were unavailable during the attempted review; after the user requested no computer use, no further computer/browser interaction was performed. No rendered UI, Safari or human usefulness acceptance is claimed.
+[Host/worker guards](../../scripts/experiments/sid-analysis/runner.test.ts) cover bounded execution and output handling. Local software/type checks, viewer JavaScript syntax and the three report payloads were verified on 2026-10-20. Rendered UI, Safari behavior and human usefulness were not checked.
 
 ## Deferred decision
 
 The thin viewer is available at [localhost port 4180](http://127.0.0.1:4180/) while its local server runs. It allows selection among the three reports, inspection of finding evidence, comparison of voice/chip statistics and expansion of provenance. It does not play audio or seek Explorer. The Node JSON reports remain usable without it.
 
-The user parked the proposal after reviewing the spike handoff. Keep its code, reports and evidence for possible later use; do not proceed with integration or further ranking work now. If explicitly reopened, first review whether the waveform changes and voice summaries help exploration. The retained architectural recommendation is a headless core with an Explorer adapter consuming its report, rather than moving analysis rules into the UI.
+If explicitly reopened, first review whether waveform changes and voice summaries help exploration. The retained architectural recommendation is a headless core with an Explorer adapter consuming its report, keeping analysis rules outside the UI.

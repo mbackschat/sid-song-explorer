@@ -29,6 +29,13 @@ Explorer implementation, experiments, decision records and working output belong
 - Never push without authorization. Before every GitHub push verify that `git config user.email` is `mbackschat@mail.de`; stop on a mismatch.
 - Ask for listening or product decisions with a recommendation and rationale. Make routine execution choices autonomously. Do not send messages to others without explicit authorization.
 
+## Keep documentation durable
+
+- Document current contracts, decisions and their rationale, reproducible validation methods, material limitations and scoped acceptance. Keep each fact in its existing owner.
+- Do not accumulate session journals, release chronology, implementation play-by-play, routine test counts/timings, retry histories, or commit/push/deployment status in project documentation. Use command logs, CI, Git history and the final response for execution reporting.
+- Reduce a resolved failure to the reusable constraint and regression guard when those help future work; retain reproduction inputs in tests or evidence, not a narrative of the debugging session. Keep dated measurements only when they support a performance/resource decision or another substantive claim, and preserve human listening verdicts with their scope.
+- Update or replace superseded text instead of appending another checkpoint or follow-up. Remove obsolete operational prose; do not move it into a new archive document. Before adding a paragraph, identify the future decision or task it supports; omit it if it only proves work happened.
+
 ## Choose sub-agent tiers by task
 
 Delegation is authorized. **LOW, MEDIUM and HIGH are symbolic model tiers**, not fixed roles or agent counts. Resolve the active CLI's model and effort settings through the [global model tier mappings](https://github.com/mbackschat/coding-setup/blob/main/CLAUDE.md#model-tier-mappings); keep concrete selectors only there. Report missing or unsupported configurations rather than substituting silently. Start a fresh agent when changing tier so a fork cannot retain the previous model.
@@ -91,4 +98,4 @@ Use the selected sound-lens identity and its [owning assets](assets/branding/REA
 
 For JavaScript/TypeScript work, budget focused tests at 60 seconds and builds at 120 seconds unless a measured exception is documented. Use the runner's native bounded waits and session IDs; poll at most 30 seconds at a time and terminate/reap abandoned processes. Do not increase a budget just to wait longer. Diagnose sustained CPU saturation without progress; silence alone does not prove a hang. Use cancellation/deadlines at risky external-call boundaries.
 
-Before a checkpoint, reconcile decisions, failed approaches and verification in their owning documents and update the plan. Retain reproduction inputs and evidence scope. Automate established repeated procedures with explicit inputs, bounded execution and meaningful checks; do not turn agents into a manual scheduler.
+Before a checkpoint, reconcile durable decisions, relevant rejected alternatives and verification contracts in their owning documents, and update current plan status. Retain reproduction inputs and evidence scope without adding execution chronology. Automate established repeated procedures with explicit inputs, bounded execution and meaningful checks; do not turn agents into a manual scheduler.
