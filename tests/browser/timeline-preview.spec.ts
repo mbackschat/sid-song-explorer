@@ -46,17 +46,18 @@ test('dense stereo Bach keeps its prepared upcoming range visible near the entra
   const coverage = await page.evaluate(async () => {
     const lane = document.querySelector<HTMLElement>('#voice-lane-0')!;
     const start = Number(lane.getAttribute('aria-valuenow'));
+    const target = start + 3;
     const deadline = performance.now() + 8000;
     let minimum = Infinity;
     let latest = start;
-    while (latest < start + 3 && performance.now() < deadline) {
+    while (latest < target && performance.now() < deadline) {
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
       latest = Number(lane.getAttribute('aria-valuenow'));
       if (latest > start) minimum = Math.min(minimum, Number(lane.dataset.observedUntil) - Number(lane.getAttribute('aria-valuemax')));
     }
-    return {minimum, advanced:latest - start};
+    return {minimum, latest, target};
   });
-  expect(coverage.advanced).toBeGreaterThanOrEqual(3);
+  expect(coverage.latest).toBeGreaterThanOrEqual(coverage.target);
   expect(coverage.minimum).toBeGreaterThanOrEqual(-.01);
 });
 
@@ -123,11 +124,12 @@ test('prepared upcoming activity stays filled between refreshes during playback 
     const coverage = await page.evaluate(async () => {
       const lane = document.querySelector<HTMLElement>('#voice-lane-0')!;
       const start = Number(lane.getAttribute('aria-valuenow'));
+      const target = start + 3;
       const deadline = performance.now() + 8000;
       let minimum = Infinity;
       let samples = 0;
       let latest = start;
-      while (latest < start + 3 && performance.now() < deadline) {
+      while (latest < target && performance.now() < deadline) {
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         latest = Number(lane.getAttribute('aria-valuenow'));
         if (latest > start) {
@@ -135,10 +137,10 @@ test('prepared upcoming activity stays filled between refreshes during playback 
           samples++;
         }
       }
-      return {minimum, samples, advanced:latest - start};
+      return {minimum, samples, latest, target};
     });
     console.log(`${test.info().project.name}: preview coverage at ${target}s`, coverage);
-    expect(coverage.advanced).toBeGreaterThanOrEqual(3);
+    expect(coverage.latest).toBeGreaterThanOrEqual(coverage.target);
     expect(coverage.samples).toBeGreaterThan(10);
     expect(coverage.minimum, 'the visible right edge must not outrun already prepared observations between refreshes').toBeGreaterThanOrEqual(-.001);
     await expect(page.locator('#audio-diagnostics')).toContainText('0 buffer underruns');
