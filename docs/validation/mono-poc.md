@@ -83,7 +83,7 @@ The 2026-10-19 audit confirmed the public GitHub repository and tracked guide, r
 
 Production build and documentation checks passed after the warning fix. The audio engine and transport were unchanged by this final presentation correction, so their passed full-duration and exact-audio checks were not repeated.
 
-On 2026-10-19, in direct response to the outstanding “Full-ending playback in actual Safari and your judgment of the inspection’s usefulness” gates, the user confirmed: “it works, I have tested it”. This is the human acceptance that closes milestone 1. The confirmation did not specify the tested Safari/macOS versions, a separate comparison with the reference render, or a verdict on the voice-switch feedback presentation. It does not establish gapless switching, iPhone behavior or dual-SID acceptance. [The plan](../PLAN.md) owns subsequent priorities and the deferred dual-SID and normalized Crafter producer gates.
+On 2026-10-19, in direct response to the outstanding “Full-ending playback in actual Safari and your judgment of the inspection’s usefulness” gates, the user confirmed: “it works, I have tested it”. This is the human acceptance that closes milestone 1. The confirmation did not specify the tested Safari/macOS versions, a separate comparison with the reference render, or a verdict on the voice-switch feedback presentation. It does not establish gapless switching, iPhone behavior or dual-SID acceptance. [The plan](../PLAN.md) owns subsequent priorities; [dual-SID validation](stereo.md) and [catalog integration](../integration/crafter-handoff.md#normalized-catalog-integration) record their later completion.
 
 
 ## CI cold-seek investigation
@@ -239,6 +239,8 @@ The user explicitly confirmed that the right-side clicked line should remain att
 The new regression samples the rendered white line from canvas pixels and compares its timestamp with the clicked note, independently of UI state fields. It also verifies normal-speed viewport movement during the approach, the explicit center handoff and subsequent heard tracking. The red run reproduced the accelerated viewport on the previous implementation. The first build exposed a missing canvas type assertion in the test, corrected before browser verification. Logs and reproduction traces use the ignored `build/unified-panel/clicked-note-` prefix.
 
 All eight focused Chrome/macOS WebKit checks passed in 1.4 minutes. Both browsers passed the rendered-pixel oracle for note/line attachment and the center handoff, plus startup/browsed/Fit windows and pending/completed seek geometry. Production type checking/build, the browser-policy guard, documentation links and whitespace checks passed. The user authorized proceeding with the rest of the plan; that authorization does not establish visual acceptance of the handoff.
+
+The user subsequently confirmed on 2026-10-20: “playhead-handoff: it is working, accepted.” This explicitly closes the final human review of the clicked-note transition and center handoff.
 
 
 ## Whole-song overview
