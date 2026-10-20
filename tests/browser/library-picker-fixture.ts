@@ -18,9 +18,15 @@ type FixtureWindow = Window & {
   libraryFixtureBeforeSelection?: () => void;
 };
 
-function providerHtml(parentOrigin: string, autoReady: boolean): string {
+export function fixtureSidBytes(subtunes = 1): Buffer {
+  const bytes = Buffer.from(clearedSid);
+  bytes.writeUInt16BE(subtunes, 14);
+  return bytes;
+}
+
+function providerHtml(parentOrigin: string, autoReady: boolean, subtunes = 1): string {
   const fixture = JSON.stringify({
-    base64: clearedSid.toString('base64'), path: libraryPath, title: libraryTitle,
+    base64: fixtureSidBytes(subtunes).toString('base64'), path: libraryPath, title: libraryTitle,
     author: libraryAuthor, released: libraryReleased, stil: libraryStil,
   }).replaceAll('<', '\\u003c');
   return `<!doctype html><html><head><title>Deterministic SID picker provider</title></head><body>
@@ -68,8 +74,13 @@ function providerHtml(parentOrigin: string, autoReady: boolean): string {
   </body></html>`;
 }
 
-export async function installLibraryProvider(page: Page, options: {autoReady?: boolean} = {}) {
+export async function installLibraryProvider(page: Page, options: {autoReady?: boolean; subtunes?: number; songlengths?: string; songlengthStatus?: number} = {}) {
   let requests = 0;
+  let lengthRequests = 0;
+  await page.route('https://hvsc.c64.org/download/C64Music/DOCUMENTS/Songlengths.md5', async route => {
+    lengthRequests++;
+    await route.fulfill({status: options.songlengthStatus ?? 200, contentType: 'text/plain', headers: {'Access-Control-Allow-Origin':'*'}, body: options.songlengths ?? '[Database]\n'});
+  });
   await page.addInitScript(() => {
     if (window !== window.top) return;
     const fixture = window as unknown as FixtureWindow;
@@ -88,12 +99,12 @@ export async function installLibraryProvider(page: Page, options: {autoReady?: b
   });
   await page.route(`${libraryOrigin}/hvsc-embed.html**`, async route => {
     requests++;
-    await route.fulfill({contentType: 'text/html', body: providerHtml(new URL(page.url()).origin, options.autoReady ?? true)});
+    await route.fulfill({contentType: 'text/html', body: providerHtml(new URL(page.url()).origin, options.autoReady ?? true, options.subtunes ?? 1)});
   });
   await page.route('https://unrelated.example/library-fixture**', async route => {
     await route.fulfill({contentType: 'text/html', body: providerHtml(new URL(page.url()).origin, true)});
   });
-  return {requests: () => requests};
+  return {requests: () => requests, lengthRequests: () => lengthRequests};
 }
 
 let checkpointCount = 0;

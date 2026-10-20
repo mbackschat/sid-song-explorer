@@ -780,6 +780,47 @@ test('Fit overview requests the whole range only when coverage changes and disca
   assert.equal(value.state.overview, overview);
 });
 
+test('a growing overview range remains limited to one request per second', async (t) => {
+  const {value, worker} = await loaded(t);
+  value.player.setTimelineOverview(10);
+  let replied = worker.lastRequest('overview').id;
+  worker.reply(worker.lastRequest('overview'), preview(0, 10));
+  await flushReplies();
+  for (let index = 1; index <= 100; index++) {
+    value.player.setTimelineOverview(10 + index / 100);
+    value.advance(10);
+    const request = worker.lastRequest('overview');
+    if (request.id !== replied) {
+      worker.reply(request, preview(0, request.payload.endSeconds as number));
+      replied = request.id;
+      await flushReplies();
+    }
+  }
+  assert.equal(worker.requests.filter(request => request.method === 'overview').length, 2);
+  assert.deepEqual(worker.lastRequest('overview').payload, {startSeconds:0, endSeconds:11});
+  assert.equal(value.state.overview!.end, 11);
+});
+
+test('changing an overview range while pending rejects its stale reply without bypassing the throttle', async (t) => {
+  const {value, worker} = await loaded(t);
+  value.player.setTimelineOverview(10);
+  const obsolete = worker.lastRequest('overview');
+  value.player.setTimelineOverview(20);
+  worker.reply(obsolete, preview(0, 10));
+  await flushReplies();
+  assert.equal(value.state.overview, null);
+  value.advance(999);
+  assert.equal(worker.lastRequest('overview').id, obsolete.id);
+  value.player.setTimelineOverview(30);
+  assert.equal(worker.lastRequest('overview').id, obsolete.id);
+  value.advance(1);
+  const current = worker.lastRequest('overview');
+  assert.deepEqual(current.payload, {startSeconds:0, endSeconds:30});
+  worker.reply(current, preview(0, 30));
+  await flushReplies();
+  assert.equal(value.state.overview!.end, 30);
+});
+
 test('exact future inspection is read-only and rejects a reply from a replaced playback generation', async (t) => {
   const {value, worker} = await loaded(t);
   const pending = value.player.inspectTimeline(50);

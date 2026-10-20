@@ -413,7 +413,6 @@ export class ExplorerPlayer implements PlayerControls {
     if (end === this.overviewEnd) return;
     this.overviewEnd = end;
     this.overviewKey = '';
-    this.overviewRequestedAt = -Infinity;
     this.refreshOverview();
   }
 

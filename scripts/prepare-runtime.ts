@@ -101,6 +101,7 @@ export async function prepareRuntime(options: PreparationOptions = {}): Promise<
     for (const [source, destination] of PUBLIC_FILES) await writeFile(resolve(publicDirectory, destination), artifacts.get(source)!);
     await writeFile(resolve(publicDirectory, 'engine-provenance.json'), artifacts.get('provenance.json')!);
     await writeFile(resolve(publicDirectory, 'engine-verification.json'), artifacts.get('result.json')!);
+    await writeFile(resolve(publicDirectory, 'noble-hashes-LICENSE.txt'), await regularFile(resolve(root, 'node_modules/@noble/hashes/LICENSE')));
   } catch (error) {
     throw new Error(`Raw-chip engine assets are missing or stale: ${error instanceof Error ? error.message : String(error)}. Run pnpm prepare:engine (Docker required), then pnpm prepare:assets.`, {cause: error});
   }

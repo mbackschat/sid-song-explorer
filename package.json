@@ -22,6 +22,7 @@
     "test:full": "EXPLORER_FULL_SONG=1 playwright test --project webkit --grep uninterrupted"
   },
   "dependencies": {
+    "@noble/hashes": "2.4.0",
     "libsidplayfp-wasm": "1.1.0"
   },
   "devDependencies": {

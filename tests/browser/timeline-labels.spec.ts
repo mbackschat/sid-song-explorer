@@ -67,22 +67,49 @@ test('viewport times belong to the chart while scrollbar endpoints keep the full
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeCloseTo(expectedPosition, 1);
 });
 
-test('an unknown song duration labels the scrollbar endpoint as the explored boundary', async ({page}) => {
+test('an unknown song duration labels the scrollbar endpoint as a timeline limit', async ({page}) => {
   await page.goto('/');
   await page.locator('#local-file').setInputFiles('public/generated/rambo-loader-main.sid');
   await pauseAfterPlayback(page);
   const rangeEnd = page.locator('#timeline-range-end');
   await expect(page.locator('#timeline-range-start')).toHaveText('0:00');
-  await expect(rangeEnd).toHaveText('Explored 0:30');
-  await expect(rangeEnd).toHaveAttribute('title', 'Explored range; song duration unknown');
+  await expect(rangeEnd).toHaveText('0:30 · length unknown');
+  await expect(rangeEnd).toHaveAttribute('title', 'Current timeline limit; song length unknown');
   await expectLabelPlacement(page);
   await page.locator('#timeline-zoom-in').click();
   await page.locator('#timeline-scroll-track').focus();
   await page.locator('#timeline-scroll-track').press('End');
-  await expect(rangeEnd).toHaveText('Explored 0:30');
+  await expect(rangeEnd).toHaveText('0:30 · length unknown');
   await page.setViewportSize({width:390, height:844});
   await expectLabelPlacement(page);
   await page.locator('#timeline-fit').click();
-  await expect(rangeEnd).toHaveText('Explored 0:30');
-  await expect(page.locator('#timeline-view-note')).toHaveText('Explored range · duration unknown');
+  await expect(rangeEnd).toHaveText('0:30 · length unknown');
+  await expect(page.locator('#timeline-view-note')).toHaveText('Length unknown · click Fit timeline to update');
+});
+
+
+test('Fit timeline keeps an unknown-length range fixed until explicitly fitted again', async ({page}) => {
+  await page.goto('/');
+  await page.locator('#local-file').setInputFiles('public/generated/rambo-loader-main.sid');
+  await pauseAfterPlayback(page);
+  const fit = page.locator('#timeline-fit');
+  await expect(fit).toHaveText('Fit timeline');
+  await fit.click();
+  const lane = page.locator('#voice-lane-0');
+  const initialEnd = Number(await lane.getAttribute('aria-valuemax'));
+  await page.locator('#seek-slider').fill('25');
+  await expect(page.locator('#play-button')).toBeEnabled();
+  await expect.poll(() => page.locator('#timeline-scroll-track').getAttribute('data-total').then(Number)).toBeGreaterThan(initialEnd);
+  expect(Number(await lane.getAttribute('aria-valuemax'))).toBe(initialEnd);
+  await page.locator('#play-button').click();
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(25.2);
+  await page.locator('#play-button').click();
+  expect(Number(await lane.getAttribute('aria-valuemax'))).toBe(initialEnd);
+  await fit.click();
+  await expect.poll(() => lane.getAttribute('aria-valuemax').then(Number)).toBeGreaterThan(initialEnd);
+  await page.locator('#use-sample-button').click();
+  await expect(page.locator('#play-button')).toBeEnabled();
+  await expect(fit).toHaveText('Fit song');
+  await fit.click();
+  expect(Number(await lane.getAttribute('aria-valuemax'))).toBeCloseTo(193.35884353741497, 2);
 });

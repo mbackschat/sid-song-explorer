@@ -18,6 +18,12 @@ Run `pnpm prepare:engine` with Docker to build and verify the raw-chip engine, t
 
 The package's full notices and source archive retain its component-specific terms, including MIT, Emscripten's MIT/NCSA choice and Apache-2.0 with LLVM Exceptions. The archive also contains the package's reSIDfp build sources; Explorer selects the SIDLite engine. Preserve the copied files and source access when redistributing the generated app. Dependency versions and integrity are pinned in [the pnpm lockfile](pnpm-lock.yaml); development tools and test runners retain their own package notices.
 
+## @noble/hashes 2.4.0
+
+The pinned [@noble/hashes 2.4.0](https://github.com/paulmillr/noble-hashes) dependency is MIT-licensed, Copyright (c) 2022 Paul Miller. Explorer uses its MD5 implementation solely to match original library SID bytes against HVSC’s song-length database locally. This identifier is not an authenticity or security check. `pnpm prepare:assets` copies the complete upstream notice to `dist/generated/noble-hashes-LICENSE.txt` through the production build. Dependency integrity is pinned in [the lockfile](pnpm-lock.yaml).
+
+HVSC song-length metadata is fetched from its [official endpoint](https://hvsc.c64.org/download/C64Music/DOCUMENTS/Songlengths.md5) only for library selections and retained in tab memory. Explorer does not bundle or mirror the database or grant rights to the referenced music.
+
 ## Rambo loader main-music sample
 
 The catalog's **Rambo loader — main music** is a cleared independent reconstruction of Martin Galway's 1985 loading music, distributed under **GPL-3.0-only**. Composed, arranged and programmed by **Martin Galway**; historical credit: **(C) Ocean Software 1985**. His pinned [ownership statement](https://github.com/MartinGalway/C64_music/blob/a458a3687e27a63647bbe41968094f0e6d0965a0/README.md) states that he later acquired the music/programming rights from Infogrames; his repository supplies [the loader source](https://github.com/MartinGalway/C64_music/blob/a458a3687e27a63647bbe41968094f0e6d0965a0/rambload.asm) and [GPL version 3 license](https://github.com/MartinGalway/C64_music/blob/a458a3687e27a63647bbe41968094f0e6d0965a0/LICENSE).

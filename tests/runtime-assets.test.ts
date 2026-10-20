@@ -60,8 +60,10 @@ test('packages only hash-verified runtime and corresponding-source artifacts fro
     assert.deepEqual((await readdir(value.engineDirectory)).sort(), ['libsidplayfp.d.ts', 'libsidplayfp.js', 'libsidplayfp.wasm']);
     assert.deepEqual((await readdir(value.publicDirectory)).sort(), [
       'engine-EXPLORER-LICENSE.txt', 'engine-LICENSE.txt', 'engine-MODIFICATIONS.txt', 'engine-NOTICES.txt',
-      'engine-complete-source.tar.gz', 'engine-provenance.json', 'engine-verification.json',
+      'engine-complete-source.tar.gz', 'engine-provenance.json', 'engine-verification.json', 'noble-hashes-LICENSE.txt',
     ]);
+    assert.deepEqual(await readFile(path.join(value.publicDirectory, 'noble-hashes-LICENSE.txt')),
+      await readFile(path.join(root, 'node_modules/@noble/hashes/LICENSE')));
     assert.deepEqual(await readFile(path.join(value.engineDirectory, 'libsidplayfp.wasm')),
       await readFile(path.join(value.artifactDirectory, 'libsidplayfp.wasm')));
     assert.deepEqual(await readFile(path.join(value.publicDirectory, 'engine-complete-source.tar.gz')),

@@ -4,6 +4,7 @@ import { FOLLOW_WINDOW_SECONDS, followingWindow, fittedWindow, visibleTimelineFr
 import type { DisplayedObservation } from './timeline.ts';
 import {timelineScrollbarGeometry, timelineViewportStart} from './timeline-scrollbar.ts';
 import {mountLibraryPicker, type LibrarySelection} from './library-picker.ts';
+import {SongLengthLookup} from './song-lengths.ts';
 import logoUrl from '../assets/branding/sid-song-explorer.svg?url';
 import './style.css';
 import './library-picker.css';
@@ -68,7 +69,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
             <div id="history-summary" class="history-summary"><span id="history-description">No retained observations yet.</span> <span id="trace-warning" role="status" hidden></span> <a id="view-inspector" href="#inspector-title" hidden>View inspector →</a></div>
             <p id="voice-mix-status" class="intervention-note" role="status" aria-live="polite" aria-atomic="true"></p>
             <div class="panel-options"><details id="loop-details"><summary>Loop A–B</summary>
-            <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="0" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="8" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restarts may briefly pause; playback is not gapless.</span></div></details><details id="playback-setup"><summary>Playback setup</summary><div class="settings"><label><span>Clock</span><select id="clock-select"><option>PAL</option><option>NTSC</option></select></label><label><span id="chip-model-label">Chip model</span><select id="model-select"><option value="MOS6581">MOS 6581</option><option value="MOS8580">MOS 8580</option></select></label><label><span>Subtune</span><select id="subtune-select"><option value="1">1</option></select></label><p id="settings-note" class="settings-note">Settings apply when you load. Prepared audio supports quick seeking; other positions need preparation. Trace timestamp alignment is approximate.</p></div></details><details id="timeline-help"><summary>Help & details</summary><p class="timeline-help">Drag the proportional scrollbar to browse without changing sound. Click or drag the time ruler to seek when released. Click a lane to seek playback. Shift-click a lane to inspect its settings; Hold captures the current heard position. Follow returns to centered playback. Zoom changes detail; wider charts show more time at the same zoom. Shading marks unavailable observations. Fit song shows the whole duration with prepared activity ahead; unknown duration uses the explored range. A line shows register frequency, not loudness; gate clear can still release sound.</p><div class="transport-foot"><span id="seek-note"></span><span id="render-lead"></span></div></details></div>
+            <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="0" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="8" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restarts may briefly pause; playback is not gapless.</span></div></details><details id="playback-setup"><summary>Playback setup</summary><div class="settings"><label><span>Clock</span><select id="clock-select"><option>PAL</option><option>NTSC</option></select></label><label><span id="chip-model-label">Chip model</span><select id="model-select"><option value="MOS6581">MOS 6581</option><option value="MOS8580">MOS 8580</option></select></label><label><span>Subtune</span><select id="subtune-select"><option value="1">1</option></select></label><p id="settings-note" class="settings-note">Settings apply when you load. Prepared audio supports quick seeking; other positions need preparation. Trace timestamp alignment is approximate.</p></div></details><details id="timeline-help"><summary>Help & details</summary><p class="timeline-help">Drag the proportional scrollbar to browse without changing sound. Click or drag the time ruler to seek when released. Click a lane to seek playback. Shift-click a lane to inspect its settings; Hold captures the current heard position. Follow returns to centered playback. Zoom changes detail; wider charts show more time at the same zoom. Shading marks unavailable observations. Fit song shows the known duration. When length is unknown, Fit timeline fits the current range and keeps its scale fixed; click it again to update. A line shows register frequency, not loudness; gate clear can still release sound.</p><div class="transport-foot"><span id="seek-note"></span><span id="render-lead"></span></div></details></div>
           </section>
           <div class="inspection-sidebar"><aside class="panel inspector" aria-labelledby="inspector-title"><div class="panel-header"><h2 id="inspector-title" tabindex="-1">Sound inspector</h2><span id="inspection-time" class="inspection-time mono">0:00.00</span></div><div class="inspector-body"><p id="inspector-note" class="inspector-note">Following heard playback. Register settings are derived observations, not recovered instruments or measured envelope amplitude.</p><div class="voice-tabs" role="group" aria-label="Inspect voice">${VOICES.map(voice => `<button id="inspect-${voice}" class="small" aria-pressed="${voice === 0}"${voice >= 3 ? ' hidden' : ''}>Voice ${voice + 1}</button>`).join('')}</div>
             <dl class="register-grid"><div><dt>Frequency register</dt><dd id="reg-frequency">—</dd></div><div><dt>Derived oscillator Hz</dt><dd id="reg-hz">—</dd></div><div class="wide"><dt>Waveform selection</dt><dd id="reg-waveform">—</dd></div><div><dt>Gate / Test</dt><dd id="reg-gate">—</dd></div><div><dt>Pulse width · 12-bit</dt><dd id="reg-pulse">—</dd></div><div><dt>AD / SR settings</dt><dd id="reg-adsr">—</dd></div><div><dt>Ring / Sync</dt><dd id="reg-coupling">—</dd></div></dl>
@@ -112,6 +113,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let chartHeld: HeldHistory | null = null;
   let inspectionSequence = 0;
   let timelineView: 'scroll' | 'fit' = 'scroll';
+  let fittedEnd: number | null = null;
+  const songLengths = new SongLengthLookup();
   let timelineZoom = TIMELINE_DENSITIES.indexOf(64);
   let timelineSpan = FOLLOW_WINDOW_SECONDS;
   let seekViewport: {center: number; span: number; heard: number | null; marker: number | null} | null = null;
@@ -128,7 +131,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let busy = false;
   let notice = '';
   let seekDragging = false;
-  let exploredUntil = 30;
+  let timelineLimit = 30;
   let animationFrame = 0;
   let lastDraw = 0;
   let plotStart = 0;
@@ -190,7 +193,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       el('reference-section').hidden = true;
     }
   };
-  const resetInspection = () => { seekViewport = null; held = null; cursor = 0; selectedEnd = null; exploredUntil = 30; evidenceKey = ''; sourceKey = ''; };
+  const resetInspection = () => { fittedEnd = null; seekViewport = null; held = null; cursor = 0; selectedEnd = null; timelineLimit = 30; evidenceKey = ''; sourceKey = ''; };
   const loadBytes = async (bytes: Uint8Array, entry: Entry | null, library: LibrarySelection | null = null) => {
     reference.pause();
     const profile = currentProfile();
@@ -202,6 +205,10 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     setText('library-stil', '');
     evidenceKey = '';
     updateReference();
+    if (library) {
+      const duration = await songLengths.lookup(bytes, profile.subtune, profile.clock);
+      if (duration !== null) profile.durationSeconds = duration;
+    }
     await controls.load(bytes, profile);
     loadedBytes = bytes;
     loadedEntry = entry;
@@ -420,7 +427,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   button('follow-button').addEventListener('click', () => holdAt(state?.position ?? 0));
   button('return-button').addEventListener('click', follow);
   for (const mode of ['scroll', 'fit'] as const) button(`timeline-${mode}`).addEventListener('click', () => {
-    if (mode === timelineView) return;
+    if (mode === timelineView && (mode !== 'fit' || state?.duration != null)) return;
+    if (mode === 'fit') fittedEnd = timelineTotal();
     seekViewport = null;
     timelineView = mode;
     if (held && mode === 'scroll') {
@@ -436,7 +444,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       draw();
     });
   }
-  const timelineTotal = () => Math.min(state?.duration ?? exploredUntil, MAX_SEEK_SECONDS);
+  const timelineTotal = () => Math.min(state?.duration ?? timelineLimit, MAX_SEEK_SECONDS);
   const browseAtStart = (start: number) => {
     if (!state?.info) return;
     seekViewport = null;
@@ -937,14 +945,14 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     el('timeline-availability').hidden = !el('status-message').hidden;
     const position = state?.position ?? 0;
     const transportPosition = state?.seekTarget ?? position;
-    exploredUntil = Math.min(MAX_SEEK_SECONDS, Math.max(exploredUntil, position + 10, state?.renderedUntil ?? 0));
-    if (!seekDragging) { input('seek-slider').max = String(Math.min(state?.duration ?? exploredUntil, MAX_SEEK_SECONDS)); input('seek-slider').value = String(transportPosition); setText('heard-time', time(transportPosition)); }
+    timelineLimit = Math.min(MAX_SEEK_SECONDS, Math.max(timelineLimit, position + 10, state?.renderedUntil ?? 0));
+    if (!seekDragging) { input('seek-slider').max = String(Math.min(state?.duration ?? timelineLimit, MAX_SEEK_SECONDS)); input('seek-slider').value = String(transportPosition); setText('heard-time', time(transportPosition)); }
     input('seek-slider').disabled = !loaded || changing;
     input('loop-start').max = String(Math.min(state?.duration ?? MAX_SEEK_SECONDS, MAX_SEEK_SECONDS));
     input('loop-end').max = String(Math.min(state?.duration ?? MAX_SEEK_SECONDS, MAX_SEEK_SECONDS));
     input('seek-slider').setAttribute('aria-valuetext', `${time(transportPosition, true)} ${preparingVoices ? 'preparing selected voices' : seeking ? 'requested; seeking' : 'heard'}${state?.duration == null ? '; duration unknown' : ` of ${time(state.duration)}`}`);
     setText('duration-label', state?.duration != null ? `/ ${time(state.duration)}` : '/ duration unknown');
-    setText('seek-note', preparingVoices ? 'Position kept · preparing selected voices…' : seeking ? 'Requested position · restoring sound…' : state?.duration != null ? 'Heard position · white dashed cursor' : `Unknown duration · explored seek window ${time(exploredUntil)} · 10-minute prototype limit`);
+    setText('seek-note', preparingVoices ? 'Position kept · preparing selected voices…' : seeking ? 'Requested position · restoring sound…' : state?.duration != null ? 'Heard position · white dashed cursor' : `Unknown length · current timeline limit ${time(timelineLimit)} · 10-minute prototype limit`);
     const prepared = state?.preparedRange;
     el('render-lead').dataset.preparedUntil = String(prepared?.end ?? 0);
     setText('render-lead', `${prepared ? `Prepared ${time(prepared.start)}–${time(prepared.end)}` : 'Preparing audio'} · audio queue ${Math.max(0, (state?.renderedUntil ?? 0) - position).toFixed(2)} s`);
@@ -985,7 +993,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
         if (seekViewport) seekViewport.heard = position;
       }
     }
-    controls.setTimelineOverview(timelineView === 'fit' && !held ? timelineTotal() : null);
+    const fitEnd = state?.duration != null ? timelineTotal() : (fittedEnd ??= timelineTotal());
+    controls.setTimelineOverview(timelineView === 'fit' && !held ? fitEnd : null);
     const observationSpan = timelineSpan + (seekViewport && timelineView === 'scroll' ? 2 * Math.abs(seekViewport.center - transportPosition) : 0);
     if (state?.timelineWindowSeconds !== observationSpan) controls.setTimelineWindow(observationSpan);
     const browsing = timelineView === 'scroll' && state?.timelineCenterSeconds != null;
@@ -1004,7 +1013,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     const writes = overview ? [] : observations.writes;
     const heardUntil = chartHeld?.heardUntil ?? position;
     const chartEnd = observedUntil;
-    const window = timelineView === 'fit' ? fittedWindow(timelineTotal()) : seekViewport ? followingWindow(seekViewport.center, timelineSpan)
+    const window = timelineView === 'fit' ? fittedWindow(fitEnd) : seekViewport ? followingWindow(seekViewport.center, timelineSpan)
       : chartHeld ? {start: chartHeld.plotStart, end: chartHeld.plotEnd} : followingWindow(state?.timelineCenterSeconds ?? position, timelineSpan);
     plotStart = window.start;
     plotEnd = window.end;
@@ -1013,11 +1022,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     scrollTrack.setAttribute('aria-disabled', String(scrollDisabled));
     scrollTrack.setAttribute('aria-valuemax', String(geometry.maximumStart));
     scrollTrack.setAttribute('aria-valuenow', String(Math.max(0, Math.min(geometry.maximumStart, plotStart))));
-    scrollTrack.setAttribute('aria-valuetext', `${time(Math.max(0, plotStart), true)}–${time(Math.min(timelineTotal(), plotEnd), true)} visible; ${state?.duration == null ? 'duration unknown; explored range' : 'song duration'} ${time(timelineTotal())}`);
+    scrollTrack.setAttribute('aria-valuetext', `${time(Math.max(0, plotStart), true)}–${time(Math.min(timelineTotal(), plotEnd), true)} visible; ${state?.duration == null ? 'length unknown; current timeline limit' : 'song duration'} ${time(timelineTotal())}`);
     scrollTrack.dataset.total = String(timelineTotal());
     scrollTrack.dataset.span = String(plotEnd - plotStart);
-    setText('timeline-range-end', `${state?.duration == null ? 'Explored ' : ''}${time(timelineTotal())}`);
-    el('timeline-range-end').title = state?.duration == null ? 'Explored range; song duration unknown' : 'Song end';
+    setText('timeline-range-end', `${time(timelineTotal())}${state?.duration == null ? ' · length unknown' : ''}`);
+    el('timeline-range-end').title = state?.duration == null ? 'Current timeline limit; song length unknown' : 'Song end';
     scrollTrack.title = timelineView === 'fit' ? 'Choose Scroll to browse the timeline' : 'Drag to browse without seeking. Arrows move; Page Up/Down page; Home/End reach the edges.';
     el('timeline-scroll-thumb').style.width = `${geometry.thumbFraction * 100}%`;
     el('timeline-scroll-thumb').style.left = `${geometry.leftFraction * 100}%`;
@@ -1025,11 +1034,13 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     button('timeline-scroll-forward').disabled = scrollDisabled || plotEnd >= timelineTotal();
     button('timeline-scroll').setAttribute('aria-pressed', String(timelineView === 'scroll'));
     button('timeline-fit').setAttribute('aria-pressed', String(timelineView === 'fit'));
+    setText('timeline-fit', state?.duration == null ? 'Fit timeline' : 'Fit song');
+    button('timeline-fit').title = state?.duration == null ? 'Fit the current timeline range. Click again to update; song length is unknown.' : 'Fit the whole song into the chart';
     el('timeline-direction').hidden = false;
     setText('timeline-earlier', browsing || timelineView === 'fit' ? 'Earlier' : 'Past');
     setText('timeline-later', browsing || timelineView === 'fit' ? 'Later · prepared' : 'Upcoming · prepared');
     const durationPrecision = timelineSpan < 1 ? 2 : 1;
-    setText('timeline-view-note', seekViewport ? '' : timelineView === 'scroll' ? browsing ? 'Browsing · playback position unchanged' : `${Number((timelineSpan / 2).toFixed(durationPrecision))} s past · ${Number((timelineSpan / 2).toFixed(durationPrecision))} s upcoming` : state?.duration == null ? 'Explored range · duration unknown' : 'Whole song');
+    setText('timeline-view-note', seekViewport ? '' : timelineView === 'scroll' ? browsing ? 'Browsing · playback position unchanged' : `${Number((timelineSpan / 2).toFixed(durationPrecision))} s past · ${Number((timelineSpan / 2).toFixed(durationPrecision))} s upcoming` : state?.duration == null ? 'Length unknown · click Fit timeline to update' : 'Whole song');
     el('timeline-zoom').hidden = timelineView !== 'scroll';
     button('timeline-zoom-out').disabled = timelineZoom === 0;
     button('timeline-zoom-in').disabled = timelineZoom === TIMELINE_DENSITIES.length - 1;
@@ -1093,7 +1104,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   controls.subscribe(next => {
     if (['loading', 'error'].includes(next.status) || next.status === 'seeking' && seekViewport?.heard != null) seekViewport = null;
     state = next;
-    if (next.epoch !== previousEpoch) { previousEpoch = next.epoch; exploredUntil = Math.min(MAX_SEEK_SECONDS, Math.max(30, next.position + 10)); }
+    if (next.epoch !== previousEpoch) { previousEpoch = next.epoch; timelineLimit = Math.min(MAX_SEEK_SECONDS, Math.max(30, next.position + 10)); }
     if (!animationFrame) animationFrame = requestAnimationFrame(timestamp => { animationFrame = 0; if (timestamp - lastDraw >= 70 || next.status !== 'playing') { lastDraw = timestamp; draw(); } });
   });
   window.addEventListener('resize', () => draw());
