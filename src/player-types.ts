@@ -35,6 +35,8 @@ export interface TimelineObservation {
   frames: RegisterFrame[];
   writes: WriteObservation[];
   dropped: number;
+  /** A packet write limit, rather than the prepared-data frontier, ended this range. */
+  continuationStart?: number;
 }
 export type PlayerStatus = 'empty' | 'loading' | 'ready' | 'playing' | 'paused' | 'seeking' | 'ended' | 'error';
 export interface PlayerState {

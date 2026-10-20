@@ -734,3 +734,25 @@ test('dual-SID load exposes six controls and delivers each interleaved chip to i
   assert.equal(value.state.frames.at(-1)!.registers[4], 17);
   assert.equal(value.state.frames.at(-1)!.registers[36], 33);
 });
+
+test('preview joins capped responses before replacing the accepted window', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), {...preview(0, 3), continuationStart:3});
+  await flushReplies();
+  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds:3, endSeconds:6});
+  assert.equal(value.state.preview, null);
+  worker.reply(worker.lastRequest('observe'), preview(3, 6));
+  await flushReplies();
+  assert.equal(value.state.preview!.start, 0);
+  assert.equal(value.state.preview!.end, 6);
+});
+
+test('moving the viewport stops further pagination and retains a useful completed prefix', async (t) => {
+  const {value, worker} = await loaded(t);
+  const request = worker.lastRequest('observe');
+  value.player.setTimelineWindow(12);
+  worker.reply(request, {...preview(0, 3), continuationStart:3});
+  await flushReplies();
+  assert.equal(value.state.preview!.end, 3);
+  assert.ok(!worker.requests.some(request => request.method === 'observe' && request.payload.startSeconds === 3));
+});

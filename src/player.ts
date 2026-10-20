@@ -1,4 +1,5 @@
 import type { CacheCoverage, EngineEvent, EngineReply } from './engine/protocol.ts';
+import { collectObservationWindow } from './engine/observation-window.ts';
 import type { PlayerControls, PlayerState, Profile, TimelineObservation, TuneDetails, WriteObservation } from './player-types.ts';
 import { positionAt, trimHistory, validateLoop, type AudioSegment } from './timeline.ts';
 
@@ -149,7 +150,11 @@ export class ExplorerPlayer implements PlayerControls {
     const revision = this.previewRevision;
     this.previewPending = true;
     this.previewRequestedAt = performance.now();
-    void engine.request<TimelineObservation | null>('observe', {startSeconds, endSeconds}).then(observation => {
+    void collectObservationWindow(startSeconds, endSeconds,
+      (start, end) => start !== startSeconds && revision !== this.previewRevision ? Promise.resolve(null) :
+        engine.request<TimelineObservation | null>('observe', {startSeconds: start, endSeconds: end}),
+      () => generation === this.generation && engine === this.engine && !this.disposed,
+    ).then(observation => {
       if (generation !== this.generation || engine !== this.engine || this.disposed) return;
       if (!this.previewFitsFollowLoop(observation)) return;
       if (revision !== this.previewRevision && this.previewOverlap(observation) <= this.previewOverlap(this.state.preview)) return;

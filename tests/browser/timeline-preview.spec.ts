@@ -22,6 +22,44 @@ async function chart(page: Page) {
   }));
 }
 
+test('dense stereo Bach keeps its prepared upcoming range visible near the entrance', async ({page}) => {
+  await page.goto('/');
+  await page.locator('#sample-select').selectOption('bach-toccata-stereo');
+  await page.locator('#load-button').click();
+  await expect(page.locator('#play-button')).toBeEnabled();
+  await page.locator('#play-button').click();
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(.1);
+  await page.locator('#play-button').click();
+  await expect.poll(() => page.locator('#render-lead').getAttribute('data-prepared-until').then(Number), {timeout:25000}).toBeGreaterThan(20);
+  const releaseSeek = await holdWorkerRequest(page, 'seek');
+  await page.locator('#seek-slider').fill('2.93');
+  await expect(page.locator('#play-status')).toHaveText('Seeking…');
+  await releaseSeek();
+  await expect.poll(async () => (await chart(page)).cursor).toBeCloseTo(2.93, 2);
+  await expect.poll(async () => { const view = await chart(page); return view.observedUntil - view.end; }).toBeGreaterThanOrEqual(-.01);
+  for (const density of [32, 16]) {
+    await page.getByRole('button', {name:'Zoom out', exact:true}).click();
+    await expect.poll(async () => { const view = await chart(page); return view.observedUntil - view.end; }).toBeGreaterThanOrEqual(-.01);
+    await page.screenshot({path:`build/timeline-preview/${test.info().project.name}-bach-${density}.png`, fullPage:true});
+  }
+  await page.locator('#play-button').click();
+  const coverage = await page.evaluate(async () => {
+    const lane = document.querySelector<HTMLElement>('#voice-lane-0')!;
+    const start = Number(lane.getAttribute('aria-valuenow'));
+    const deadline = performance.now() + 8000;
+    let minimum = Infinity;
+    let latest = start;
+    while (latest < start + 3 && performance.now() < deadline) {
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      latest = Number(lane.getAttribute('aria-valuenow'));
+      if (latest > start) minimum = Math.min(minimum, Number(lane.dataset.observedUntil) - Number(lane.getAttribute('aria-valuemax')));
+    }
+    return {minimum, advanced:latest - start};
+  });
+  expect(coverage.advanced).toBeGreaterThanOrEqual(3);
+  expect(coverage.minimum).toBeGreaterThanOrEqual(-.01);
+});
+
 test('timeline zoom preserves density on resize and holds selected observations', async ({page}) => {
   await openPaused(page);
   await expect(page.getByRole('button', {name:'Zoom out', exact:true})).toBeVisible();

@@ -181,6 +181,7 @@ export class CachedSidSession {
     }
     const start = Math.max(startSeconds, this.cacheStartFrame / SAMPLE_RATE);
     let end = Math.min(endSeconds, this.frontier / SAMPLE_RATE);
+    let continuationStart: number | undefined;
     if (start >= end) return null;
     const writes: SidWrite[] = [];
     for (const block of this.blocks) {
@@ -192,6 +193,7 @@ export class CachedSidSession {
         if (time < start && start !== 0) continue;
         if (writes.length === MAX_OBSERVATION_WRITES) {
           end = Math.max(start, time);
+          continuationStart = end;
           break;
         }
         writes.push(unpackWrite(block.writes, offset));
@@ -225,7 +227,7 @@ export class CachedSidSession {
       // The sample sweep leaves only exact block boundaries; rounding preserves their original PCM frame after the seconds conversion.
       frames.push({time: end, registers: this.registersAt(Math.round(end * SAMPLE_RATE))});
     }
-    return {start, end, frames, writes, dropped};
+    return {start, end, frames, writes, dropped, ...(continuationStart === undefined ? {} : {continuationStart})};
   }
 
   render(frames: number): RenderResult {

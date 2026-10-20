@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { SidSession } from '../src/engine/session.ts';
 import { CachedSidSession } from '../src/engine/cached-session.ts';
+import { collectObservationWindow } from '../src/engine/observation-window.ts';
 import { parseCatalog } from '../src/catalog.ts';
 import { dualSid, monoSid } from './fixtures/dual-sid.ts';
 
@@ -145,4 +146,46 @@ test('rebuilt raw mono preserves the complete accepted Rambo PCM and observation
       frame += count;
     }
   } finally { rebuilt.dispose(); shipped.dispose(); }
+});
+
+test('dense Bach observations cover both requested windows without changing cached playback', async (t) => {
+  const entry = parseCatalog(JSON.parse(readFileSync('config/catalog.json', 'utf8'))).entries.find(entry => entry.id === 'bach-toccata-stereo')!;
+  const bytes = new Uint8Array(readFileSync(`public/generated/${entry.files.sid.filename}`));
+  const cached = await CachedSidSession.create({moduleUrl});
+  const continuous = await SidSession.create({moduleUrl});
+  try {
+    await cached.load(bytes, settings('MOS8580'));
+    const initial = await continuous.load(bytes, settings('MOS8580'));
+    while (cached.cacheEndFrame < 16 * 44100) cached.prefetch(44100);
+    const expected = Array.from({length:16}, () => continuous.render(44100));
+    const cacheBytes = cached.cacheBytes;
+    const frontier = cached.cacheEndFrame;
+    for (const [start, end] of [[0, 10], [5, 16]]) {
+      const packet = cached.observe(start, end)!;
+      assert.ok(packet.end < end);
+      assert.equal(packet.continuationStart, packet.end);
+      const started = performance.now();
+      const observation = await collectObservationWindow(start, end, async (from, until) => cached.observe(from, until), () => true);
+      const elapsed = performance.now() - started;
+      assert.equal(observation!.start, start);
+      assert.equal(observation!.end, end);
+      assert.deepEqual(observation!.writes, expected.flatMap(block => block.writes).filter(write => (start === 0 || write.timeSeconds >= start) && write.timeSeconds < end));
+      assert.equal(observation!.dropped, 0);
+      assert.ok(observation!.frames.length <= 1001);
+      const writes = expected.flatMap(block => block.writes);
+      const registers = initial.registers.slice();
+      let index = 0;
+      for (const frame of observation!.frames) {
+        while (index < writes.length && writes[index].timeSeconds < frame.time) {
+          const write = writes[index++];
+          registers[write.sidNumber * 32 + write.address] = write.value;
+        }
+        assert.deepEqual(frame.registers, registers);
+      }
+      t.diagnostic(`${start}–${end}s: ${elapsed.toFixed(3)}ms; writes=${observation!.writes.length}; frames=${observation!.frames.length}; response JSON=${JSON.stringify(observation).length} bytes`);
+    }
+    assert.equal(cached.cacheBytes, cacheBytes);
+    assert.equal(cached.cacheEndFrame, frontier);
+    for (const block of expected) assert.deepEqual(cached.render(44100), block);
+  } finally { cached.dispose(); continuous.dispose(); }
 });
