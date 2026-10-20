@@ -9,10 +9,27 @@ export async function collectObservationWindow(
   end: number,
   request: (start: number, end: number) => Promise<TimelineObservation | null>,
   isCurrent: () => boolean,
+  retained?: TimelineObservation | null,
 ): Promise<TimelineObservation | null> {
   const pages: TimelineObservation[] = [];
   let nextStart = start;
   let writeCount = 0;
+  if (retained && retained.start <= start && retained.end > start && retained.end < end) {
+    let first = 0;
+    while (first + 1 < retained.frames.length && retained.frames[first + 1].time <= start) first++;
+    const baseline = retained.frames[first];
+    if (baseline && baseline.time <= start) {
+      // Caller-verified same-configuration data is immutable; an exact baseline preserves edge inspection (tests/observation-window.test.ts).
+      const seed = {
+        start: baseline.time, end: retained.end, frames: retained.frames.slice(first),
+        writes: retained.writes.filter(write => write.timeSeconds >= baseline.time),
+        dropped: retained.dropped,
+      };
+      pages.push(seed);
+      nextStart = seed.end;
+      writeCount = seed.writes.length;
+    }
+  }
   for (let index = 0; index < MAX_WINDOW_REQUESTS; index++) {
     if (!isCurrent()) return null;
     const observation = await request(nextStart, end);

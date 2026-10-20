@@ -200,6 +200,37 @@ test('prepared previews cover the moving visible right edge through the refresh 
   assert.equal(worker.requests.filter((request) => request.method === 'render').length, 0, 'observation refresh does not schedule audio');
 });
 
+test('playing follow keeps its right edge covered when dense observation packets take 300ms each', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const seeking = value.player.seek(10);
+  worker.reply(worker.lastRequest('seek'), position(10));
+  await seeking;
+  worker.reply(worker.lastRequest('observe'), preview(5, 16));
+  await flushReplies();
+  value.state.status = 'playing';
+  value.state.position = 10.25;
+  value.advance(250);
+  let request = worker.lastRequest('observe');
+  let packets = 0;
+  while (packets++ < 4) {
+    value.state.position += .3;
+    value.advance(300);
+    assert.ok(value.state.preview!.end >= value.state.position + 5, 'prepared coverage must survive the bounded packet round trips');
+    const start = Number(request.payload.startSeconds);
+    const requestedEnd = Number(request.payload.endSeconds);
+    const end = Math.min(start + 4, requestedEnd);
+    worker.reply(request, {...preview(start, end), ...(end < requestedEnd ? {continuationStart: end} : {})});
+    await flushReplies();
+    if (end === requestedEnd) break;
+    request = worker.lastRequest('observe');
+  }
+  assert.equal(packets, 1, 'immutable history should not cross the worker boundary again');
+  assert.equal(value.state.preview!.end, 16.25);
+  assert.ok(value.state.preview!.start <= value.state.position - 5);
+});
+
 test('timeline windows follow measured widths without changing transport or accepting invalid spans', async (t) => {
   const {value, worker} = await loaded(t);
   assert.equal(value.state.timelineWindowSeconds, 10);

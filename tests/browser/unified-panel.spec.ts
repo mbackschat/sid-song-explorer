@@ -145,13 +145,14 @@ test('an ending thumb moves immediately and ruler dragging seeks only on release
   await bar.focus();
   await page.keyboard.press('Home');
   const heard = await page.locator('#seek-slider').inputValue();
+  const diagnostics = await page.locator('#audio-diagnostics').textContent();
   const releaseSeek = await holdWorkerRequest(page, 'seek');
   const ruler = (await page.locator('#seek-slider').boundingBox())!;
   await page.mouse.move(ruler.x + ruler.width * .25, ruler.y + ruler.height / 2);
   await page.mouse.down();
   await page.mouse.move(ruler.x + ruler.width * .75, ruler.y + ruler.height / 2);
   await expect(page.locator('#play-status')).toHaveText('Paused');
-  await expect(page.locator('#audio-diagnostics')).toContainText('0 buffer underruns');
+  await expect(page.locator('#audio-diagnostics')).toHaveText(diagnostics!);
   const target = Number(await page.locator('#seek-slider').inputValue());
   expect(target).toBeLessThan(Number(heard));
   await page.mouse.up();

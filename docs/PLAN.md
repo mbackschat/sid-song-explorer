@@ -55,8 +55,6 @@ The retained [native gain trial](research/seek-performance.md#bounded-live-gain-
 2. Review the library picker on actual Safari/iPhone, separately from accepted stereo playback, using its [validation gates](validation/library-picker.md).
 3. For each authorized release, require exact-commit CI and verify the hosted app's assets/routes. Report results through CI and the release response rather than appending them to this plan.
 
-Targeted WebKit follow-up: investigate transient upcoming-coverage loss in the dense Bach [preview regression](../tests/browser/timeline-preview.spec.ts) and the cumulative underrun assertion in the [ruler-drag regression](../tests/browser/unified-panel.spec.ts). These broader checks remain available outside the POC release selection; reducing the release scope does not resolve their failures.
-
 No additional feature is automatically scheduled by closing these gates. Generic analysis and gapless switching remain deferred.
 
 ## Public application and README-aligned catalog

@@ -6,6 +6,7 @@ import { positionAt, trimHistory, validateLoop, composeTimelineOverviews, type A
 
 const TIMELINE_PREVIEW_MARGIN_SECONDS = 1;
 const TIMELINE_BROWSE_MARGIN_SECONDS = 5;
+const AUDIO_SCHEDULE_AHEAD_SECONDS = 0.25;
 
 interface RenderBlock {
   pcm: Int16Array;
@@ -186,6 +187,7 @@ export class ExplorerPlayer implements PlayerControls {
       (start, end) => start !== startSeconds && revision !== this.previewRevision ? Promise.resolve(null) :
         engine.request<TimelineObservation | null>('observe', {startSeconds: start, endSeconds: end}),
       () => generation === this.generation && engine === this.engine && !this.disposed,
+      !browsing && this.state.status === 'playing' ? this.state.preview : null,
     ).then(observation => {
       if (generation !== this.generation || engine !== this.engine || this.disposed) return;
       if (revision !== this.previewRevision && !this.improvesPreview(observation)) return;
@@ -476,14 +478,16 @@ export class ExplorerPlayer implements PlayerControls {
     this.pumping = true;
     const generation = this.generation;
     try {
-      while (this.state.status === 'playing' && generation === this.generation && this.nextStart < this.context.currentTime + 0.25 && !this.boundary) {
+      while (this.state.status === 'playing' && generation === this.generation && this.nextStart < this.context.currentTime + AUDIO_SCHEDULE_AHEAD_SECONDS && !this.boundary) {
         const end = Math.min(this.state.loop?.end ?? Infinity, this.state.duration ?? 600);
         const remaining = Math.round(end * 44100) - this.frame;
         if (remaining <= 0) {
           this.boundary = {time: this.nextStart, loop: Boolean(this.state.loop)};
           break;
         }
-        const block = await this.engine.request<RenderBlock>('render', {frames: Math.min(4096, remaining)});
+        const starting = this.segments.length === 0;
+        // Prime the existing refill horizon before starting its clock; worker latency is unbounded by the 60ms source lead (tests/player-audio.test.ts).
+        const block = await this.engine.request<RenderBlock>('render', {frames: Math.min(starting ? AUDIO_SCHEDULE_AHEAD_SECONDS * 44100 : 4096, remaining)});
         if (generation !== this.generation) return;
         const channels = this.state.info!.channels;
         const frames = block.endFrame - block.startFrame;
@@ -499,7 +503,9 @@ export class ExplorerPlayer implements PlayerControls {
         source.buffer = buffer;
         source.connect(this.monitor.input);
         source.onended = () => source.disconnect();
-        if (this.nextStart < this.context.currentTime) {
+        if (starting) {
+          this.nextStart = this.context.currentTime + 0.06;
+        } else if (this.nextStart < this.context.currentTime) {
           this.state.underruns++;
           this.nextStart = this.context.currentTime + 0.03;
         }

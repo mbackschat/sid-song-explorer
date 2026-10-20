@@ -41,6 +41,58 @@ test('a complete observation preserves its response object and fixed request end
   assert.deepEqual(calls, [[0, 3]]);
 });
 
+test('an advancing window reuses exact retained baselines and writes and reads only its missing tail', async () => {
+  const retained = packet(0, 2);
+  const original = structuredClone(retained);
+  const calls: number[][] = [];
+  const result = await collectObservationWindow(.75, 3, async (start, end) => {
+    calls.push([start, end]);
+    return packet(start, end);
+  }, () => true, retained);
+  assert.deepEqual(calls, [[2, 3]]);
+  assert.ok(result);
+  assert.equal(result.start, .5);
+  assert.equal(result.end, 3);
+  assert.deepEqual(result.writes, observedWrites.filter(write => write.timeSeconds >= .5));
+  for (const time of [.75, .99, 1, 1.999, 2, 2.1, 2.999]) {
+    assert.deepEqual(observationRegistersAt(result, time), registersAt(time, true));
+  }
+  assert.deepEqual(retained, original);
+});
+
+test('retained observations cannot fabricate a missing prefix or bridge an unavailable tail', async () => {
+  for (const retained of [packet(1, 2), packet(0, .5)]) {
+    const calls: number[][] = [];
+    const result = await collectObservationWindow(.75, 3, async (start, end) => {
+      calls.push([start, end]);
+      return packet(start, end);
+    }, () => true, retained);
+    assert.deepEqual(calls, [[.75, 3]]);
+    assert.equal(result!.start, .75);
+  }
+  const result = await collectObservationWindow(.75, 3, async () => packet(2.1, 3), () => true, packet(0, 2));
+  assert.equal(result!.end, 2);
+});
+
+test('reused windows keep the write and frame bounds and discard history behind the moving edge', async () => {
+  const retained: TimelineObservation = {
+    start: 0, end: 2, dropped: 0,
+    frames: Array.from({length: 1001}, (_, index) => ({time: index / 500, registers: Array(64).fill(0)})),
+    writes: Array.from({length: 200_000}, (_, index) => ({timeSeconds: index / 100_000, cyclePhi1: index, address: 0, value: 0, sidNumber: 0})),
+  };
+  const capped = await collectObservationWindow(0, 3, async () => packet(2, 3), () => true, retained);
+  assert.equal(capped!.end, 2);
+  assert.equal(capped!.writes.length, 200_000);
+  const moving = await collectObservationWindow(1.5, 3, async () => packet(2, 3), () => true, retained);
+  assert.equal(moving!.start, 1.5);
+  assert.equal(moving!.end, 3);
+  assert.ok(moving!.frames.length <= 1001);
+  assert.ok(moving!.writes.length < 200_000);
+  assert.ok(moving!.writes.every(write => write.timeSeconds >= moving!.start));
+  assert.equal(retained.start, 0);
+  assert.equal(retained.writes.length, 200_000);
+});
+
 test('explicit packet continuations retain exact writes and register inspection across seams', async () => {
   const packets = [packet(0, 1, 1), packet(1, 2, 2), packet(2, 3)];
   packets[0].dropped = 7;
