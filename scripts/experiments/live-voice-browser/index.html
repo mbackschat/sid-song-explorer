@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Voice switching · SID Song Explorer POC</title></head>
+<body>
+  <main>
+    <header><p class="eyebrow">SID SONG EXPLORER · BROWSER POC</p><h1>Listen by voice</h1><p>Mute or solo a voice while the song keeps playing.</p></header>
+    <section class="panel" aria-label="Player">
+      <div class="setup">
+        <label class="tune">Sample<select id="sample">
+          <optgroup label="Test tones">
+            <option value="saw">Sustained saw · stereo</option><option value="filter">Shared filter · stereo</option>
+            <option value="ring-sync">Ring / sync · stereo</option><option value="d418">Volume changes · stereo</option><option value="noise">Noise · stereo</option>
+          </optgroup>
+        </select></label>
+        <label>SID<select id="model"><option>MOS6581</option><option>MOS8580</option></select></label>
+        <label>Clock<select id="clock"><option>PAL</option><option>NTSC</option></select></label>
+        <button id="load" disabled>Load</button>
+      </div>
+      <div class="transport"><button id="play" class="primary" disabled>Play</button><output id="position">0:00.00</output><span id="status" role="status">Empty</span><label class="volume">Volume<input id="volume" type="range" min="0" max="1" step="0.01" value="0.35"></label></div>
+      <canvas id="waveform" width="1000" height="100" aria-label="Live output waveform"></canvas>
+      <div class="voice-heading"><h2>Voices</h2><button id="full-mix" disabled>Full mix</button></div>
+      <div id="voices"><p class="empty">Load a sample to select its voices.</p></div>
+      <p id="diagnostics" aria-live="polite">M = mute · S = solo</p>
+      <p id="error" role="alert"></p>
+    </section>
+    <footer><p>Playback-only experiment using the verified replay engine. Seeking and history remain in the main player.</p><a href="/engine/THIRD-PARTY-NOTICES.md">Engine notices</a> · <a href="/engine/complete-source.tar.gz">Engine source</a></footer>
+  </main>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

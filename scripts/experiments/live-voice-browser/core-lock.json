@@ -1,0 +1,12 @@
+{
+  "verifiedCommit": "cf07a6cbf25a769f14435dec5be12491a11cb846",
+  "files": {
+    "scripts/experiments/live-voice-replay/patch.py": "7bbcb203d45b9497555048bc00a7c1d50de4864ff40a60ae1aad93b8a069271f",
+    "scripts/experiments/live-voice-replay/replay.h": "8d664fd8a9dbeeac8f4ae52c3022d194ad85479ea2e7f724c241abe0deb02971",
+    "scripts/experiments/live-voice-replay/bindings.inc": "b74279b4bea7d33ee443c1f040288ecedf159d71d2411164541c53db83d66252",
+    "scripts/experiments/live-voice-replay/capture.inc": "533e7fa2387db92454b32230aa374840ee75832c457965dc2cb734e8ac1bf763",
+    "scripts/experiments/live-voice-replay/fixtures.mjs": "c7094e2a1e1eb1f69b7dd4ea3a369208a3ddf4066cf22a2d8fb46d3bb67d81bc",
+    "build/live-voice-replay/output/libsidplayfp.js": "c61b867099598aa0a83e04165a18ce1da2a9b73d1052297874c152ae372d4134",
+    "build/live-voice-replay/output/libsidplayfp.wasm": "27c7af785386f0e49f6840196266169f7ad79b2b719241c3c771c5037d0e4c76"
+  }
+}

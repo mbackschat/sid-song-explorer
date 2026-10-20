@@ -152,3 +152,24 @@ Storage uses ten bytes per chip/frame and 32 checkpoint bytes per chip/block. Th
 The resulting experimental WASM SHA-256 is `27c7af785386f0e49f6840196266169f7ad79b2b719241c3c771c5037d0e4c76`. Successful `verify-MOS6581-PAL.json`, `verify-MOS6581-NTSC.json`, `verify-MOS8580-PAL.json` and `verify-MOS8580-NTSC.json` receipts bind module, WASM, independent oracle, fixture and verifier hashes. The final clean/recompile/link stages took 5.86/36.31/16.16 seconds. No production player, engine asset or cache changed, and no browser or listening result is claimed.
 
 Decision: exact prefilter capture and same-filter replay are feasible; this completes the bounded replay spike. Production integration remains a no-go under the current contract: this representation cuts the sample's mono prepared history from the complete passage to roughly 71 seconds, and browser control latency, output continuity and audition/seek-history semantics remain unverified. A later bounded playback experiment is technically justified, but cannot by itself authorize that coverage reduction. Preserve the working player and its current voice-switch feedback; do not label `VOICE-1` implemented.
+
+### Executed browser playback spike (2026-10-20)
+
+The user authorized a separate browser POC with the explicit constraint to preserve the proven audio core. The [experiment and commands](../../scripts/experiments/live-voice-browser/README.md) use the exact capture/filter/checkpoint implementation and JS/WASM from the replay gate above. Source and binary hashes are frozen in [core-lock.json](../../scripts/experiments/live-voice-browser/core-lock.json); preparation/build reject mismatches, and browser tests verify the HTTP-served engine bytes. No emulator/filter changes, crossfades or concealment of underruns were added. The production player and cache remain unchanged.
+
+The worker streams capture blocks through a persistent native replay instance, retaining its evolving shared-filter state across mute/solo changes. A standalone browser wrapper schedules contiguous PCM with a 250 ms queue target. Already scheduled output keeps its previous mask. No raw history or prepared seeking is implemented in this POC; it does not resolve the retention cost measured above.
+
+Local verification passed: two core/asset checks, twelve session checks (including real WASM across both models/clocks and one/two chips), TypeScript checking, an isolated production build and four silent browser tests per target. Chrome took 12.5 seconds; macOS WebKit took 12.4 seconds. The browser suite covers independent selected-voice PCM, continuous frame numbers and scheduled times, rapid last-selection behavior, persistent output objects, served core hashes, real Rambo stereo/mono, pause/resume/reload and narrow layout. Filtered audition has continuity/state evidence, not an equivalence claim against a song rendered with those voices muted from startup.
+
+| Browser / fixture | Measured action-to-scheduled-output delay | Scheduled blocks checked |
+| --- | ---: | ---: |
+| Chrome / stereo saw | 246.33–259.77 ms | 129 |
+| Chrome / shared filter | 246.67–256.49 ms | 86 |
+| macOS WebKit / stereo saw | 229.14–258.05 ms | 130 |
+| macOS WebKit / shared filter | 225.03–232.04 ms | 85 |
+
+These are measured AudioContext scheduling delays, excluding physical-device latency. Tests observe actual submitted PCM and reject gaps, overlaps, dropped/duplicated frames or stopping/replacing output during selection. They do not capture device-loopback sound or establish perceptually click-free transitions, real Safari/iPhone behavior or human acceptance. Listening review should judge dropouts/clicks and whether the roughly quarter-second response is acceptable.
+
+Retained failures improved the wrapper without changing the frozen core: Vite development import rewriting rejected a public-directory engine import, so the POC uses a regular build plus static preview; a held AudioContext resume exposed controls being available during pending startup, now guarded by transport state and generation identity; a mock boundary test caught rejection of the core's valid 4,096-frame block, now accepted while larger captures are rejected. Logs and rendered evidence remain in ignored `build/live-voice-browser/`, including `chrome-final.log`, `webkit-final.log` and per-browser PCM/scheduling receipts in `evidence/`. The core/asset red/green logs remain in `build/live-voice-replay/browser-assets-*.log`.
+
+Decision: the unchanged replay core supports the bounded browser experiment with continuous submitted output and measured control response. The POC is ready for listening review. Production `VOICE-1` remains deferred: listening acceptance, prepared-history coverage and audition/seek semantics are still open. This evidence supports the browser approach without authorizing a cache rewrite or silently reducing retained history.
