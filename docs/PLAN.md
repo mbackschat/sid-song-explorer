@@ -14,6 +14,7 @@ This file owns scope, priorities and completion. [The founding design](design/we
 | `CATALOG-1`: normalized producer/consumer | Implemented | [Pinned integration contract](integration/crafter-handoff.md#normalized-catalog-integration). |
 | `LIBRARY-1`: online SID selection | Implemented; actual Safari/iPhone review open | [Picker scope](#online-sid-library-picker-library-1), [validation](validation/library-picker.md). |
 | `COMPOSITION-1`: Rambo parts and programs | Implemented; usefulness review open | [Design](design/composition-exploration.md), [review route](validation/composition-exploration.md). |
+| Release validation | Implemented | [Candidate identity, complete preflight and publication gates](validation/mono-poc.md#release-validation); exact-commit results remain in CI. |
 | `VOICE-1`: gapless voice switching | Deferred; existing pause-and-rebuild controls retained | [Cost decision and retained experiments](#gapless-voice-follow-up-spike). |
 | `ANALYSIS-1`: generic headless analysis | Parked; no production integration | [Retained spike](#headless-sid-analysis-spike-analysis-1). |
 | Broader catalog/profiles, stereo/Bach composition packages, deeper inspection | Unscheduled | Define bounded scope before implementation. |

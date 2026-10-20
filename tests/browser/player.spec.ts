@@ -48,9 +48,13 @@ test('live audio, held inspection, mute/solo, loop replay and complete ending', 
   await page.screenshot({path: `build/poc/${test.info().project.name}-ending.png`, fullPage: true});
 });
 
-test('local file stays local and profile changes invalidate authored annotations', async ({page}) => {
+test('local file stays local and profile changes invalidate authored annotations', async ({page, baseURL}) => {
   const remoteRequests: string[] = [];
-  page.on('request', request => {if (!request.url().startsWith('http://127.0.0.1:4173') && !request.url().startsWith('blob:') && !request.url().startsWith('data:')) remoteRequests.push(request.url());});
+  const origin = new URL(baseURL!).origin;
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.origin !== origin && !['blob:', 'data:'].includes(url.protocol)) remoteRequests.push(url.href);
+  });
   await page.goto('/');
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
@@ -120,12 +124,12 @@ test('timeline switches between scrolling and fitted song without changing playb
   await expect(page.locator('#timeline-scroll')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
-  await page.locator('#seek-slider').fill('30');
+  await page.locator('#seek-slider').fill('90');
   await expect(page.locator('#play-button')).toBeEnabled();
   await page.locator('#play-button').click();
   const lane = page.locator('#voice-lane-0');
   const range = () => lane.evaluate(element => ({start:Number(element.getAttribute('aria-valuemin')),end:Number(element.getAttribute('aria-valuemax'))}));
-  await expect.poll(async () => (await range()).start).toBeGreaterThan(20);
+  await expect.poll(async () => (await range()).start).toBeGreaterThan(80);
   await page.locator('#timeline-fit').click();
   await expect(page.locator('#timeline-fit')).toHaveAttribute('aria-pressed', 'true');
   expect((await range()).start).toBe(0);
@@ -136,7 +140,8 @@ test('timeline switches between scrolling and fitted song without changing playb
   await page.locator('#timeline-scroll').click();
   const scrolled = await range();
   expect(scrolled.end - scrolled.start).toBeCloseTo(await lane.evaluate(element => element.clientWidth / 64), 1);
-  expect(scrolled.start).toBeLessThan(30);
+  const [minutes, seconds] = cursor!.split(':').map(Number);
+  expect((scrolled.start + scrolled.end) / 2).toBeCloseTo(minutes! * 60 + seconds!, 1);
   await expect(page.locator('#inspection-time')).toHaveText(cursor!);
   await expect(page.locator('#return-button')).toBeVisible();
   await page.locator('#timeline-fit').click();
@@ -148,7 +153,12 @@ test('timeline switches between scrolling and fitted song without changing playb
   expect(await range()).toEqual(held);
   await page.locator('#return-button').click();
   await page.locator('#timeline-scroll').click();
-  await expect.poll(async () => (await range()).start).toBeLessThan(30);
+  await expect.poll(() => lane.evaluate(element => {
+    const start = Number(element.getAttribute('aria-valuemin'));
+    const end = Number(element.getAttribute('aria-valuemax'));
+    const heard = Number((document.querySelector('#seek-slider') as HTMLInputElement).value);
+    return Math.abs((start + end) / 2 - heard);
+  })).toBeLessThan(.03);
   await page.setViewportSize({width:390, height:844});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

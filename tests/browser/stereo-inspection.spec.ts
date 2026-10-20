@@ -86,11 +86,12 @@ for (const controlKind of ['mute', 'solo'] as const) {
   });
 }
 
-test('local dual-SID PSID opening keeps chip inspection device-local', async ({page}) => {
+test('local dual-SID PSID opening keeps chip inspection device-local', async ({page, baseURL}) => {
   const remoteRequests: string[] = [];
+  const origin = new URL(baseURL!).origin;
   page.on('request', request => {
-    const url = request.url();
-    if (!url.startsWith('http://127.0.0.1:4173') && !url.startsWith('blob:') && !url.startsWith('data:')) remoteRequests.push(url);
+    const url = new URL(request.url());
+    if (url.origin !== origin && !['blob:', 'data:'].includes(url.protocol)) remoteRequests.push(url.href);
   });
   await page.goto('/');
   await page.locator('#local-file').setInputFiles(resolve('public/generated/bach-toccata-stereo.sid'));

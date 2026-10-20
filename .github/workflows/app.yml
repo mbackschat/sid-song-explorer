@@ -5,11 +5,27 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  pages: read
 concurrency:
   group: application-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  matrix:
+    name: Resolve release browser matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      browsers: ${{ steps.matrix.outputs.browsers }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - id: matrix
+        run: echo "browsers=$(pnpm --silent release:check matrix)" >> "$GITHUB_OUTPUT"
+
   samples:
     name: Prepare verified catalog assets / ubuntu-24.04
     runs-on: ubuntu-24.04
@@ -52,31 +68,19 @@ jobs:
           path: build/stereo-gate/output/
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
-          name: raw-chip-engine-failures
+          name: raw-chip-engine-diagnostics
           path: |
             build/stereo-gate/*.log
             build/stereo-gate/*.json
             build/stereo-gate/output/*.json
 
-  check:
-    name: ${{ matrix.browser }} / ${{ matrix.os }} / shard ${{ matrix.shard }}
+  build:
+    name: Build sealed release candidate / ubuntu-24.04
     needs: [engine, samples]
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chrome, webkit]
-        shard: [1, 2, 3, 4, 5, 6, 7]
-        include:
-          - os: ubuntu-24.04
-            browser: chrome
-            install: chrome
-          - os: macos-26
-            browser: webkit
-            install: webkit
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -95,29 +99,196 @@ jobs:
         with:
           name: verified-catalog-assets
           path: public/generated/
-      - run: pnpm prepare:assets
-      - run: pnpm exec node --experimental-strip-types --test --test-concurrency=1 --test-shard=${{ matrix.shard }}/7 tests/*.test.ts
+      - run: pnpm release:check build
+        timeout-minutes: 5
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate
+          path: |
+            dist/
+            public/generated/
+            build/release/artifact.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-build-diagnostics
+          path: build/release/
+
+  software:
+    name: Software / ${{ matrix.os }}
+    needs: [build, engine]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+          path: .
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-raw-chip-engine
+          path: build/stereo-gate/output/
+      - name: Prepare and verify software fixtures
         timeout-minutes: 1
-      - run: pnpm build
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm prepare:assets 2>&1 | tee build/release/software-assets.log
+      - run: pnpm release:check software
+        timeout-minutes: 8
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-software-diagnostics-${{ matrix.os }}
+          path: build/release/
+
+  browsers:
+    name: ${{ matrix.project }} / ${{ matrix.os }} / shard ${{ matrix.shard }}
+    needs: [build, matrix]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.browsers) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+          path: .
+      - name: Install browser dependencies
         timeout-minutes: 2
-      - run: pnpm exec playwright install --with-deps ${{ matrix.install }}
-      - run: pnpm test:browser --project ${{ matrix.browser }} --fully-parallel --shard ${{ matrix.shard }}/7 --reporter=list --global-timeout=170000
-        timeout-minutes: 3
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p build/release
+          pnpm exec playwright install --with-deps ${{ matrix.install }} 2>&1 | tee build/release/browser-install-${{ matrix.project }}-${{ matrix.index }}.log
+      - run: pnpm release:check browser --project ${{ matrix.project }} --shard ${{ matrix.shard }}
+        timeout-minutes: 4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-receipts-${{ matrix.project }}-${{ matrix.index }}
+          path: |
+            build/release/browser-*.json
+            build/release/inventory-*.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-browser-diagnostics-${{ matrix.project }}-${{ matrix.index }}
+          path: |
+            build/release/
+            test-results/
+
+  coverage:
+    name: Verify complete browser coverage / ubuntu-24.04
+    needs: [build, browsers]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+          path: .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: browser-receipts-*
+          path: build/release/receipts/
+      - run: pnpm release:check coverage --receipts build/release/receipts
+        timeout-minutes: 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-coverage-diagnostics
+          path: build/release/
+
+  docs:
+    name: Documentation and patch checks / ubuntu-24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - run: pnpm release:check docs
+        timeout-minutes: 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-docs-diagnostics
+          path: build/release/
+
+  publish:
+    name: Publish verified candidate to Pages
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [build, software, coverage, docs]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+          path: .
+      - run: pnpm release:check verify
+        timeout-minutes: 1
       - uses: actions/configure-pages@v5
-        if: matrix.browser == 'chrome' && matrix.shard == 1 && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
       - uses: actions/upload-pages-artifact@v3
-        if: matrix.browser == 'chrome' && matrix.shard == 1 && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
           path: dist
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
-          name: browser-failures-${{ matrix.browser }}-${{ matrix.os }}-${{ matrix.shard }}
-          path: test-results/
+          name: release-publish-diagnostics
+          path: build/release/
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: check
+    needs: publish
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

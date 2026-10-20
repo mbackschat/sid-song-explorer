@@ -1,7 +1,10 @@
 import {test as base, expect} from '@playwright/test';
 
 export const test = base.extend({
-  page: async ({page}, use, testInfo) => {
+  page: async ({page, browser}, use, testInfo) => {
+    if (process.env.EXPLORER_RELEASE_CHECK === '1') {
+      testInfo.annotations.push({type: 'browser-version', description: browser.version()});
+    }
     const timing: unknown[] = [];
     page.on('console', message => {
       if (message.type() === 'debug' && message.text().startsWith('explorer-test-timing ')) {
