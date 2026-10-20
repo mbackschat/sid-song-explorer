@@ -36,6 +36,8 @@ The full-song output measurements were Rambo: 8,527,125 frames, left/right peaks
 
 On 2026-10-20 the user reported that the current candidate works, then requested that Audio output sit directly below Sound inspector. The two panels now share a right-hand stack with the standard 16-pixel gap, independent of timeline height. The build and the existing desktop, narrow-screen and stereo-inspection scenarios passed in Chrome and macOS WebKit (three per browser); the desktop capture was visually checked. The initial combined run reached its 60-second suite deadline after Chrome passed while WebKit was still advancing, so only the interrupted WebKit checks were run separately, passing in 20.6 seconds under the same budget. No broader workspace redesign was made.
 
+The subsequent compact-inspector follow-up reduces header/body padding and gaps between register settings while retaining font and button sizes. Ordered writes are lower-priority detail, per the user’s clarification, so a native disclosure keeps them collapsed by default and expandable in place. The production build and four existing desktop/narrow-layout checks passed across Chrome and macOS WebKit in 19.0 seconds; the desktop capture was visually checked with Audio output immediately below the shorter inspector.
+
 ## Remaining acceptance
 
 - Actual desktop Safari: play the stereo Rambo (MOS6581) and Bach (MOS8580) entries through their endings, compare their retained reference renders for lead/accompaniment placement and coupled/filter passages, and exercise six-voice audition, seek, loop and inspection. Record macOS/Safari versions and concrete results; the earlier mono verdict must not be reused.
