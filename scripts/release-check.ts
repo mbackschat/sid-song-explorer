@@ -9,6 +9,7 @@ import {UNIT_SHARDS, BROWSER_SHARDS, BROWSER_GLOBAL_TIMEOUT_MS, releaseBrowserMa
 import {validateReleaseInventory, type ReleaseBrowserReceipt} from './release-browser-reporter.ts';
 
 interface Candidate {commit: string; status: string}
+class ValidationInterrupted extends Error {}
 
 export function assertCandidate(before: Candidate, after: Candidate): void {
   assert.equal(before.status.trim(), '', 'Release evidence requires a clean committed candidate');
@@ -27,6 +28,19 @@ export function assertUnitResults(tap: string): number {
   assert.equal(value('pass'), count, 'Incomplete passing unit execution');
   for (const key of ['fail', 'cancelled', 'skipped', 'todo']) assert.equal(value(key), 0, `Unexpected unit ${key}`);
   return count;
+}
+
+export async function runChecks(checks: (() => Promise<void>)[]): Promise<void> {
+  const failures: unknown[] = [];
+  for (const check of checks) {
+    try { await check(); }
+    catch (error) {
+      if (error instanceof ValidationInterrupted) throw error;
+      failures.push(error);
+      console.error(error);
+    }
+  }
+  if (failures.length) throw new AggregateError(failures, `${failures.length} independent validation checks failed`);
 }
 
 export function reconcileBrowserCoverage(
@@ -100,22 +114,24 @@ export async function runStage(name: string, command: string, args: string[], bu
         kill('SIGTERM');
         force = setTimeout(() => kill('SIGKILL'), 2000);
       };
-      process.once('SIGINT', stop);
-      process.once('SIGTERM', stop);
+      const interrupt = () => stop('interrupted');
+      process.once('SIGINT', interrupt);
+      process.once('SIGTERM', interrupt);
       const timer = setTimeout(() => {
         stop(`deadline exceeded (${budget} ms)`);
       }, budget);
       const cleanup = () => {
         clearTimeout(timer);
         if (force) clearTimeout(force);
-        process.removeListener('SIGINT', stop);
-        process.removeListener('SIGTERM', stop);
+        process.removeListener('SIGINT', interrupt);
+        process.removeListener('SIGTERM', interrupt);
       };
       child.once('error', error => { cleanup(); fail(error); });
       child.once('close', (code, signal) => {
         kill('SIGKILL');
         cleanup();
-        if (stopped) fail(new Error(`${name}: ${stopped}; see ${log}`));
+        if (stopped?.startsWith('interrupted')) fail(new ValidationInterrupted(`${name}: ${stopped}; see ${log}`));
+        else if (stopped) fail(new Error(`${name}: ${stopped}; see ${log}`));
         else if (code !== 0) fail(new Error(`${name}: failed (${signal ?? code}); see ${log}`));
         else done();
       });
@@ -148,14 +164,19 @@ function nativeInventory(value: unknown, project: string): string[] {
 
 async function software(): Promise<void> {
   const files = (await readdir('tests')).filter(file => file.endsWith('.test.ts')).sort().map(file => `tests/${file}`);
-  const groups = [];
-  for (let shard = 1; shard <= UNIT_SHARDS; shard++) {
-    const name = `units-${shard}`;
-    await runStage(name, process.execPath, ['--experimental-strip-types', '--test', '--test-concurrency=1',
-      '--test-reporter=tap', `--test-shard=${shard}/${UNIT_SHARDS}`, ...files], 60_000, logPath(name));
-    groups.push({shard, tests:assertUnitResults(await readFile(logPath(name), 'utf8'))});
+  const groups: {shard: number; tests: number}[] = [];
+  try {
+    await runChecks(Array.from({length:UNIT_SHARDS}, (_, index) => async () => {
+      const shard = index + 1;
+      const name = `units-${shard}`;
+      await runStage(name, process.execPath, ['--experimental-strip-types', '--test', '--test-concurrency=1',
+        '--test-reporter=tap', `--test-shard=${shard}/${UNIT_SHARDS}`, ...files], 60_000, logPath(name));
+      groups.push({shard, tests:assertUnitResults(await readFile(logPath(name), 'utf8'))});
+    }));
+  } finally {
+    await save('software', {commit:candidate().commit, platform:process.platform, node:process.version, files, groups,
+      status:groups.length === UNIT_SHARDS ? 'passed' : 'failed'});
   }
-  await save('software', {commit:candidate().commit, platform:process.platform, node:process.version, files, groups});
 }
 
 async function build(): Promise<void> {
@@ -256,12 +277,12 @@ async function main(args: string[]): Promise<void> {
       case 'all':
         await runStage('dependencies', 'pnpm', ['install', '--frozen-lockfile'], 60_000, logPath('dependencies'));
         await build();
-        await software();
-        await docs();
-        for (const selected of ['chrome', 'webkit']) {
-          for (let index = 1; index <= BROWSER_SHARDS; index++) await browser(selected, `${index}/${BROWSER_SHARDS}`);
-        }
-        await coverage(outputDirectory);
+        await runChecks([
+          software, docs,
+          ...['chrome', 'webkit'].flatMap(selected => Array.from({length:BROWSER_SHARDS},
+            (_, index) => () => browser(selected, `${index + 1}/${BROWSER_SHARDS}`))),
+          () => coverage(outputDirectory),
+        ]);
         break;
       default: throw new Error(`Unknown release command: ${command}`);
     }

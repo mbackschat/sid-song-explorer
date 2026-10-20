@@ -3,7 +3,20 @@ import {test} from 'node:test';
 import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {assertCandidate, assertUnitResults, reconcileBrowserCoverage, runStage} from '../scripts/release-check.ts';
+import {assertCandidate, assertUnitResults, reconcileBrowserCoverage, runChecks, runStage} from '../scripts/release-check.ts';
+
+test('independent checks all execute and preserve each failure without retrying', async () => {
+  const calls: number[] = [];
+  const first = new Error('first failure');
+  const last = new Error('last failure');
+  await assert.rejects(runChecks([
+    async () => { calls.push(1); throw first; },
+    async () => { calls.push(2); },
+    async () => { calls.push(3); throw last; },
+  ]), error => error instanceof AggregateError && error.errors[0] === first && error.errors[1] === last);
+  assert.deepEqual(calls, [1, 2, 3]);
+  await assert.doesNotReject(runChecks([async () => {}]));
+});
 
 test('release evidence rejects dirty or changed candidates', () => {
   assert.doesNotThrow(() => assertCandidate({commit:'a', status:''}, {commit:'a', status:''}));
@@ -55,7 +68,11 @@ test('interruption rejects even a zero exit and reaps detached descendants used 
         {detached:true,stdio:['ignore','ignore','ignore','ipc']});
       child.on('message', () => console.log(child.pid));
     `;
-    const result = runStage('interrupted', process.execPath, ['-e', script], 3000, log);
+    let continued = false;
+    const result = runChecks([
+      () => runStage('interrupted', process.execPath, ['-e', script], 3000, log),
+      async () => { continued = true; },
+    ]);
     const rejected = assert.rejects(result, /interrupted/);
     const deadline = Date.now() + 2000;
     while (!pid && Date.now() < deadline) {
@@ -65,6 +82,7 @@ test('interruption rejects even a zero exit and reaps detached descendants used 
     assert.ok(pid, 'Child must report readiness before interruption');
     process.emit('SIGTERM');
     await rejected;
+    assert.equal(continued, false, 'Interruption must stop further checks');
     let alive = true;
     while (alive && Date.now() < deadline) {
       try { process.kill(pid, 0); await new Promise(done => setTimeout(done, 10)); }
