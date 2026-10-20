@@ -12,7 +12,7 @@ Positions, durations and seeks count PCM frames; only the PCM array is chip-orde
 
 The 32 MiB typed-cache cap is unchanged. Stereo Rambo PCM exceeds it, so consumed history can be evicted while unread audio must remain. [Session/cache guards](../../tests/stereo-engine.test.ts) compare split/cached reads, unaligned seeks and chip-specific observations with continuous rendering under a deliberately small cap. UI coverage describes actual retained data.
 
-[Browser routing guards](../../tests/browser/stereo-output.spec.ts) compare PCM submitted to Web Audio with the independent mono oracle on both sides/models. [Inspection guards](../../tests/browser/stereo-inspection.spec.ts) cover chip ownership, six controls, shared filters, local-file privacy and return to mono. All browser automation uses the silent fixture; software checks do not establish real Safari sound.
+[Browser routing guards](../../tests/browser/stereo-output.spec.ts) compare PCM submitted to Web Audio with the independent mono oracle on both sides/models. [Inspection guards](../../tests/browser/stereo-inspection.spec.ts) cover chip ownership, six controls, shared filters, local-file privacy and return to mono. Mute, solo and inspection/transport are independent scenarios; each audition sequence verifies pending disabled controls, all six mask bits and full-mix restoration without combining repeated mix rebuilds into the inspection budget. All browser automation uses the silent fixture; software checks do not establish real Safari sound.
 
 ## Executed adoption evidence
 

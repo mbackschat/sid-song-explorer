@@ -1,14 +1,19 @@
 import {resolve} from 'node:path';
+import type {Page} from '@playwright/test';
 import {test, expect} from './fixtures.ts';
 import {holdWorkerRequest} from './worker-control.ts';
 import {dualSid} from '../fixtures/dual-sid.ts';
 
-test('dual-SID rows share transport while voice audition and inspection retain chip ownership', async ({page}) => {
+async function loadStereo(page: Page): Promise<void> {
   await page.goto('/');
   await page.locator('#sample-select').selectOption('bach-toccata-stereo');
   await expect(page.locator('#chip-profile-badge')).toBeHidden();
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
+}
+
+test('dual-SID inspection and seeking retain chip ownership across responsive layout and mono replacement', async ({page}) => {
+  await loadStereo(page);
   await expect(page.locator('#chip-profile-badge')).toHaveText('2 SIDs · $D400 / $D420 · stereo');
   await expect(page.locator('#routing-badge')).toHaveText('Player routing · SID 1 left / SID 2 right');
   await expect(page.locator('#routing-badge')).toBeVisible();
@@ -32,23 +37,6 @@ test('dual-SID rows share transport while voice audition and inspection retain c
   await expect(page.locator('#write-list')).toHaveAttribute('data-sid-number', '1');
   await expect(page.locator('#write-list li').first()).toContainText('SID 2 $D4');
   expect((await page.locator('#write-list li').allTextContents()).every(text => text.includes('SID 2'))).toBe(true);
-
-  const voices = [0, 1, 2, 3, 4, 5];
-  const selections: [string, boolean[]][] = [
-    ...voices.map(voice => [`mute-${voice}`, voices.map(index => index <= voice)] as [string, boolean[]]),
-    ['restore-button', voices.map(() => false)],
-    ...voices.map(voice => [`solo-${voice}`, voices.map(index => index !== voice)] as [string, boolean[]]),
-    ['solo-5', voices.map(() => false)],
-  ];
-  for (const [control, expectedMask] of selections) {
-    const release = await holdWorkerRequest(page, 'mute');
-    await page.locator(`#${control}`).click();
-    await expect(page.locator('#mix-controls')).toHaveAttribute('aria-busy', 'true');
-    for (let voice = 0; voice < 6; voice++) await expect(page.locator(`#mute-${voice}`)).toBeDisabled();
-    await release();
-    await expect(page.locator('#play-status')).toHaveText('Live SID');
-    for (let voice = 0; voice < 6; voice++) await expect(page.locator(`#mute-${voice}`)).toHaveAttribute('aria-pressed', String(expectedMask[voice]));
-  }
 
   const filter = page.locator('#filter-lane-1');
   const releaseSeek = await holdWorkerRequest(page, 'seek');
@@ -76,6 +64,27 @@ test('dual-SID rows share transport while voice audition and inspection retain c
   await expect(page.locator('#analysis-monitor')).toBeHidden();
   await expect(page.locator('#peak-title')).toHaveText('Peak · measured PCM');
 });
+
+for (const controlKind of ['mute', 'solo'] as const) {
+  test(`dual-SID ${controlKind} controls apply every voice mask and restore the full mix`, async ({page}) => {
+    await loadStereo(page);
+    await page.locator('#play-button').click();
+    await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(1);
+    const voices = [0, 1, 2, 3, 4, 5];
+    const selections: [string, boolean[]][] = controlKind === 'mute'
+      ? [...voices.map(voice => [`mute-${voice}`, voices.map(index => index <= voice)] as [string, boolean[]]), ['restore-button', voices.map(() => false)]]
+      : [...voices.map(voice => [`solo-${voice}`, voices.map(index => index !== voice)] as [string, boolean[]]), ['solo-5', voices.map(() => false)]];
+    for (const [control, expectedMask] of selections) {
+      const release = await holdWorkerRequest(page, 'mute');
+      await page.locator(`#${control}`).click();
+      await expect(page.locator('#mix-controls')).toHaveAttribute('aria-busy', 'true');
+      for (let voice = 0; voice < 6; voice++) await expect(page.locator(`#mute-${voice}`)).toBeDisabled();
+      await release();
+      await expect(page.locator('#play-status')).toHaveText('Live SID');
+      for (let voice = 0; voice < 6; voice++) await expect(page.locator(`#mute-${voice}`)).toHaveAttribute('aria-pressed', String(expectedMask[voice]));
+    }
+  });
+}
 
 test('local dual-SID PSID opening keeps chip inspection device-local', async ({page}) => {
   const remoteRequests: string[] = [];
