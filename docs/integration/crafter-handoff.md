@@ -51,6 +51,27 @@ For a shared-format change, first agree the producer/consumer contract and its c
 
 Keep musical/engine knowledge with its existing Crafter owner and browser integration decisions here. The normalized catalog migration does not authorize new musical content, broader analysis packages or publication of either repository.
 
+## Composition package integration
+
+On 2026-10-20 the user separately authorized composition exploration across both repositories. Crafter's headless producer exports the bounded Rambo mono sidecar; [the composition design](../design/composition-exploration.md) owns the user experience and [the validation record](../validation/composition-exploration.md) owns evidence. This leaves the version-1 catalog and accepted SID files unchanged.
+
+- [Producer pin](../../config/composition-pin.json): Crafter commit `259e7fa4407f954bef360c092379bc0bd211aa66`, `samples/composition/rambo-main.json`, exact size and digest.
+- [Vendored package](../../config/composition.json): byte-identical producer output, referencing the existing published musical-source revision independently.
+- [Importer](../../scripts/import-composition.ts) and [consumer contract](../../src/composition-package.ts): exact-input verification, strict version/field/reference/time checks and binding to the catalog file/profile.
+- [PCM timing projection](../../src/composition-time.ts) and [calibration](../../config/composition-timing.json): Explorer-owned conversion from source calls to the adopted engine's timeline; package/engine/adapter changes invalidate the calibration.
+
+Normal `pnpm dev` and `pnpm build` run `pnpm composition:check` offline. They use the vendored package and existing prepared engine, with no sibling checkout dependency. A local producer update is explicit:
+
+```sh
+node --experimental-strip-types scripts/import-composition.ts --pin config/composition-pin.json --catalog config/catalog.json --source-root ../sid-song-crafter --output config/composition.json
+pnpm composition:calibrate
+pnpm composition:check
+```
+
+Update the pin from a verified Crafter checkpoint before import; an input override never bypasses its bytes/hash. Omitting `--source-root` fetches the immutable producer URL. The new producer commit is local and unpublished, so that remote route is not yet claimed to work. Publishing either repository still requires authorization; publish and verify the producer's availability before releasing its Explorer consumer. Existing evidence links use the older public source revision and remain independent of that publication.
+
+The package's `source-call-grid` seconds are canonical nominal composition coordinates. Runtime projection changes only display/listening coordinates, retaining the source calls and original package bytes. Musical roles, exact program states and physical allocations remain separate; unsupported exports and profiles receive generic inspection.
+
 ## Normalized catalog integration
 
 Crafter's [version-1 producer contract](https://github.com/mbackschat/sid-song-crafter/blob/0b51d387ca7660d9563e68ae5cde1db65aabfff4/docs/workflows/catalog.md) owns the normalized schema. The [producer pin](../../config/catalog-pin.json) identifies the Crafter commit, index path, exact byte count and SHA-256. The [vendored index](../../config/catalog-index.json) contains those exact bytes. Its `source.revision` separately identifies the original assets and evidence: publishing a producer does not rebase existing musical provenance. [The adapter](../../src/producer-catalog.ts) validates the producer contract and derives the existing [runtime catalog](../../config/catalog.json), which continues through the runtime parser. The frozen [migration oracle](../../tests/fixtures/catalog-migration.json) establishes exact semantic equality with the preceding snapshot, including order and default selection.

@@ -1,0 +1,20 @@
+.composition-panel { padding-bottom: 16px; }
+.composition-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.composition-heading h3 { font-size: 14px; margin: 0; }
+.composition-scope, .composition-limit { font-size: 11px; line-height: 1.6; color: #a7b2cd; margin: 9px 0; }
+.composition-phrases, .composition-parts, .composition-listening, .composition-sources { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.composition-phrases { margin: 12px 0; }
+.composition-phrases button { border-color: #8170b5; }
+.composition-selection { border: 1px solid #394260; border-radius: 7px; padding: 12px; background: #141a2c; }
+.composition-parts { margin-bottom: 12px; }
+.composition-parts button.small { min-height: 30px; font-size: 11px; }
+.composition-selection h4 { font-size: 13px; margin: 0 0 5px; color: #ddd3ff; }
+.composition-role { color: #c7d5e9; font-size: 12px; line-height: 1.6; }
+.composition-description, .composition-dependency, .composition-comparison, .composition-empty { color: #aeb9d2; font-size: 12px; line-height: 1.65; margin-top: 8px; }
+.composition-behavior { margin: 8px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.65; color: #bdc9dd; }
+.composition-dependency { border-left: 2px solid #8170b5; padding-left: 9px; }
+.composition-listening { margin-top: 12px; }
+.composition-sources { margin-top: 11px; font-size: 11px; }
+.composition-program-details { margin-top: 10px; font-size: 11px; color: #b9c4de; }
+.composition-program-details summary { cursor: pointer; }
+.composition-limit { margin-bottom: 0; }

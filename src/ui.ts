@@ -5,9 +5,13 @@ import type { DisplayedObservation } from './timeline.ts';
 import {timelineScrollbarGeometry, timelineViewportStart} from './timeline-scrollbar.ts';
 import {mountLibraryPicker, type LibrarySelection} from './library-picker.ts';
 import {SongLengthLookup} from './song-lengths.ts';
+import {matchingCompositionPackage} from './composition-package.ts';
+import type {PlaybackCompositionPackage} from './composition-time.ts';
+import {mountCompositionPanel, phrasePlaybackRange} from './composition-panel.ts';
 import logoUrl from '../assets/branding/sid-song-explorer.svg?url';
 import './style.css';
 import './library-picker.css';
+import './composition-panel.css';
 
 type Entry = Catalog['entries'][number];
 type Annotation = Entry['analysis']['annotations'][number];
@@ -40,7 +44,7 @@ const db = (value: number) => Number.isFinite(value) ? `${value.toFixed(1)} dBFS
 const waveforms = (control: number) => ['Triangle', 'Saw', 'Pulse', 'Noise'].filter((_, index) => control & (16 << index)).join(' + ') || 'None';
 const generated = (filename: string) => `${import.meta.env.BASE_URL}generated/${encodeURIComponent(filename)}`;
 
-export function mountExplorer(root: HTMLElement, controls: PlayerControls, catalog: Catalog): void {
+export function mountExplorer(root: HTMLElement, controls: PlayerControls, catalog: Catalog, compositionPackage: PlaybackCompositionPackage | null = null): void {
   root.innerHTML = `
     <header class="app-header">
       <div class="brand"><img id="brand-logo" alt="SID Song Explorer sound lens" /><div><div class="brand-name">SID Song Explorer</div><div class="brand-subtitle">Hear the music. Explore the chip.</div></div></div>
@@ -80,7 +84,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
             <div class="audio-spectrum"><p id="analysis-monitor" class="audio-monitor" hidden><span class="audio-left">L · Left</span><span class="audio-right">R · Right</span></p><canvas id="spectrum-plot" class="audio-plot" aria-label="Actual output frequency spectrum"></canvas><div class="plot-caption"><span>SPECTRUM</span><span id="spectrum-range">0 → Nyquist</span></div></div>
           </div><div id="reference-section" class="reference-body"><h3>Retained reference · WAV</h3><p id="reference-scope">Load a catalog sample for its retained listening reference.</p><audio id="reference-audio" controls preload="none" aria-label="Retained reference recording"></audio></div></section>
           </div>
-          <section class="panel evidence-panel" aria-labelledby="evidence-title"><div class="panel-header"><h2 id="evidence-title">Listen a little closer</h2><span class="badge">Linked evidence</span></div><div class="evidence-body"><p id="evidence-scope" class="evidence-scope">Authored annotations apply only to their exact catalog file, clock, chip model and subtune.</p><div id="evidence-cards"></div></div></section>
+          <section class="panel evidence-panel" aria-labelledby="evidence-title"><div class="panel-header"><h2 id="evidence-title">Listen a little closer</h2><span class="badge">Linked evidence</span></div><div class="evidence-body"><div id="composition-analysis"></div><details id="playback-evidence" open><summary id="playback-evidence-summary" hidden>Playback evidence</summary><p id="evidence-scope" class="evidence-scope">Authored annotations apply only to their exact catalog file, clock, chip model and subtune.</p><div id="evidence-cards"></div></details></div></section>
         </div>
         <footer class="source-footer"><div id="source-links" class="source-links"></div><span id="audio-diagnostics">Device-local playback · no backend</span><div id="engine-links" class="source-links" aria-label="Playback engine licenses and source"></div></footer>
       </main>
@@ -137,6 +141,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let plotStart = 0;
   let plotEnd = FOLLOW_WINDOW_SECONDS;
   let evidenceKey = '';
+  let compositionVisible = false;
   let sourceKey = '';
   let previousEpoch = -1;
   let liveObservationCache: {
@@ -405,6 +410,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     cursor = seconds;
     selectedEnd = end;
     const snapshot = held;
+    compositionPanel.selectAt(seconds, selectedFilterChip === null ? selectedVoice + 1 : null);
     const sequence = ++inspectionSequence;
     snapshot.inspectionPending = false;
     const captured = snapshot.overview ?? snapshot;
@@ -423,7 +429,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     }
     draw();
   };
-  const follow = () => { seekViewport = null; held = null; selectedEnd = null; timelineView = 'scroll'; controls.setTimelineCenter(null); draw(); };
+  const follow = () => { seekViewport = null; held = null; selectedEnd = null; compositionPanel.follow(); timelineView = 'scroll'; controls.setTimelineCenter(null); draw(); };
   button('follow-button').addEventListener('click', () => holdAt(state?.position ?? 0));
   button('return-button').addEventListener('click', follow);
   for (const mode of ['scroll', 'fit'] as const) button(`timeline-${mode}`).addEventListener('click', () => {
@@ -505,6 +511,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     held = null;
     selectedEnd = null;
     void run(async () => {
+    compositionPanel.selectAt(destination, selectedFilterChip === null ? selectedVoice + 1 : null, 'follow');
       reference.pause();
       notice = '';
       controls.setTimelineCenter(null);
@@ -540,7 +547,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   });
   ruler.addEventListener('pointercancel', () => { rulerPointer = null; seekDragging = false; draw(); });
   for (const voice of VOICES) {
-    button(`inspect-${voice}`).addEventListener('click', () => { selectedVoice = voice; selectedFilterChip = null; draw(); });
+    button(`inspect-${voice}`).addEventListener('click', () => { selectedVoice = voice; selectedFilterChip = null; compositionPanel.selectAt(held ? cursor : state?.position ?? 0, voice + 1, held ? 'hold' : 'follow'); draw(); });
     button(`mute-${voice}`).addEventListener('click', () => { void run(async () => {
       const mask = [...state!.muted];
       mask[voice] = !mask[voice];
@@ -587,7 +594,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   }); });
   button('clear-loop').addEventListener('click', () => { void run(async () => { await controls.setLoop(null); }); });
 
-  const hearPhrase = async (annotation: Annotation) => {
+  const hearPhrase = async (annotation: Pick<Annotation, 'title' | 'startSeconds' | 'endSeconds' | 'voices'>, options = {minimumContextSeconds: 4, preserveCompositionSelection: false}) => {
     seekViewport = null;
     reference.pause();
     controls.setTimelineCenter(null);
@@ -599,8 +606,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     selectedFilterChip = null;
     selectedVoice = Math.max(0, (annotation.voices[0] ?? 1) - 1);
     const playbackLimit = Math.min(state?.duration ?? MAX_SEEK_SECONDS, MAX_SEEK_SECONDS);
-    const contextEnd = Math.min(playbackLimit, Math.max(annotation.endSeconds, annotation.startSeconds + 4));
-    const contextStart = Math.max(0, Math.min(annotation.startSeconds, contextEnd - 4));
+    if (!options.preserveCompositionSelection) compositionPanel.selectAt(annotation.startSeconds, selectedVoice + 1);
+    const {start: contextStart, end: contextEnd} = phrasePlaybackRange(annotation, playbackLimit, options.minimumContextSeconds);
     input('loop-start').value = String(contextStart);
     input('loop-end').value = String(contextEnd);
     await controls.setLoop({ start: contextStart, end: contextEnd });
@@ -610,6 +617,14 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     await controls.play();
   };
   const link = (text: string, href: string) => {
+  const compositionPanel = mountCompositionPanel(el('composition-analysis'), {
+    onHear: selection => { void run(() => hearPhrase(selection, {minimumContextSeconds: 0, preserveCompositionSelection: true})); },
+    onSelectionChange: () => {
+      const voice = compositionPanel.selection()?.voices[0];
+      if (voice !== undefined) {selectedVoice = voice - 1; selectedFilterChip = null;}
+      draw();
+    },
+  });
     const anchor = document.createElement('a');
     anchor.textContent = text;
     anchor.href = href;
@@ -764,12 +779,23 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       }
     }
     if (linePosition >= plotStart && linePosition <= plotEnd) { ctx.strokeStyle = '#dce9fa'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x(linePosition), 0); ctx.lineTo(x(linePosition), height); ctx.stroke(); ctx.setLineDash([]); }
+    const compositionSelection = compositionPanel.selection();
+    const mappedSpans = voice === null ? [] : compositionSelection?.spans.filter(span => span.voice === voice + 1 && span.endSeconds > plotStart && span.startSeconds < plotEnd) ?? [];
+    for (const span of mappedSpans) {
+      const left = Math.max(0, x(span.startSeconds));
+      const spanWidth = Math.min(width, x(span.endSeconds)) - left;
+      ctx.fillStyle = '#ccb2ff25';
+      ctx.fillRect(left, 0, spanWidth, height);
+      ctx.fillStyle = '#ccb2ff';
+      ctx.fillRect(left, height - 3, spanWidth, 3);
+    }
     if (held) { ctx.strokeStyle = '#c2a6ff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x(cursor), 0); ctx.lineTo(x(cursor), height); ctx.stroke(); }
     const canvas = el(id);
     canvas.dataset.observedStart = String(coverageStart);
     canvas.dataset.observedUntil = String(observedUntil);
     canvas.dataset.futureFrames = String(frames.filter(frame => frame.time > (chartHeld?.heardUntil ?? heardPosition)).length);
     canvas.setAttribute('aria-valuemin', plotStart.toFixed(2));
+    canvas.dataset.compositionOccurrence = mappedSpans.length ? compositionSelection!.id : '';
     canvas.setAttribute('aria-valuemax', plotEnd.toFixed(2));
     canvas.setAttribute('aria-valuenow', Math.max(plotStart, Math.min(plotEnd, held ? cursor : linePosition)).toFixed(2));
     canvas.setAttribute('aria-valuetext', `${time(held ? cursor : linePosition, true)} ${held ? 'held inspection' : seekMarker !== null ? 'seek point' : 'heard playback'}`);
@@ -1070,6 +1096,13 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     const capturedInspection = held?.overview ?? held;
     if (held?.inspection && capturedInspection && inspectedTime >= capturedInspection.start && inspectedTime < capturedInspection.end) {
       const exactRegisters = observationRegistersAt(held.inspection, inspectedTime);
+    const matchedComposition = state && !['loading', 'error'].includes(state.status) ? matchingCompositionPackage(compositionPackage, loadedEntry, loadedProfile, state.info) : null;
+    compositionPanel.update({package: matchedComposition, timeSeconds: inspectedTime, voice: selectedFilterChip === null ? selectedVoice + 1 : null, disabled: changing || !loaded, intervention: state?.muted.some(Boolean)});
+    if (compositionVisible !== Boolean(matchedComposition)) {
+      compositionVisible = Boolean(matchedComposition);
+      el<HTMLDetailsElement>('playback-evidence').open = !compositionVisible;
+      el('playback-evidence-summary').hidden = !compositionVisible;
+    }
       if (exactRegisters) { inspection = held.inspection; registers = exactRegisters; }
     }
     if (!registers) {

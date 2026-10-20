@@ -7,6 +7,8 @@
 - [Mono POC validation](validation/mono-poc.md): technical checks, browser evidence, Safari/listening acceptance and remaining limitations.
 - [POC sample snapshot](integration/poc-sources.md): pinned cleared assets, download checks, corresponding source, annotation offsets and listening limits.
 - [Founding design](design/web-player-and-analyser.md): scope, interactions, evidence semantics, engine constraints and prototype gates.
+- [Composition exploration](design/composition-exploration.md): Crafter's musical package, Rambo passage/recurrence experience and the producer/consumer boundary.
+- [Composition verification](validation/composition-exploration.md): source-event oracles, PCM-time projection, local checks and review instructions.
 - [Seeking performance](research/seek-performance.md): replay, caching and state-snapshot alternatives, reproducible measurements and PCM/trace clock correction.
 - [Application research](research/web-music-explorers.md): dated comparisons, upstream citations and reuse alternatives.
 - [Assess headless SID analysis](research/sid-analysis-capabilities.md): retrievable metadata, execution metrics, inference limits and the recommended Node reuse scope.

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "packageSha256": "3b5a0014bf9b06c1e3e9719043e874e3e0454d1a9906ea5e6ce471dc2e4d52d0",
+  "engine": {
+    "moduleSha256": "c90ae581a47caf6624df394d3b0261c86fe21fce5a638ef42e3ff907f9b916cc",
+    "wasmSha256": "31e85e275fcd08940ee65ce8330bfc4d1f2d726c2d99dfcbdef8b1da55007896",
+    "sessionSha256": "0dd98acca376ae1dd79dbf296a6f10010d1c85d366d166c37c3df01c44f33811"
+  },
+  "sampleRate": 44100,
+  "cyclesPerSecond": 983981.25,
+  "anchor": {
+    "sourceCall": 5419,
+    "timeSeconds": 76.57787750020643
+  },
+  "maxOnsetErrorSeconds": 0.0025691546459967185,
+  "checkedEvents": 101
+}
