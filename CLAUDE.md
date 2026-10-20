@@ -65,7 +65,7 @@ Original work is GPL-3.0-or-later; retain MIT notices for transferred documentat
 
 ## Commands and validation
 
-The application uses TypeScript 5.9.3, Vite 7.3.1 and `libsidplayfp-wasm` 1.1.0/SIDLite. [The architecture record](docs/architecture/playback-adapter.md) owns the choice and [the mono validation record](docs/validation/mono-poc.md) and [dual-SID validation](docs/validation/stereo.md) own their separate evidence and gates. Documentation checks additionally require Git and Python 3.10 or newer. Building the modified raw-chip engine requires Docker and Python 3.12 or newer; CI builds it once on Linux and shares the verified artifact with both browser/platform jobs.
+The application uses TypeScript 5.9.3, Vite 7.3.1 and `libsidplayfp-wasm` 1.1.0/SIDLite. [The architecture record](docs/architecture/playback-adapter.md) owns the choice and [the mono validation record](docs/validation/mono-poc.md) and [dual-SID validation](docs/validation/stereo.md) own their separate evidence and gates. Documentation checks additionally require Git and Python 3.10 or newer. Building the modified raw-chip engine requires Docker and Python 3.12 or newer; CI builds it once on Linux and shares the verified artifact with both browser/platform jobs. CI also prepares catalog assets once and shares them across test jobs; each consumer rechecks pinned sizes and hashes through `pnpm prepare:assets` before building.
 
 | Task | Command | Evidence |
 | --- | --- | --- |
