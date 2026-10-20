@@ -173,3 +173,31 @@ These are measured AudioContext scheduling delays, excluding physical-device lat
 Retained failures improved the wrapper without changing the frozen core: Vite development import rewriting rejected a public-directory engine import, so the POC uses a regular build plus static preview; a held AudioContext resume exposed controls being available during pending startup, now guarded by transport state and generation identity; a mock boundary test caught rejection of the core's valid 4,096-frame block, now accepted while larger captures are rejected. Logs and rendered evidence remain in ignored `build/live-voice-browser/`, including `chrome-final.log`, `webkit-final.log` and per-browser PCM/scheduling receipts in `evidence/`. The core/asset red/green logs remain in `build/live-voice-replay/browser-assets-*.log`.
 
 Decision: the unchanged replay core supports the bounded browser experiment with continuous submitted output and measured control response. The user subsequently accepted the POC on 2026-10-20 with “works” in response to the playback/listening review instructions. This closes that POC review; the browser/device was not specified and no new Safari/iPhone-specific verdict is inferred. Production `VOICE-1` remains deferred: prepared-history coverage and audition/seek semantics are still open, and integrated playback will require its own validation. This evidence supports the browser approach without authorizing a cache rewrite or silently reducing retained history.
+
+
+### Final decision: retain existing voice switching (2026-10-20)
+
+After reviewing memory, seeking and filter-history tradeoffs, the user chose to retain the pre-spike production behavior and explicitly requested preservation of the spike records and implementations. Gapless integration is deferred by product decision, not because the audio proof failed. No further storage/compression spike or production integration is scheduled. The production player was never replaced, so no runtime rollback is necessary.
+
+The retained behavior stops scheduled sound, holds the heard position, reconstructs the selected mix from initialization and resumes at the held position. Preparation can take longer later in a song. Changing selection invalidates the previous mix’s prepared audio and associated preview/history, which then rebuild. Existing feedback explains that interruption. The existing 32 MiB cache budget and seek/filter semantics remain unchanged.
+
+The user considered approximately 50 MB an acceptable cache scale and rejected the proposed hundreds-of-megabytes approach. No 50 MB implementation or measurement was performed. At a literal 50,000,000-byte limit, the uncompressed ten-byte mono/twenty-byte stereo frame records alone have theoretical upper bounds of about 113/57 seconds at 44.1 kHz; observations, checkpoints and queues reduce coverage further. This budget is not total application memory. The earlier 50 MiB coverage estimates were extrapolations, not executed results. The proposed canonical full-mix filter state on seeking was not adopted.
+
+Alternatives considered remain unimplemented and unscheduled:
+
+| Alternative | Benefit | Reason not selected now |
+| --- | --- | --- |
+| Prepare a replacement mix while the old mix continues | Avoid silence during preparation. | Delayed selection response, concurrent execution/storage and a handover to a moving position add complexity. |
+| Gapless audition within a selected short passage | Bound the retained data and support repeated local comparisons. | Requires initial preparation and a separately defined passage/loop contract; the most promising bounded option if actual use later justifies reopening. |
+| Explicit voice-exploration mode | Limit the extra cost to exploration sessions. | Adds a mode and transition; reduced retained history and seek semantics still need resolution inside that mode. |
+| Compress captured voice records | Potentially extend coverage within a modest budget. | Savings and processing costs are unmeasured; no guarantee of whole-song stereo coverage. |
+| Complete emulator checkpoints | Potentially accelerate reconstruction without retaining every voice sample. | Broader engine-state implementation and verification than this feature warrants. |
+
+Native write-mask muting is not an equivalent immediate held-note control, and separately filtered voice stems cannot generally reproduce the shared filter. Keep the successful evidence rather than repeating those rejected shortcuts. Reopening requires an explicit new scope justified by an observed exploration need; it does not follow automatically from the POC’s success.
+
+Retained implementation and evidence owners:
+
+- [Native gain experiment](../../scripts/experiments/live-voice/run.py) and [its recorded results](#bounded-live-gain-prototype-and-integration-decision).
+- [Exact WASM capture/replay spike](../../scripts/experiments/live-voice-replay/README.md), committed in `cf07a6c`, including source patches, verifier and reproduction commands.
+- [Separate browser POC](../../scripts/experiments/live-voice-browser/README.md), committed in `14bee2e`, including frozen core hashes, worker/session wrapper, UI and regression oracles; acceptance recorded in `2c092d4`.
+- Generated binaries, receipts, logs and browser captures remain locally in ignored `build/live-voice-prototype/`, `build/live-voice-replay/` and `build/live-voice-browser/`. These are retained local evidence, not committed or published artifacts; the tracked study preserves the measured outcomes and limits.

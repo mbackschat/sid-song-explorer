@@ -2,6 +2,8 @@
 
 Separate playback experiment around the [verified replay core](../live-voice-replay/README.md). The production player, engine and prepared-seek cache are unchanged. The [study](../../../docs/research/seek-performance.md#executed-browser-playback-spike-2026-10-20) owns results and the production decision.
 
+Retained experiment: on 2026-10-20 the user chose to keep the existing production voice-switch interruption and preserve this implementation and its evidence. Production integration is not scheduled; see the [final decision](../../../docs/research/seek-performance.md#final-decision-retain-existing-voice-switching-2026-10-20).
+
 ## Frozen core
 
 [core-lock.json](core-lock.json) pins the previously verified capture/filter/checkpoint sources, fixture generator and built JS/WASM to the replay checkpoint. Preparation and build reject changed core files; browser tests also hash the actual HTTP responses. This POC adds no filter math, emulator modifications, fades or crossfades. A core change requires a separately reviewed replay experiment and new equality evidence, not a silent lock refresh.

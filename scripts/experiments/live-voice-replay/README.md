@@ -2,6 +2,8 @@
 
 This isolated experiment tests whether sample-aligned voice contributions can reproduce the adopted SIDLite output through its original shared filter. The [plan](../../../docs/PLAN.md#gapless-voice-follow-up-spike) owns scope and the [study](../../../docs/research/seek-performance.md#follow-up-spike-after-stereo-adoption) owns results and the integration decision. Production playback and its prepared-seek cache are unchanged.
 
+Retained experiment: on 2026-10-20 the user chose to keep the existing production voice-switch interruption and preserve this implementation and its evidence. Production integration is not scheduled; see the [final decision](../../../docs/research/seek-performance.md#final-decision-retain-existing-voice-switching-2026-10-20).
+
 ## Run
 
 Use the project's pinned Node.js and installed dependencies, prepared Rambo asset, Python 3.12 or newer and Docker. First build the [adopted raw-chip experiment](../stereo/README.md); this experiment reuses its local Emscripten image and output as an independent oracle. It builds into a separate directory and runs compilation offline.
