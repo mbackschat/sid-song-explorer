@@ -268,27 +268,60 @@ for (const fraction of [.8, .2]) test(`timeline click on the ${fraction > .5 ? '
   const startHeard = Number(await page.locator('#seek-slider').inputValue());
   const initialOffset = startHeard - (before.start + before.end) / 2;
   await page.locator('#play-button').click();
-  const frames = await lane.evaluate(async (element, {start, distance}) => {
-    const samples: {center:number;heard:number;marker:number}[] = [];
+  const {frames, markerProbes} = await lane.evaluate(async (element, {start, distance}) => {
+    const markerX = (canvas: HTMLCanvasElement, row = Math.round(19 * devicePixelRatio)) => {
+      const pixels = canvas.getContext('2d')!.getImageData(0, row, canvas.width, 1).data;
+      let weightedX = 0;
+      let weight = 0;
+      for (let x = 0; x < canvas.width; x++) {
+        const red = pixels[x * 4]!;
+        const green = pixels[x * 4 + 1]!;
+        const blue = pixels[x * 4 + 2]!;
+        const alpha = pixels[x * 4 + 3]!;
+        // Unpremultiplied WebKit edge pixels can read as white at alpha 1; the probes below lock visible-marker detection.
+        if (red > 140 && green > red && blue > green && alpha > 128) {
+          weightedX += (x + .5) * alpha;
+          weight += alpha;
+        }
+      }
+      return weight ? weightedX / weight : NaN;
+    };
+    const probe = document.createElement('canvas');
+    probe.width = 673;
+    probe.height = 74;
+    const probeContext = probe.getContext('2d')!;
+    const markerProbes = [];
+    for (const offset of [.008, .009, .01]) {
+      probeContext.clearRect(0, 0, probe.width, probe.height);
+      probeContext.strokeStyle = '#6ee0de';
+      probeContext.lineWidth = 1.4;
+      probeContext.beginPath();
+      probeContext.moveTo(0, 18 + offset);
+      probeContext.lineTo(probe.width, 21 + offset);
+      probeContext.stroke();
+      probeContext.fillStyle = '#ccb2ff25';
+      probeContext.fillRect(100, 0, 60, probe.height);
+      probeContext.strokeStyle = '#dce9fa';
+      probeContext.beginPath();
+      probeContext.moveTo(336.5, 0);
+      probeContext.lineTo(336.5, probe.height);
+      probeContext.stroke();
+      markerProbes.push(markerX(probe, 19));
+    }
+    const frames: {center:number;heard:number;marker:number}[] = [];
     const deadline = performance.now() + 7000;
     while (performance.now() < deadline) {
       const heard = Number((document.querySelector('#seek-slider') as HTMLInputElement).value);
       const startTime = Number(element.getAttribute('aria-valuemin'));
       const endTime = Number(element.getAttribute('aria-valuemax'));
       const canvas = element as HTMLCanvasElement;
-      const pixels = canvas.getContext('2d')!.getImageData(0, Math.round(19 * devicePixelRatio), canvas.width, 1).data;
-      let weightedX = 0;
-      let weight = 0;
-      for (let x = 0; x < canvas.width; x++) {
-        const red = pixels[x * 4]!;
-        if (red > 140) { weightedX += (x + .5) * red; weight += red; }
-      }
-      samples.push({center:(startTime + endTime) / 2,heard,marker:weight ? startTime + weightedX / weight / canvas.width * (endTime - startTime) : NaN});
+      frames.push({center:(startTime + endTime) / 2,heard,marker:startTime + markerX(canvas) / canvas.width * (endTime - startTime)});
       if (heard > start + distance + .3) break;
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
     }
-    return samples;
+    return {frames, markerProbes};
   }, {start:startHeard,distance:Math.abs(initialOffset)});
+  for (const marker of markerProbes) expect(Math.abs(marker - 336.5), 'the pixel oracle must exclude translucent source overlays and antialiased note edges').toBeLessThan(.5);
   expect(frames.at(-1)!.heard).toBeGreaterThan(startHeard + Math.abs(initialOffset));
   for (const frame of frames) {
     const elapsed = frame.heard - startHeard;

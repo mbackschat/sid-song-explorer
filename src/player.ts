@@ -128,11 +128,21 @@ export class ExplorerPlayer implements PlayerControls {
     this.previewRequestedAt = -Infinity;
   }
 
-  private previewOverlap(observation: TimelineObservation | null): number {
+  private previewOverlap(observation: TimelineObservation | null, includeMargin = false): number {
     if (!observation) return 0;
     const center = this.state.timelineCenterSeconds ?? this.state.position;
     const halfWindow = this.state.timelineWindowSeconds / 2;
-    return Math.max(0, Math.min(observation.end, center + halfWindow) - Math.max(observation.start, center - halfWindow));
+    const browsing = this.state.timelineCenterSeconds !== null;
+    const margin = includeMargin ? browsing ? TIMELINE_BROWSE_MARGIN_SECONDS : TIMELINE_PREVIEW_MARGIN_SECONDS : 0;
+    return Math.max(0, Math.min(observation.end, center + halfWindow + margin) - Math.max(observation.start, center - halfWindow - (browsing ? margin : 0)));
+  }
+
+  private improvesPreview(observation: TimelineObservation | null): boolean {
+    const visibleOverlap = this.previewOverlap(observation);
+    const acceptedOverlap = this.previewOverlap(this.state.preview);
+    if (visibleOverlap !== acceptedOverlap) return visibleOverlap > acceptedOverlap;
+    // Equal visible coverage still needs fresh offscreen data during movement (tests/player.test.ts).
+    return visibleOverlap > 0 && this.previewOverlap(observation, true) > this.previewOverlap(this.state.preview, true);
   }
 
   private refreshOverview() {
@@ -178,7 +188,7 @@ export class ExplorerPlayer implements PlayerControls {
       () => generation === this.generation && engine === this.engine && !this.disposed,
     ).then(observation => {
       if (generation !== this.generation || engine !== this.engine || this.disposed) return;
-      if (revision !== this.previewRevision && this.previewOverlap(observation) <= this.previewOverlap(this.state.preview)) return;
+      if (revision !== this.previewRevision && !this.improvesPreview(observation)) return;
       this.state.preview = observation;
       this.emit();
     }).catch(() => {
@@ -436,6 +446,8 @@ export class ExplorerPlayer implements PlayerControls {
       throw new Error('Timeline center must be null or finite and within 0–600 seconds.');
     }
     if (seconds === this.state.timelineCenterSeconds) return;
+    // Browsing needs its wider margin before motion exhausts follow coverage (tests/player.test.ts).
+    if (this.state.timelineCenterSeconds === null && seconds !== null) this.previewRequestedAt = -Infinity;
     this.state.timelineCenterSeconds = seconds;
     this.previewRevision++;
     this.emit();

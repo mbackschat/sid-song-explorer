@@ -108,7 +108,7 @@ Variable-span cache reads are compared with continuous writes/registers and subs
 
 ## Unified timeline panel
 
-The proportional scrollbar browses observations without seeking or rendering audio. Its independent geometry oracle uses a 200-second song and 20-second viewport: 10% thumb, 10% offset at viewport start 20, and final viewport start 180. It covers zoom/resize, bounds, oversized views and unknown durations. Continuous-drag guards check prepared coverage every animation frame. Browsing uses five-second margins, at most ten requests per second and one in flight; stale-view replies are accepted only when useful to current coverage, with configuration-generation checks still mandatory.
+The proportional scrollbar browses observations without seeking or rendering audio. Its independent geometry oracle uses a 200-second song and 20-second viewport: 10% thumb, 10% offset at viewport start 20, and final viewport start 180. It covers zoom/resize, bounds, oversized views and unknown durations. Continuous-drag guards check prepared coverage every animation frame. Entering browsing requests its five-second margins as soon as any in-flight request finishes, without inheriting the narrower follow view's throttle. Subsequent movement is limited to ten requests per second with one in flight. Replies from an earlier view may improve visible coverage or, when visible coverage is equal, add useful off-screen margin around the current view; configuration-generation checks remain mandatory.
 
 ### Seek transition stability
 
@@ -118,7 +118,7 @@ Pending seeks must preserve chart, scrollbar and button geometry, clicked range 
 
 After a right-side click, the seek marker remains attached to the clicked note while marker and notes scroll toward center at song speed. The ruler labels the seek point; transport, upcoming shading and live inspector continue to report heard playback. At center, the marker returns to live tracking and the viewport catches up with audio. Left-side playback advances naturally against a stationary timeline until center; paused placement stays fixed and Follow centers immediately.
 
-The browser oracle samples the rendered white line from canvas pixels and compares it with the clicked note, independently of UI state. It checks normal-speed viewport motion, the center handoff and subsequent heard tracking. The user explicitly accepted this behavior on 2026-10-20: “playhead-handoff: it is working, accepted.”
+The browser oracle samples the rendered white line from canvas pixels and compares it with the clicked note, independently of UI state. Pixel detection accounts for opacity so nearly transparent antialiasing and composition tints cannot masquerade as the playhead. It checks normal-speed viewport motion, the center handoff and subsequent heard tracking. The user explicitly accepted this behavior on 2026-10-20: “playhead-handoff: it is working, accepted.”
 
 ## Whole-song overview
 
@@ -138,7 +138,7 @@ Chart times and Heard position attach to the chart axis; scrollbar labels attach
 
 ## Linear timeline through loop boundaries
 
-Playback loop B constrains audio scheduling, not linear song observations. Follow, browsing and Fit retain data beyond B up to song duration/available coverage; a visible boundary explains the return to A without wrapped or synthesized frames. [Player guards](../../tests/player.test.ts) reproduced missing coverage at Rambo's 2:59.03–3:04.12 ending range and an independent 10–20-second loop, then verify beyond-B coverage, browse/Follow retention, unchanged loop bounds and no transport calls from view changes. The updated browser scenario was not executed in that bounded correction; it remains separate from the local unit/build evidence.
+Playback loop B constrains audio scheduling, not linear song observations. Follow, browsing and Fit retain data beyond B up to song duration/available coverage; a visible boundary explains the return to A without wrapped or synthesized frames. [Player guards](../../tests/player.test.ts) cover Rambo's 2:59.03–3:04.12 ending range and an independent 10–20-second loop, verifying beyond-B coverage, browse/Follow retention, unchanged loop bounds and no transport calls from view changes.
 
 ## Loop bracket and handles
 
@@ -152,4 +152,4 @@ Selected endpoints are independent of Loop on: a single endpoint stays visible/d
 
 ### Stable ruler height
 
-Once used, marker space remains allocated for the page session, including after Clear and transitions away from staggered handles. This prevents the former 24/44-pixel panel collapse while markers themselves disappear. Initial rendering reserves no marker space until needed. The user accepted the correction with “Nice.” on 2026-10-20. Browser scroll behavior and the updated Hear phrase browser assertion were not executed locally in that correction; no CI outcome is inferred.
+Once used, marker space remains allocated for the page session, including after Clear and transitions away from staggered handles. This prevents the former 24/44-pixel panel collapse while markers themselves disappear. Initial rendering reserves no marker space until needed. The user accepted the correction with “Nice.” on 2026-10-20.

@@ -287,9 +287,9 @@ test('timeline browsing changes prepared coverage without seeking, rendering or 
   await flushReplies();
   const transport = worker.requests.filter((request) => request.method !== 'observe');
   const playback = [value.state.position, value.state.renderedUntil, value.state.status, value.state.epoch];
-  for (const [center, start, end] of [[100, 90, 110], [0, 0, 10], [199, 189, 200]]) {
+  for (const [center, start, end, delay] of [[100, 90, 110, 0], [0, 0, 10, 100], [199, 189, 200, 100]]) {
     value.player.setTimelineCenter(center);
-    value.advance(250);
+    value.advance(delay);
     const request = worker.lastRequest('observe');
     assert.deepEqual(request.payload, {startSeconds: start, endSeconds: end});
     assert.equal(value.state.timelineCenterSeconds, center);
@@ -329,9 +329,7 @@ test('browsing and Follow retain valid data while rejecting stale view replies t
   worker.reply(obsoleteFollow, preview(0, 6));
   await flushReplies();
   assert.equal(value.state.preview, accepted);
-  value.advance(99);
-  assert.equal(worker.requests.length, requests);
-  value.advance(1);
+  assert.equal(worker.requests.length, requests + 1);
   const obsoleteBrowse = worker.lastRequest('observe');
   assert.deepEqual(obsoleteBrowse.payload, {startSeconds: 70, endSeconds: 90});
   value.state.position = 3;
@@ -399,7 +397,6 @@ test('browsing and following retain linear song observations beyond loop B witho
   await flushReplies();
   const transport = worker.requests.filter((request) => request.method !== 'observe');
   value.player.setTimelineCenter(40);
-  value.advance(250);
   const browsing = worker.lastRequest('observe');
   assert.deepEqual(browsing.payload, {startSeconds: 30, endSeconds: 50});
   worker.reply(browsing, preview(30, 50));
@@ -465,13 +462,39 @@ test('entering browsing reuses useful in-flight follow data while a padded reque
   assert.deepEqual(worker.requests.filter((request) => request.method !== 'observe'), transport);
 });
 
+test('entering browsing requests its wider coverage immediately after an accepted or pending follow preview', async (t) => {
+  for (const pending of [false, true]) {
+    await t.test(pending ? 'follow reply pending' : 'follow reply accepted', async (t) => {
+      const {value, worker} = await loaded(t);
+      const follow = worker.lastRequest('observe');
+      if (!pending) {
+        worker.reply(follow, preview(0, 6));
+        await flushReplies();
+      }
+      value.advance(20);
+      value.player.setTimelineCenter(5);
+      if (pending) {
+        assert.equal(worker.lastRequest('observe').id, follow.id);
+        worker.reply(follow, preview(0, 6));
+        await flushReplies();
+      }
+      const browsing = worker.lastRequest('observe');
+      assert.notEqual(browsing.id, follow.id, 'a follow throttle must not defer the first padded browsing request');
+      assert.deepEqual(browsing.payload, {startSeconds:0, endSeconds:15});
+      value.player.setTimelineCenter(6);
+      worker.reply(browsing, preview(0, 15));
+      await flushReplies();
+      assert.equal(worker.lastRequest('observe').id, browsing.id, 'subsequent movement retains the browsing throttle');
+    });
+  }
+});
+
 test('continuous browsing accepts useful pending coverage without waiting for dragging to stop', async (t) => {
   const {value, worker} = await loaded(t);
   worker.reply(worker.lastRequest('observe'), preview(0, 6));
   await flushReplies();
   const transport = worker.requests.filter((request) => request.method !== 'observe');
   value.player.setTimelineCenter(50);
-  value.advance(100);
   const first = worker.lastRequest('observe');
   assert.deepEqual(first.payload, {startSeconds: 40, endSeconds: 60});
   for (const center of [51, 52, 53]) {
@@ -527,9 +550,41 @@ test('obsolete browsing responses cannot replace current data with equal or smal
   assert.equal(value.state.preview, accepted);
 });
 
+test('moving viewport accepts equal visible coverage when a pending reply restores browsing margins', async (t) => {
+  for (const direction of [-1, 1]) {
+    await t.test(direction < 0 ? 'earlier motion' : 'later motion', async (t) => {
+      const {value, worker} = await loaded(t);
+      worker.reply(worker.lastRequest('observe'), preview(0, 6));
+      await flushReplies();
+      const seeking = value.player.seek(20);
+      worker.reply(worker.lastRequest('seek'), position(20));
+      await seeking;
+      worker.reply(worker.lastRequest('observe'), preview(15, 26));
+      await flushReplies();
+      value.player.setTimelineCenter(20);
+      const browsing = worker.lastRequest('observe');
+      value.player.setTimelineCenter(20.5);
+      worker.reply(browsing, preview(10, 30));
+      await flushReplies();
+      assert.deepEqual(value.state.preview, preview(10, 30), 'the first padded reply must replace narrow follow coverage before visible content runs out');
+      value.player.setTimelineCenter(20.5 + direction);
+      value.advance(100);
+      const moving = worker.lastRequest('observe');
+      value.player.setTimelineCenter(20.5 + 1.5 * direction);
+      const padded = preview(10.5 + direction, 30.5 + direction);
+      worker.reply(moving, padded);
+      await flushReplies();
+      assert.deepEqual(value.state.preview, padded, 'motion must replenish the leading margin while visible overlap remains complete');
+    });
+  }
+});
+
 test('continuous browsing refreshes at most ten times per second without changing follow timing', async (t) => {
   const {value, worker} = await loaded(t);
   worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  value.player.setTimelineCenter(50);
+  worker.reply(worker.lastRequest('observe'), preview(40, 60));
   await flushReplies();
   let replied = worker.lastRequest('observe').id;
   const before = worker.requests.length;
