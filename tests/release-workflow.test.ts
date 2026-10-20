@@ -1,10 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {BROWSER_GLOBAL_TIMEOUT_MS, BROWSER_SHARDS, releaseBrowserMatrix, UNIT_SHARDS} from '../scripts/release-settings.ts';
+import {readFileSync, existsSync} from 'node:fs';
+import {BROWSER_GLOBAL_TIMEOUT_MS, BROWSER_SHARDS, releaseBrowserMatrix} from '../scripts/release-settings.ts';
 
 const workflow = readFileSync('.github/workflows/app.yml', 'utf8');
-const jobs = new Map([...workflow.matchAll(/^  ([a-z][a-z-]*):\n([\s\S]*?)(?=^  [a-z][a-z-]*:\n|$(?![\s\S]))/gm)].map(match => [match[1], match[2]]));
+const jobs = new Map([...workflow.split('\njobs:\n')[1]!.matchAll(/^  ([a-z][a-z-]*):\n([\s\S]*?)(?=^  [a-z][a-z-]*:\n|$(?![\s\S]))/gm)].map(match => [match[1], match[2]]));
 
 function job(name: string): string {
   const body = jobs.get(name);
@@ -16,104 +16,80 @@ function steps(body: string): string[] {
   return body.split(/^      - /m).slice(1);
 }
 
-function dependencies(name: string): string[] {
-  const value = job(name).match(/^    needs: (.+)$/m)?.[1];
-  return value ? value.replace(/[\[\]]/g, '').split(',').map(name => name.trim()) : [];
-}
-
-function ancestors(name: string, seen = new Set<string>()): Set<string> {
-  for (const dependency of dependencies(name)) {
-    if (!seen.has(dependency)) {
-      seen.add(dependency);
-      ancestors(dependency, seen);
-    }
-  }
-  return seen;
-}
-
 function downloadsCandidate(name: string): void {
-  assert.ok(steps(job(name)).some(step => step.includes('uses: actions/download-artifact@v4') && step.includes('name: release-candidate') && /path: \.\s*$/m.test(step)), `${name} must download the entire sealed candidate into the workspace`);
+  assert.ok(steps(job(name)).some(step => step.includes('uses: actions/download-artifact@v4') && step.includes('name: release-candidate') && /path: \.\s*$/m.test(step)), `${name} must download the entire sealed candidate`);
 }
 
-test('the release matrix covers every native shard with its supported browser and host', () => {
-  const matrix = releaseBrowserMatrix();
-  assert.equal(UNIT_SHARDS, 7);
-  assert.equal(BROWSER_SHARDS, 1, 'POC release checks need one runner per browser');
-  assert.ok(BROWSER_GLOBAL_TIMEOUT_MS < 180_000);
-  assert.equal(matrix.include.length, BROWSER_SHARDS * 2);
-  for (const [project, os, install] of [['chrome', 'ubuntu-24.04', 'chrome'], ['webkit', 'macos-26', 'webkit']]) {
-    const rows = matrix.include.filter(row => row.project === project);
-    assert.deepEqual(rows.map(row => row.shard), Array.from({length: BROWSER_SHARDS}, (_, index) => `${index + 1}/${BROWSER_SHARDS}`));
-    assert.deepEqual(rows.map(row => row.index), Array.from({length: BROWSER_SHARDS}, (_, index) => index + 1));
-    assert.ok(rows.every(row => row.os === os && row.install === install));
+test('POC CI runs software and docs once on Linux without standalone setup jobs', () => {
+  assert.deepEqual([...jobs.keys()], ['check', 'browsers', 'publish']);
+  const check = job('check');
+  assert.match(check, /runs-on: ubuntu-24\.04/);
+  assert.doesNotMatch(check, /matrix:/);
+  for (const command of ['build', 'software', 'docs']) {
+    assert.equal([...workflow.matchAll(new RegExp(`run: pnpm release:check ${command}\\s*$`, 'gm'))].length, 1);
+    assert.match(check, new RegExp(`run: pnpm release:check ${command}`));
   }
+  assert.equal(existsSync('.github/workflows/docs.yml'), false, 'Documentation must not run twice per push');
+  assert.match(workflow, /cancel-in-progress: true/);
 });
 
-test('CI builds and seals one candidate containing deployment output and browser fixtures', () => {
-  assert.equal([...workflow.matchAll(/run: pnpm release:check build\s*$/gm)].length, 1);
-  assert.doesNotMatch(workflow, /run: pnpm build\s*$/m);
-  assert.deepEqual(dependencies('build'), ['engine', 'samples']);
-  const upload = steps(job('build')).find(step => step.includes('uses: actions/upload-artifact@v4') && step.includes('name: release-candidate'));
+test('engine reuse requires an exact input key and retains runtime verification', () => {
+  const check = job('check');
+  const cache = steps(check).find(step => step.includes('uses: actions/cache@v4'));
+  assert.ok(cache);
+  assert.match(cache, /path: build\/stereo-gate\/output/);
+  for (const input of ['pnpm-lock.yaml', 'package.json', 'scripts/experiments/stereo/**', 'scripts/generate-test-sid.ts', 'LICENSE']) assert.ok(cache.includes(`'${input}'`), input);
+  assert.doesNotMatch(cache, /restore-keys:/);
+  const engine = steps(check).find(step => step.includes('run: pnpm prepare:engine'));
+  assert.ok(engine);
+  assert.match(engine, /if: steps\.engine\.outputs\.cache-hit != 'true'/);
+  assert.ok(check.indexOf('run: pnpm prepare:engine') < check.indexOf('run: pnpm release:check build'));
+  // prepare:assets in the build command independently checks provenance and runtime hashes.
+  assert.match(readFileSync('scripts/release-check.ts', 'utf8'), /runStage\('prepare-assets', 'pnpm', \['prepare:assets'\]/);
+});
+
+test('CI builds one candidate and runs only the supported small browser matrix', () => {
+  assert.equal(BROWSER_SHARDS, 1);
+  assert.ok(BROWSER_GLOBAL_TIMEOUT_MS < 180_000);
+  const browsers = job('browsers');
+  assert.match(browsers, /needs: check/);
+  for (const row of releaseBrowserMatrix().include) {
+    assert.match(browsers, new RegExp(`project: ${row.project}\\n\\s+os: ${row.os}\\n\\s+install: ${row.install}`));
+  }
+  assert.equal([...browsers.matchAll(/- project:/g)].length, 2);
+  assert.match(browsers, /run: pnpm release:check browser --project \$\{\{ matrix\.project \}\} --shard 1\/1/);
+  assert.doesNotMatch(browsers, /release:check software|pnpm test(?:\s|:)|pnpm build|prepare:assets|prepare:engine/);
+  downloadsCandidate('browsers');
+  const upload = steps(job('check')).find(step => step.includes('name: release-candidate'));
   assert.ok(upload);
-  for (const path of ['dist/', 'public/generated/', 'build/release/artifact.json']) assert.ok(upload.includes(path), `Candidate is missing ${path}`);
+  for (const path of ['dist/', 'public/generated/', 'build/release/artifact.json']) assert.ok(upload.includes(path));
   assert.match(upload, /if-no-files-found: error/);
 });
 
-test('CI runs software once on each supported host outside the browser matrix', () => {
-  const software = job('software');
-  assert.match(software, /os: \[ubuntu-24\.04, macos-26\]/);
-  assert.doesNotMatch(software, /(?:project|browser|shard):/);
-  assert.match(software, /run: pnpm release:check software/);
-  downloadsCandidate('software');
-  assert.match(software, /name: verified-raw-chip-engine/);
-  const browsers = job('browsers');
-  assert.doesNotMatch(browsers, /release:check software|pnpm test(?:\s|:)|pnpm build|prepare:assets|prepare:engine/);
-  assert.equal([...workflow.matchAll(/run: pnpm prepare:engine\s*$/gm)].length, 1);
-  assert.equal([...workflow.matchAll(/run: pnpm prepare:samples\s*$/gm)].length, 1);
+test('publication verifies both browser receipts and deploys the tested candidate', () => {
+  const publish = job('publish');
+  assert.match(publish, /needs: \[check, browsers\]/);
+  assert.match(publish, /if: github\.ref == 'refs\/heads\/main' && github\.event_name != 'pull_request'/);
+  downloadsCandidate('publish');
+  assert.match(publish, /pattern: browser-receipts-/);
+  assert.match(publish, /run: pnpm release:check coverage --receipts build\/release\/receipts/);
+  assert.doesNotMatch(publish, /pnpm build|release:check build|prepare:assets|prepare:engine/);
+  assert.ok(publish.indexOf('run: pnpm release:check coverage') < publish.indexOf('uses: actions/upload-pages-artifact@v3'));
+  assert.match(publish, /path: dist/);
+  assert.match(publish, /uses: actions\/deploy-pages@v4/);
 });
 
-test('CI browser consumers use the shared matrix and retain installation failures separately', () => {
-  assert.match(job('matrix'), /pnpm --silent release:check matrix/);
+test('CI retains failure diagnostics and browser receipts without retries', () => {
+  for (const name of jobs.keys()) {
+    assert.ok(steps(job(name)).some(step => step.includes('uses: actions/upload-artifact@v4') && step.includes('if: always()') && step.includes('build/release/')), `${name} must retain diagnostics`);
+  }
   const browsers = job('browsers');
-  assert.match(browsers, /matrix: \$\{\{ fromJSON\(needs\.matrix\.outputs\.browsers\) \}\}/);
-  assert.match(browsers, /fail-fast: false/);
-  assert.match(browsers, /run: pnpm release:check browser --project \$\{\{ matrix\.project \}\} --shard \$\{\{ matrix\.shard \}\}/);
-  downloadsCandidate('browsers');
-  const install = steps(browsers).find(step => step.startsWith('name: Install browser dependencies'));
-  assert.ok(install);
-  assert.match(install, /timeout-minutes: 2/);
-  assert.match(install, /set -o pipefail/);
-  assert.match(install, /playwright install --with-deps/);
-  assert.match(install, /tee build\/release\/browser-install-/);
-  assert.ok(steps(browsers).indexOf(install) < steps(browsers).findIndex(step => step.includes('run: pnpm release:check browser')));
   const receipts = steps(browsers).find(step => step.includes('name: browser-receipts-'));
   assert.ok(receipts);
   assert.match(receipts, /if: always\(\)/);
   assert.match(receipts, /build\/release\/browser-\*\.json/);
   assert.match(receipts, /build\/release\/inventory-\*\.json/);
-});
-
-test('CI publishes the same verified candidate only after software browser coverage and docs gates', () => {
-  assert.deepEqual(dependencies('coverage'), ['build', 'browsers']);
-  assert.match(job('coverage'), /run: pnpm release:check coverage --receipts build\/release\/receipts/);
-  assert.match(job('coverage'), /pattern: browser-receipts-/);
-  assert.match(job('docs'), /run: pnpm release:check docs/);
-  for (const gate of ['build', 'software', 'browsers', 'coverage', 'docs']) assert.ok(ancestors('deploy').has(gate), `Pages deployment is missing the ${gate} gate`);
-  assert.deepEqual(dependencies('deploy'), ['publish']);
-  downloadsCandidate('publish');
-  const publish = job('publish');
-  assert.match(publish, /run: pnpm release:check verify/);
-  assert.doesNotMatch(publish, /pnpm build|release:check build|prepare:assets|prepare:engine/);
-  assert.ok(publish.indexOf('run: pnpm release:check verify') < publish.indexOf('uses: actions/upload-pages-artifact@v3'));
-  assert.equal([...workflow.matchAll(/uses: actions\/upload-pages-artifact@v3/g)].length, 1);
-  assert.match(publish, /path: dist/);
-});
-
-test('CI keeps release diagnostics on success and failure without automatic retries', () => {
-  for (const name of ['build', 'software', 'browsers', 'coverage', 'docs', 'publish']) {
-    assert.ok(steps(job(name)).some(step => step.includes('uses: actions/upload-artifact@v4') && step.includes('if: always()') && step.includes('build/release/')), `${name} must retain release diagnostics`);
-  }
+  assert.match(browsers, /set -o pipefail/);
+  assert.match(browsers, /playwright install --with-deps/);
   assert.doesNotMatch(workflow, /retry|continue-on-error/);
-  assert.equal([...workflow.matchAll(/^      pages: write$/gm)].length, 1);
-  assert.equal([...workflow.matchAll(/^      id-token: write$/gm)].length, 1);
 });

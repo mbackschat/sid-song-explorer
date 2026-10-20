@@ -7,29 +7,12 @@ permissions:
   contents: read
 concurrency:
   group: application-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
-  matrix:
-    name: Resolve release browser matrix
+  check:
+    name: Build and software checks / Linux
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
-    outputs:
-      browsers: ${{ steps.matrix.outputs.browsers }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.20.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-      - id: matrix
-        run: echo "browsers=$(pnpm --silent release:check matrix)" >> "$GITHUB_OUTPUT"
-
-  samples:
-    name: Prepare verified catalog assets / ubuntu-24.04
-    runs-on: ubuntu-24.04
-    timeout-minutes: 3
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -40,67 +23,18 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm prepare:samples
-      - uses: actions/upload-artifact@v4
+      - run: pnpm release:check docs
+      - uses: actions/cache@v4
+        id: engine
         with:
-          name: verified-catalog-assets
-          path: public/generated/
-          if-no-files-found: error
-
-  engine:
-    name: Build and verify raw-chip engine / ubuntu-24.04
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.20.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          path: build/stereo-gate/output/
+          key: raw-chip-linux-v1-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'scripts/experiments/stereo/**', 'scripts/generate-test-sid.ts', 'LICENSE') }}
       - run: pnpm prepare:engine
-      - uses: actions/upload-artifact@v4
-        with:
-          name: verified-raw-chip-engine
-          path: build/stereo-gate/output/
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: raw-chip-engine-diagnostics
-          path: |
-            build/stereo-gate/*.log
-            build/stereo-gate/*.json
-            build/stereo-gate/output/*.json
-
-  build:
-    name: Build sealed release candidate / ubuntu-24.04
-    needs: [engine, samples]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.20.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v4
-        with:
-          name: verified-raw-chip-engine
-          path: build/stereo-gate/output/
-      - uses: actions/download-artifact@v4
-        with:
-          name: verified-catalog-assets
-          path: public/generated/
+        if: steps.engine.outputs.cache-hit != 'true'
       - run: pnpm release:check build
-        timeout-minutes: 5
+        timeout-minutes: 3
+      - run: pnpm release:check software
+        timeout-minutes: 3
       - uses: actions/upload-artifact@v4
         with:
           name: release-candidate
@@ -112,58 +46,28 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: release-build-diagnostics
-          path: build/release/
+          name: check-diagnostics
+          path: |
+            build/release/
+            build/stereo-gate/*.log
+            build/stereo-gate/*.json
+            build/stereo-gate/output/*.json
 
-  software:
-    name: Software / ${{ matrix.os }}
-    needs: [build, engine]
+  browsers:
+    name: ${{ matrix.project }}
+    needs: check
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-26]
+        include:
+          - project: chrome
+            os: ubuntu-24.04
+            install: chrome
+          - project: webkit
+            os: macos-26
+            install: webkit
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.20.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-candidate
-          path: .
-      - uses: actions/download-artifact@v4
-        with:
-          name: verified-raw-chip-engine
-          path: build/stereo-gate/output/
-      - name: Prepare and verify software fixtures
-        timeout-minutes: 1
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm prepare:assets 2>&1 | tee build/release/software-assets.log
-      - run: pnpm release:check software
-        timeout-minutes: 8
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: release-software-diagnostics-${{ matrix.os }}
-          path: build/release/
-
-  browsers:
-    name: ${{ matrix.project }} / ${{ matrix.os }} / shard ${{ matrix.shard }}
-    needs: [build, matrix]
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.matrix.outputs.browsers) }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -184,29 +88,37 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p build/release
-          pnpm exec playwright install --with-deps ${{ matrix.install }} 2>&1 | tee build/release/browser-install-${{ matrix.project }}-${{ matrix.index }}.log
-      - run: pnpm release:check browser --project ${{ matrix.project }} --shard ${{ matrix.shard }}
+          pnpm exec playwright install --with-deps ${{ matrix.install }} 2>&1 | tee build/release/browser-install-${{ matrix.project }}.log
+      - run: pnpm release:check browser --project ${{ matrix.project }} --shard 1/1
         timeout-minutes: 4
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-receipts-${{ matrix.project }}-${{ matrix.index }}
+          name: browser-receipts-${{ matrix.project }}
           path: |
             build/release/browser-*.json
             build/release/inventory-*.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: release-browser-diagnostics-${{ matrix.project }}-${{ matrix.index }}
+          name: browser-diagnostics-${{ matrix.project }}
           path: |
             build/release/
             test-results/
 
-  coverage:
-    name: Verify complete browser coverage / ubuntu-24.04
-    needs: [build, browsers]
+  publish:
+    name: Publish tested app
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [check, browsers]
     runs-on: ubuntu-24.04
     timeout-minutes: 4
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -215,8 +127,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@v4
         with:
           name: release-candidate
@@ -226,77 +136,14 @@ jobs:
           pattern: browser-receipts-*
           path: build/release/receipts/
       - run: pnpm release:check coverage --receipts build/release/receipts
-        timeout-minutes: 1
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: release-coverage-diagnostics
-          path: build/release/
-
-  docs:
-    name: Documentation and patch checks / ubuntu-24.04
-    runs-on: ubuntu-24.04
-    timeout-minutes: 4
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.20.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-      - run: pnpm release:check docs
-        timeout-minutes: 1
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: release-docs-diagnostics
-          path: build/release/
-
-  publish:
-    name: Publish verified candidate to Pages
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: [build, software, coverage, docs]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 4
-    permissions:
-      contents: read
-      pages: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.20.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-candidate
-          path: .
-      - run: pnpm release:check verify
-        timeout-minutes: 1
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: release-publish-diagnostics
+          name: publish-diagnostics
           path: build/release/
-
-  deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: publish
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
