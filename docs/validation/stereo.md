@@ -34,6 +34,8 @@ The development server at `127.0.0.1:5173` separately passed both MOS8580 raw-ch
 
 The full-song output measurements were Rambo: 8,527,125 frames, left/right peaks 0.388031/0.379578; Bach: 3,886,221 frames, peaks 0.283691/0.283630. These are linear full-scale magnitudes measured at the Web Audio buffer input, before the silent test sink. They establish continuity and gain/clipping behavior for these renders, not audible comparison with the retained native references.
 
+On 2026-10-20 the user reported that the current candidate works, then requested that Audio output sit directly below Sound inspector. The two panels now share a right-hand stack with the standard 16-pixel gap, independent of timeline height. The build and the existing desktop, narrow-screen and stereo-inspection scenarios passed in Chrome and macOS WebKit (three per browser); the desktop capture was visually checked. The initial combined run reached its 60-second suite deadline after Chrome passed while WebKit was still advancing, so only the interrupted WebKit checks were run separately, passing in 20.6 seconds under the same budget. No broader workspace redesign was made.
+
 ## Remaining acceptance
 
 - Actual desktop Safari: play the stereo Rambo (MOS6581) and Bach (MOS8580) entries through their endings, compare their retained reference renders for lead/accompaniment placement and coupled/filter passages, and exercise six-voice audition, seek, loop and inspection. Record macOS/Safari versions and concrete results; the earlier mono verdict must not be reused.
