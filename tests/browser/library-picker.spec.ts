@@ -2,12 +2,21 @@ import {test, expect} from './fixtures.ts';
 import {holdWorkerRequest} from './worker-control.ts';
 import {
   addFixtureSender, clearedSidTitle, differentLibraryPath, differentSidTitle, dropBeforeQueuedSelection, installLibraryProvider, libraryAuthor, libraryOrigin,
-  libraryPath, libraryReleased, libraryStil, libraryTitle, reloadBeforeQueuedSelection, selectionMessageCount, sendFixtureMessage,
+  libraryPath, libraryPointerDiagnostics, libraryReleased, libraryStil, libraryTitle, reloadBeforeQueuedSelection, selectionMessageCount, sendFixtureMessage,
 } from './library-picker-fixture.ts';
 import {resolve} from 'node:path';
 import type {Page} from '@playwright/test';
 
 const sample = resolve('public/generated/rambo-loader-main.sid');
+
+test.afterEach(async ({page}, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    await testInfo.attach('library-pointer-events', {
+      body: JSON.stringify(await libraryPointerDiagnostics(page), null, 2),
+      contentType: 'application/json',
+    });
+  }
+});
 
 async function loadPausedSample(page: Page): Promise<void> {
   await page.goto('/');

@@ -79,6 +79,7 @@ test('a short evidence annotation plays useful context while preserving its exac
   await page.goto('/');
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
+  await page.locator('#playback-evidence-summary').click();
   await page.locator('[data-annotation="restored-main-entry"]').click();
   await expect(page.locator('#play-status')).toHaveText('Live SID');
   await expect(page.locator('#loop-end')).toHaveValue('4');

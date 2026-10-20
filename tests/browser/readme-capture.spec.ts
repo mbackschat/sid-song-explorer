@@ -4,7 +4,7 @@ import {test, expect} from './fixtures.ts';
 
 const shot = {
   sample: 'rambo-stereo-main',
-  viewport: {width:1600, height:1240},
+  viewport: {width:1600, height:1280},
   earliestSeconds: 12,
 };
 

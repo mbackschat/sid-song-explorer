@@ -19,6 +19,7 @@ type FixtureWindow = Window & {
   libraryFixtureCheckpoints: string[];
   libraryFixtureMessages: string[];
   libraryFixtureBeforeSelection?: () => void;
+  libraryFixturePointerEvents: unknown[];
 };
 
 export function fixtureSidBytes(subtunes = 1): Buffer {
@@ -91,8 +92,21 @@ export async function installLibraryProvider(page: Page, options: {autoReady?: b
     await route.fulfill({status: options.songlengthStatus ?? 200, contentType: 'text/plain', headers: {'Access-Control-Allow-Origin':'*'}, body: options.songlengths ?? '[Database]\n'});
   });
   await page.addInitScript(() => {
-    if (window !== window.top) return;
     const fixture = window as unknown as FixtureWindow;
+    fixture.libraryFixturePointerEvents = [];
+    for (const type of ['pointerdown', 'pointerup', 'click', 'focusin']) {
+      document.addEventListener(type, event => {
+        const pointer = event as PointerEvent;
+        const target = event.target as HTMLElement;
+        fixture.libraryFixturePointerEvents.push({
+          type, at: performance.now(), trusted: event.isTrusted,
+          tag: target.tagName, id: target.id, choice: target.dataset?.choice,
+          x: pointer.clientX, y: pointer.clientY,
+        });
+        if (fixture.libraryFixturePointerEvents.length > 64) fixture.libraryFixturePointerEvents.shift();
+      }, true);
+    }
+    if (window !== window.top) return;
     fixture.libraryFixtureCheckpoints = [];
     fixture.libraryFixtureMessages = [];
     fixture.libraryFixtureBeforeSelection = undefined;
@@ -143,6 +157,19 @@ export async function addFixtureSender(page: Page, id: string, url: string): Pro
 
 export async function selectionMessageCount(page: Page): Promise<number> {
   return page.evaluate(() => (window as unknown as FixtureWindow).libraryFixtureMessages.filter(type => type === 'hvsc:selected').length);
+}
+
+export async function libraryPointerDiagnostics(page: Page): Promise<unknown[]> {
+  return Promise.all(page.frames().map(async frame => {
+    try {
+      return await frame.evaluate(() => {
+        const fixture = window as unknown as FixtureWindow;
+        return {origin: location.origin, timeOrigin: performance.timeOrigin, events: fixture.libraryFixturePointerEvents, messages: fixture.libraryFixtureMessages};
+      });
+    } catch {
+      return {url: frame.url(), detached: frame.isDetached()};
+    }
+  }));
 }
 
 async function waitForFixture(frame: Frame): Promise<void> {

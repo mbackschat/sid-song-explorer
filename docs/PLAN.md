@@ -52,7 +52,8 @@ The retained [native gain trial](research/seek-performance.md#bounded-live-gain-
 
 1. Review the Rambo composition explanation: passages, part/program selection, timeline highlights and comparison, using the [prepared review route](validation/composition-exploration.md).
 2. Review the library picker on actual Safari/iPhone, separately from accepted stereo playback, using its [validation gates](validation/library-picker.md).
-3. For each authorized release, require exact-commit CI and verify the hosted app's assets/routes. Report results through CI and the release response rather than appending them to this plan.
+3. Diagnose intermittent Chrome pointer delivery after reopening the retained library iframe. The [pointer guards](../tests/browser/library-picker.spec.ts) must still require a real click and received selection; [failure diagnostics](validation/library-picker.md#verification-boundaries) distinguish delivery from handling. No production cause is established.
+4. For each authorized release, require exact-commit CI and verify the hosted app's assets/routes. Report results through CI and the release response rather than appending them to this plan.
 
 No additional feature is automatically scheduled by closing these gates. Generic analysis and gapless switching remain deferred.
 

@@ -81,7 +81,7 @@ test('Fit song keeps the full range through seeks and playback and inspects prep
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('Fit song labels the explored range when a local file has no duration', async ({page}) => {
+test('Fit timeline labels the fixed range when a local file has no duration', async ({page}) => {
   await page.goto('/');
   await page.locator('#local-file').setInputFiles('public/generated/rambo-loader-main.sid');
   await expect(page.locator('#play-button')).toBeEnabled();
@@ -89,7 +89,8 @@ test('Fit song labels the explored range when a local file has no duration', asy
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(.1);
   await page.locator('#play-button').click();
   await page.locator('#timeline-fit').click();
-  await expect(page.locator('#timeline-view-note')).toHaveText('Explored range · duration unknown');
+  await expect(page.locator('#timeline-fit')).toHaveText('Fit timeline');
+  await expect(page.locator('#timeline-view-note')).toHaveText('Length unknown · click Fit timeline to update');
   const lane = page.locator('#voice-lane-0');
   await expect(lane).toHaveAttribute('aria-valuemin','0.00');
   await expect(lane).toHaveAttribute('aria-valuemax','30.00');

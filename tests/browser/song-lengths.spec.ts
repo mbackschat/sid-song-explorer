@@ -43,11 +43,13 @@ test('library lengths match original bytes and selected subtune while local file
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
   await expect(page.locator('#timeline-fit')).toHaveText('Fit timeline');
-  await expect(page.locator('#duration-label')).toHaveText('/ duration unknown');
+  await expect(page.locator('#duration-label')).toHaveText('/ —');
+  await expect(page.locator('#duration-label')).toHaveAttribute('aria-label', 'Duration unknown');
   expect(provider.lengthRequests()).toBe(1);
   await page.locator('#local-file').setInputFiles({name:'same-library.sid', mimeType:'application/octet-stream', buffer:fixtureSidBytes(2)});
   await expect(page.locator('#play-button')).toBeEnabled();
-  await expect(page.locator('#duration-label')).toHaveText('/ duration unknown');
+  await expect(page.locator('#duration-label')).toHaveText('/ —');
+  await expect(page.locator('#duration-label')).toHaveAttribute('aria-label', 'Duration unknown');
   expect(provider.lengthRequests()).toBe(1);
 });
 
@@ -56,7 +58,8 @@ test('unavailable song lengths leave library playback and Fit timeline usable', 
   await page.goto('/');
   await openSelection(page);
   await expect(page.locator('#timeline-fit')).toHaveText('Fit timeline');
-  await expect(page.locator('#duration-label')).toHaveText('/ duration unknown');
+  await expect(page.locator('#duration-label')).toHaveText('/ —');
+  await expect(page.locator('#duration-label')).toHaveAttribute('aria-label', 'Duration unknown');
   await page.locator('#timeline-fit').click();
   await playSilently(page);
   await expect(page.locator('#play-status')).toHaveText('Paused');
