@@ -20,7 +20,7 @@ SID Song Explorer is a browser player and inspector for Commodore 64 SID music. 
 
 ## Current state
 
-The published mono proof of concept is complete, with user acceptance of actual Safari full-ending playback and inspection usefulness on 2026-10-19. [The mono validation record](docs/validation/mono-poc.md) retains its automated and human evidence. The working copy adds the unified timeline and six catalog entries, including two live stereo candidates. **Stereo is local and unpublished; automated routing, browser and full-song checks pass, with actual Safari/iPhone acceptance pending**; [dual-SID validation](docs/validation/stereo.md) owns those gates. The screenshot shows the local stereo implementation. [The plan](docs/PLAN.md) owns delivery status. Local files remain on your device.
+The published mono proof of concept is complete, with user acceptance of actual Safari full-ending playback and inspection usefulness on 2026-10-19. [The mono validation record](docs/validation/mono-poc.md) retains its automated and human evidence. The working copy adds the unified timeline and six catalog entries, including two live stereo candidates. **Stereo is local and unpublished; automated routing, browser and full-song checks pass, and the user accepted actual Safari/iPhone stereo on 2026-10-20**; [dual-SID validation](docs/validation/stereo.md) owns those gates. The screenshot shows the local stereo implementation. [The plan](docs/PLAN.md) owns delivery status. Local files remain on your device.
 
 ## Capabilities in the working copy
 
@@ -45,8 +45,8 @@ The [published app](https://mbackschat.github.io/sid-song-explorer/) retains fou
 | Bach Toccata | Mono | MOS8580 | Published |
 | Mozart Minuet and Trio | Mono | MOS8580 | Published |
 | Original instrument mix | Mono | MOS8580 | Published |
-| Rambo loader — main music | Dual-SID stereo | MOS6581 × 2 | Local candidate; acceptance pending |
-| Bach Toccata | Dual-SID stereo | MOS8580 × 2 | Local candidate; acceptance pending |
+| Rambo loader — main music | Dual-SID stereo | MOS6581 × 2 | Accepted locally; unpublished |
+| Bach Toccata | Dual-SID stereo | MOS8580 × 2 | Accepted locally; unpublished |
 
 The [pinned catalog](config/catalog.json) records exact files and provenance; [source preparation](docs/integration/poc-sources.md) explains updates. Retained sample listening verdicts describe those source performances and do not certify the new browser backend.
 

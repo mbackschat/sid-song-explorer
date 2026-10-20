@@ -339,7 +339,7 @@ Recommendation: retain libsidplayfp as the leading engine family, but require ra
 | Synchronized analysis | Both chips' observations align with heard output and seek position; trace drops and diagnostic mutations are visible. |
 | Safari usability | Validate the complete desktop audio path and the bounded recent-iPhone smoke check, not just successful WASM rendering. |
 
-Correct dual-SID playback is a selection gate, not optional polish. Final library adoption remains open until these checks pass; neither reviewed candidate is currently certified for this app.
+Correct dual-SID playback is a selection gate, not optional polish. The modified libsidplayfp-wasm/SIDLite backend passed the local software gates, and the user confirmed Safari/iPhone stereo acceptance on 2026-10-20; [the validation record](../validation/stereo.md#device-acceptance) owns that adoption evidence and its scope.
 
 ## Catalog and publication boundary
 
