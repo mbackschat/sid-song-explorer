@@ -9,6 +9,7 @@ import pathlib
 import shutil
 import subprocess
 import tarfile
+import tempfile
 import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -186,12 +187,23 @@ def run(command, stage, seconds, cleanup=None):
         print(f'{stage}: {time.monotonic() - started:.2f}s; log {log}', flush=True)
 
 
+def atomic_copy(source, destination):
+    """Replace container-owned metadata through the runner-owned output directory."""
+    with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=f'.{destination.name}.', delete=False) as stream:
+        temporary = pathlib.Path(stream.name)
+    try:
+        shutil.copy2(source, temporary)
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def bundle():
     shutil.copytree(HERE, SOURCE / 'explorer-stereo-gate', dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns('__pycache__'))
-    shutil.copy2(SOURCE / 'EXPLORER-REBUILD.md', OUTPUT / 'EXPLORER-REBUILD.md')
-    shutil.copy2(ROOT / 'LICENSE', OUTPUT / 'EXPLORER-LICENSE.txt')
-    shutil.copy2(WRAPPER / 'MODIFICATIONS.md', OUTPUT / 'MODIFICATIONS.md')
+    atomic_copy(SOURCE / 'EXPLORER-REBUILD.md', OUTPUT / 'EXPLORER-REBUILD.md')
+    atomic_copy(ROOT / 'LICENSE', OUTPUT / 'EXPLORER-LICENSE.txt')
+    atomic_copy(WRAPPER / 'MODIFICATIONS.md', OUTPUT / 'MODIFICATIONS.md')
     with tarfile.open(OUTPUT / 'complete-source.tar.gz', 'w:gz') as package:
         package.add(SOURCE, arcname=SOURCE_NAME)
     files = ['libsidplayfp.js', 'libsidplayfp.wasm', 'libsidplayfp.d.ts', 'LICENSE',
