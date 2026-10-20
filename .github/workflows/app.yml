@@ -46,7 +46,7 @@ jobs:
       fail-fast: false
       matrix:
         browser: [chrome, webkit]
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
         include:
           - os: ubuntu-24.04
             browser: chrome
@@ -71,12 +71,12 @@ jobs:
           name: verified-raw-chip-engine
           path: build/stereo-gate/output/
       - run: pnpm prepare:assets
-      - run: pnpm test
+      - run: pnpm exec node --experimental-strip-types --test --test-concurrency=1 --test-shard=${{ matrix.shard }}/4 tests/*.test.ts
         timeout-minutes: 1
       - run: pnpm build
         timeout-minutes: 2
       - run: pnpm exec playwright install --with-deps ${{ matrix.install }}
-      - run: pnpm test:browser --project ${{ matrix.browser }} --shard ${{ matrix.shard }}/2
+      - run: pnpm test:browser --project ${{ matrix.browser }} --shard ${{ matrix.shard }}/4
         timeout-minutes: 3
       - uses: actions/configure-pages@v5
         if: matrix.browser == 'chrome' && matrix.shard == 1 && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
