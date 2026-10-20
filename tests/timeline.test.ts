@@ -67,12 +67,11 @@ test('visible drawing retains its boundary state without losing resolution to ol
 });
 
 
-test('fit history expands with retained playback and includes a held selection', () => {
-  assert.deepEqual(fittedWindow(0, 5), {start: 0, end: 10});
-  assert.deepEqual(fittedWindow(0, 30), {start: 0, end: 30});
-  assert.deepEqual(fittedWindow(12, 45), {start: 12, end: 45});
-  assert.deepEqual(fittedWindow(30, 32), {start: 30, end: 40});
-  assert.deepEqual(fittedWindow(30, 40, {start: 5, end: 50}), {start: 5, end: 50});
+test('fit song keeps a zero origin and the whole supported duration', () => {
+  assert.deepEqual(fittedWindow(5), {start:0, end:5});
+  assert.deepEqual(fittedWindow(193.35), {start:0, end:193.35});
+  assert.deepEqual(fittedWindow(600), {start:0, end:600});
+  assert.deepEqual(fittedWindow(800), {start:0, end:600});
 });
 
 test('inspection reconstructs ordered settings without extrapolating unavailable preview time', () => {
@@ -195,4 +194,23 @@ test('composed observations retain loss warnings and independent held snapshots 
   assert.deepEqual(observationRegistersAt(held, 5.5), observationRegistersAt(expected, 5.5));
   assert.equal(retained.frames.length, 5);
   assert.equal(prepared.frames.length, 4);
+});
+
+test('sampled overviews retain known past activity when the audio cache evicts it', async () => {
+  const {composeTimelineOverviews} = await import('../src/timeline.ts');
+  const frames = (start: number, end: number) => Array.from({length:1001}, (_, index) => ({time:start + (end-start) * index / 1000,registers:[index]}));
+  const previous = {start:0,end:80,frames:frames(0,80),dropped:3};
+  const current = {start:10,end:88,frames:frames(10,88),dropped:0};
+  const combined = composeTimelineOverviews(previous,current);
+  assert.ok(combined);
+  assert.equal(combined.start,0);
+  assert.equal(combined.end,88);
+  assert.equal(combined.frames.length,1001);
+  assert.equal(combined.frames[0],previous.frames[0]);
+  assert.equal(combined.frames.at(-1),current.frames.at(-1));
+  assert.equal(combined.dropped,3);
+  for (const frame of combined.frames) assert.ok(previous.frames.includes(frame) || current.frames.includes(frame));
+  assert.equal(composeTimelineOverviews(combined,{...current,start:20}),combined);
+  const disjoint = {...current,start:81,frames:frames(81,88)};
+  assert.equal(composeTimelineOverviews(previous,disjoint),disjoint);
 });

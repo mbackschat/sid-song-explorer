@@ -756,3 +756,52 @@ test('moving the viewport stops further pagination and retains a useful complete
   assert.equal(value.state.preview!.end, 3);
   assert.ok(!worker.requests.some(request => request.method === 'observe' && request.payload.startSeconds === 3));
 });
+
+test('Fit overview requests the whole range only when coverage changes and discards obsolete replies', async (t) => {
+  const {value, worker} = await loaded(t);
+  value.player.setTimelineOverview(200);
+  const request = worker.lastRequest('overview');
+  assert.deepEqual(request.payload, {startSeconds:0, endSeconds:200});
+  const overview = {start:0, end:50, frames:preview(0,50).frames, dropped:0};
+  worker.reply(request, overview);
+  await flushReplies();
+  assert.equal(value.state.overview, overview);
+  value.advance(1500);
+  assert.equal(worker.lastRequest('overview').id, request.id);
+  worker.coverage(1, 75);
+  value.advance(1000);
+  const next = worker.lastRequest('overview');
+  assert.notEqual(next.id, request.id);
+  value.player.setTimelineOverview(null);
+  worker.reply(next, {...overview,end:75});
+  await flushReplies();
+  assert.equal(value.state.overview, overview);
+});
+
+test('exact future inspection is read-only and rejects a reply from a replaced playback generation', async (t) => {
+  const {value, worker} = await loaded(t);
+  const pending = value.player.inspectTimeline(50);
+  const request = worker.lastRequest('observe');
+  assert.deepEqual(request.payload, {startSeconds:49.75,endSeconds:50.025});
+  worker.reply(request, preview(49.75,50.025));
+  assert.deepEqual(await pending, preview(49.75,50.025));
+  assert.equal(value.state.position,0);
+  assert.equal(value.state.preview,null);
+  const obsolete = value.player.inspectTimeline(70);
+  const oldRequest = worker.lastRequest('observe');
+  const seeking = value.player.seek(5);
+  worker.reply(oldRequest, preview(69.75,70.025));
+  assert.equal(await obsolete,null);
+  worker.reply(worker.lastRequest('seek'),position(5));
+  await seeking;
+});
+
+test('exact inspection follows packet boundaries until it covers the selected time', async (t) => {
+  const {value, worker} = await loaded(t);
+  const pending = value.player.inspectTimeline(50);
+  worker.reply(worker.lastRequest('observe'), {...preview(49.75,49.9),continuationStart:49.9});
+  await flushReplies();
+  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds:49.9,endSeconds:50.025});
+  worker.reply(worker.lastRequest('observe'), preview(49.9,50.025));
+  assert.equal((await pending)!.end,50.025);
+});

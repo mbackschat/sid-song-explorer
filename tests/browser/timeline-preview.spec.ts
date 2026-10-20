@@ -177,9 +177,9 @@ test('centered timeline shows actual upcoming activity and holds future inspecti
   const selection = await page.locator('#inspection-time').textContent();
   await page.locator('#timeline-fit').click();
   const fittedHeld = await chart(page);
-  expect(fittedHeld.observedStart).toBeGreaterThanOrEqual(30);
-  expect(fittedHeld.observedUntil).toBeCloseTo(30, 2);
-  expect(fittedHeld.futureFrames).toBe(0);
+  expect(fittedHeld.start).toBe(0);
+  expect(fittedHeld.observedUntil).toBeGreaterThan(30);
+  expect(fittedHeld.futureFrames).toBeGreaterThan(0);
   await expect(page.locator('#write-list')).toHaveText(captured!);
   await page.locator('#timeline-scroll').click();
   await page.locator('#play-button').click();
@@ -195,8 +195,8 @@ test('centered timeline shows actual upcoming activity and holds future inspecti
   await page.locator('#return-button').click();
   await expect.poll(async () => (await chart(page)).observedUntil).toBeGreaterThanOrEqual(64.9);
   await page.locator('#timeline-fit').click();
-  expect((await chart(page)).futureFrames).toBe(0);
-  await expect(page.locator('#timeline-availability')).toHaveText('Only heard observations are shown.');
+  await expect.poll(async () => (await chart(page)).futureFrames).toBeGreaterThan(0);
+  await expect(page.locator('#timeline-availability')).toContainText('Upcoming prepared to');
   await page.locator('#timeline-scroll').click();
   await page.setViewportSize({width:390, height:844});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

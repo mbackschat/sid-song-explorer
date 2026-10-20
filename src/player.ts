@@ -1,7 +1,7 @@
 import type { CacheCoverage, EngineEvent, EngineReply } from './engine/protocol.ts';
 import { collectObservationWindow } from './engine/observation-window.ts';
-import type { PlayerControls, PlayerState, Profile, TimelineObservation, TuneDetails, WriteObservation } from './player-types.ts';
-import { positionAt, trimHistory, validateLoop, type AudioSegment } from './timeline.ts';
+import type { PlayerControls, PlayerState, Profile, TimelineObservation, TimelineOverview, TuneDetails, WriteObservation } from './player-types.ts';
+import { positionAt, trimHistory, validateLoop, composeTimelineOverviews, type AudioSegment } from './timeline.ts';
 
 const TIMELINE_PREVIEW_MARGIN_SECONDS = 1;
 const TIMELINE_BROWSE_MARGIN_SECONDS = 5;
@@ -81,6 +81,10 @@ export class ExplorerPlayer implements PlayerControls {
   private nextStart = 0;
   private generation = 0;
   private pumping = false;
+  private overviewEnd: number | null = null;
+  private overviewPending = false;
+  private overviewKey = '';
+  private overviewRequestedAt = -Infinity;
   private previewPending = false;
   private previewRequestedAt = -Infinity;
   private previewRevision = 0;
@@ -92,7 +96,7 @@ export class ExplorerPlayer implements PlayerControls {
   private timer: ReturnType<typeof setInterval>;
   private animation = 0;
   private state: PlayerState = {
-    status: 'empty', position: 0, seekTarget: null, pendingOperation: null, preparedRange: null, preview: null, timelineWindowSeconds: 10, timelineCenterSeconds: null, renderedUntil: 0, duration: null, error: null,
+    status: 'empty', position: 0, seekTarget: null, pendingOperation: null, preparedRange: null, preview: null, overview: null, timelineWindowSeconds: 10, timelineCenterSeconds: null, renderedUntil: 0, duration: null, error: null,
     info: null, muted: [false, false, false], loop: null, peakDb: -Infinity,
     rmsDb: -Infinity, spectrum: new Uint8Array(512), waveform: new Float32Array(1024),
     frames: [], writes: [], historyStart: 0, dropped: 0, underruns: 0, epoch: 0,
@@ -122,6 +126,8 @@ export class ExplorerPlayer implements PlayerControls {
 
   private invalidatePreview(preserveAccepted = false) {
     this.previewRevision++;
+    this.overviewKey = '';
+    if (!preserveAccepted) this.state.overview = null;
     if (!preserveAccepted || !this.previewFitsFollowLoop()) this.state.preview = null;
     this.previewRequestedAt = -Infinity;
   }
@@ -133,7 +139,28 @@ export class ExplorerPlayer implements PlayerControls {
     return Math.max(0, Math.min(observation.end, center + halfWindow) - Math.max(observation.start, center - halfWindow));
   }
 
+  private refreshOverview() {
+    if (this.overviewEnd === null || this.overviewPending || this.pumping || !this.engine || !this.state.info || this.disposed ||
+      !['ready', 'paused', 'playing', 'ended'].includes(this.state.status) || performance.now() - this.overviewRequestedAt < 1000) return;
+    const engine = this.engine;
+    const generation = this.generation;
+    const end = this.overviewEnd;
+    const key = `${generation}:${end}:${this.state.preparedRange?.start}:${this.state.preparedRange?.end}`;
+    if (key === this.overviewKey) return;
+    this.overviewPending = true;
+    this.overviewRequestedAt = performance.now();
+    void engine.request<TimelineOverview | null>('overview', {startSeconds:0, endSeconds:end}).then(overview => {
+      if (generation !== this.generation || engine !== this.engine || end !== this.overviewEnd || this.disposed) return;
+      this.overviewKey = key;
+      this.state.overview = composeTimelineOverviews(this.state.overview, overview);
+      this.emit();
+    }).catch(() => {
+      if (generation === this.generation && engine === this.engine && !this.disposed) this.overviewKey = key;
+    }).finally(() => { this.overviewPending = false; });
+  }
+
   private refreshPreview() {
+    this.refreshOverview();
     const browsing = this.state.timelineCenterSeconds !== null;
     if (this.disposed || this.previewPending || this.pumping || !this.engine || !this.state.info ||
       !['ready', 'paused', 'playing', 'ended'].includes(this.state.status) || performance.now() - this.previewRequestedAt < (browsing ? 100 : 250)) return;
@@ -386,6 +413,27 @@ export class ExplorerPlayer implements PlayerControls {
       await this.seek(this.state.position);
     }
     this.emit();
+  }
+
+  setTimelineOverview(end: number | null) {
+    if (end !== null && (!Number.isFinite(end) || end <= 0 || end > 600)) throw new Error('Overview end must be within 0–600 seconds.');
+    if (end === this.overviewEnd) return;
+    this.overviewEnd = end;
+    this.overviewKey = '';
+    this.overviewRequestedAt = -Infinity;
+    this.refreshOverview();
+  }
+
+  async inspectTimeline(seconds: number): Promise<TimelineObservation | null> {
+    if (!Number.isFinite(seconds) || seconds < 0 || seconds >= 600) return null;
+    const engine = this.engine;
+    const generation = this.generation;
+    if (!engine || this.disposed || !['ready', 'paused', 'playing', 'ended'].includes(this.state.status)) return null;
+    const result = await collectObservationWindow(Math.max(0, seconds - .25), Math.min(600, seconds + .025),
+      (startSeconds, endSeconds) => engine.request<TimelineObservation | null>('observe', {startSeconds,endSeconds}),
+      () => generation === this.generation && engine === this.engine && !this.disposed,
+    );
+    return result && result.start <= seconds && result.end > seconds ? result : null;
   }
 
   setTimelineWindow(seconds: number) {

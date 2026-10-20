@@ -1,5 +1,5 @@
 import type { Catalog } from './catalog.ts';
-import type { PlayerControls, PlayerState, Profile, RegisterFrame, WriteObservation, TimelineObservation } from './player-types.ts';
+import type { PlayerControls, PlayerState, Profile, RegisterFrame, WriteObservation, TimelineObservation, TimelineOverview } from './player-types.ts';
 import { FOLLOW_WINDOW_SECONDS, followingWindow, fittedWindow, visibleTimelineFrames, observationRegistersAt, composeTimelineObservations } from './timeline.ts';
 import type { DisplayedObservation } from './timeline.ts';
 import {timelineScrollbarGeometry, timelineViewportStart} from './timeline-scrollbar.ts';
@@ -10,6 +10,9 @@ type Entry = Catalog['entries'][number];
 type Annotation = Entry['analysis']['annotations'][number];
 type HeldHistory = DisplayedObservation & {
   history: DisplayedObservation;
+  overview: TimelineOverview | null;
+  inspectionPending: boolean;
+  inspection: DisplayedObservation | null;
   epoch: number;
   heardUntil: number;
   configuration: string;
@@ -53,7 +56,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
         <div class="inspection-grid">
           <section id="timeline-panel" class="panel unified-panel" aria-labelledby="timeline-title">
             <div class="unified-toolbar"><div class="transport-buttons"><button id="play-button" class="primary" disabled>▶ Play</button><button id="restart-button" class="small quiet" disabled aria-label="Restart from beginning" title="Restart from beginning">↺</button><div class="time-display"><span id="heard-time">0:00</span> <small id="duration-label">/ —</small></div></div>
-              <button id="load-button" class="small quiet">Load sample</button><div class="follow-controls"><div class="timeline-modes" role="group" aria-label="Timeline view"><button id="timeline-scroll" class="small" aria-pressed="true" title="Center heard playback with equal past and upcoming space">Scroll</button><button id="timeline-fit" class="small" aria-pressed="false" title="Fit all retained activity into the chart">Fit history</button></div><div id="timeline-zoom" class="timeline-zoom" role="group" aria-label="Timeline zoom"><button id="timeline-zoom-out" class="small" aria-label="Zoom out" title="Zoom out: show twice as much time">−</button><span id="timeline-scale" class="mono"></span><button id="timeline-zoom-in" class="small" aria-label="Zoom in" title="Zoom in: show twice the detail">+</button></div><button id="follow-button" class="small quiet" title="Hold the current moment in the Sound inspector">Hold</button><button id="return-button" class="small" aria-pressed="true" title="Return to centered playback and release held inspection">Follow</button></div></div>
+              <button id="load-button" class="small quiet">Load sample</button><div class="follow-controls"><div class="timeline-modes" role="group" aria-label="Timeline view"><button id="timeline-scroll" class="small" aria-pressed="true" title="Center heard playback with equal past and upcoming space">Scroll</button><button id="timeline-fit" class="small" aria-pressed="false" title="Fit the whole song into the chart">Fit song</button></div><div id="timeline-zoom" class="timeline-zoom" role="group" aria-label="Timeline zoom"><button id="timeline-zoom-out" class="small" aria-label="Zoom out" title="Zoom out: show twice as much time">−</button><span id="timeline-scale" class="mono"></span><button id="timeline-zoom-in" class="small" aria-label="Zoom in" title="Zoom in: show twice the detail">+</button></div><button id="follow-button" class="small quiet" title="Hold the current moment in the Sound inspector">Hold</button><button id="return-button" class="small" aria-pressed="true" title="Return to centered playback and release held inspection">Follow</button></div></div>
             <div class="unified-heading"><h2 id="timeline-title">Voice activity</h2><small id="timeline-view-note">Centered on heard playback</small><button id="restore-button" class="small quiet" disabled>Full mix</button></div>
             <div id="mix-controls" class="lane-list" aria-busy="false"><div id="timeline-direction" class="timeline-direction"><span id="timeline-earlier">Past</span><span id="timeline-later">Upcoming · prepared</span></div>${CHIPS.map(chip => `<div id="chip-lanes-${chip}" class="chip-lanes"${chip ? ' hidden' : ''}><div id="chip-heading-${chip}" class="chip-heading" hidden>SID ${chip + 1}</div>${[0, 1, 2].map(localVoice => {
               const voice = chip * 3 + localVoice;
@@ -63,7 +66,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
             <div id="history-summary" class="history-summary"><span id="history-description">No retained observations yet.</span> <span id="trace-warning" role="status" hidden></span> <a id="view-inspector" href="#inspector-title" hidden>View inspector →</a></div>
             <p id="voice-mix-status" class="intervention-note" role="status" aria-live="polite" aria-atomic="true"></p>
             <div class="panel-options"><details id="loop-details"><summary>Loop A–B</summary>
-            <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="0" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="8" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restarts may briefly pause; playback is not gapless.</span></div></details><details id="playback-setup"><summary>Playback setup</summary><div class="settings"><label><span>Clock</span><select id="clock-select"><option>PAL</option><option>NTSC</option></select></label><label><span id="chip-model-label">Chip model</span><select id="model-select"><option value="MOS6581">MOS 6581</option><option value="MOS8580">MOS 8580</option></select></label><label><span>Subtune</span><select id="subtune-select"><option value="1">1</option></select></label><p id="settings-note" class="settings-note">Settings apply when you load. Prepared audio supports quick seeking; other positions need preparation. Trace timestamp alignment is approximate.</p></div></details><details id="timeline-help"><summary>Help & details</summary><p class="timeline-help">Drag the proportional scrollbar to browse without changing sound. Click or drag the time ruler to seek when released. Click a lane to seek playback. Shift-click a lane to inspect its settings; Hold captures the current heard position. Follow returns to centered playback. Zoom changes detail; wider charts show more time at the same zoom. Shading marks unavailable observations. Fit history shows retained heard activity. A line shows register frequency, not loudness; gate clear can still release sound.</p><div class="transport-foot"><span id="seek-note"></span><span id="render-lead"></span></div></details></div>
+            <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="0" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="8" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restarts may briefly pause; playback is not gapless.</span></div></details><details id="playback-setup"><summary>Playback setup</summary><div class="settings"><label><span>Clock</span><select id="clock-select"><option>PAL</option><option>NTSC</option></select></label><label><span id="chip-model-label">Chip model</span><select id="model-select"><option value="MOS6581">MOS 6581</option><option value="MOS8580">MOS 8580</option></select></label><label><span>Subtune</span><select id="subtune-select"><option value="1">1</option></select></label><p id="settings-note" class="settings-note">Settings apply when you load. Prepared audio supports quick seeking; other positions need preparation. Trace timestamp alignment is approximate.</p></div></details><details id="timeline-help"><summary>Help & details</summary><p class="timeline-help">Drag the proportional scrollbar to browse without changing sound. Click or drag the time ruler to seek when released. Click a lane to seek playback. Shift-click a lane to inspect its settings; Hold captures the current heard position. Follow returns to centered playback. Zoom changes detail; wider charts show more time at the same zoom. Shading marks unavailable observations. Fit song shows the whole duration with prepared activity ahead; unknown duration uses the explored range. A line shows register frequency, not loudness; gate clear can still release sound.</p><div class="transport-foot"><span id="seek-note"></span><span id="render-lead"></span></div></details></div>
           </section>
           <div class="inspection-sidebar"><aside class="panel inspector" aria-labelledby="inspector-title"><div class="panel-header"><h2 id="inspector-title" tabindex="-1">Sound inspector</h2><span id="inspection-time" class="inspection-time mono">0:00.00</span></div><div class="inspector-body"><p id="inspector-note" class="inspector-note">Following heard playback. Register settings are derived observations, not recovered instruments or measured envelope amplitude.</p><div class="voice-tabs" role="group" aria-label="Inspect voice">${VOICES.map(voice => `<button id="inspect-${voice}" class="small" aria-pressed="${voice === 0}"${voice >= 3 ? ' hidden' : ''}>Voice ${voice + 1}</button>`).join('')}</div>
             <dl class="register-grid"><div><dt>Frequency register</dt><dd id="reg-frequency">—</dd></div><div><dt>Derived oscillator Hz</dt><dd id="reg-hz">—</dd></div><div class="wide"><dt>Waveform selection</dt><dd id="reg-waveform">—</dd></div><div><dt>Gate / Test</dt><dd id="reg-gate">—</dd></div><div><dt>Pulse width · 12-bit</dt><dd id="reg-pulse">—</dd></div><div><dt>AD / SR settings</dt><dd id="reg-adsr">—</dd></div><div><dt>Ring / Sync</dt><dd id="reg-coupling">—</dd></div></dl>
@@ -99,6 +102,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let state: PlayerState | null = null;
   let held: HeldHistory | null = null;
   let chartHeld: HeldHistory | null = null;
+  let inspectionSequence = 0;
   let timelineView: 'scroll' | 'fit' = 'scroll';
   let timelineZoom = TIMELINE_DENSITIES.indexOf(64);
   let timelineSpan = FOLLOW_WINDOW_SECONDS;
@@ -315,7 +319,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     };
   };
   const liveObservations = (): DisplayedObservation => {
-    if (timelineView !== 'scroll' || !state || ['loading', 'error'].includes(state.status)) return heardObservations();
+    if (!state || ['loading', 'error'].includes(state.status)) return heardObservations();
     const end = Math.min(state.renderedUntil, state.timelineCenterSeconds === null ? state.loop?.end ?? Infinity : Infinity);
     if (!liveObservationCache || liveObservationCache.epoch !== state.epoch || liveObservationCache.renderedUntil !== state.renderedUntil ||
       liveObservationCache.historyStart !== state.historyStart || liveObservationCache.end !== end || liveObservationCache.preview !== state.preview) {
@@ -341,10 +345,13 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   });
   const copyVisibleHistory = (): HeldHistory => {
     const history = copyObservations(heardObservations());
-    const observations = timelineView === 'scroll' ? copyObservations(liveObservations()) : history;
+    const observations = copyObservations(liveObservations());
     return {
       ...observations,
       history,
+      overview: state?.overview ? {...state.overview, frames:state.overview.frames.map(frame => ({time:frame.time, registers:[...frame.registers]}))} : null,
+      inspectionPending: false,
+      inspection: null,
       dropped: Math.max(observations.dropped, state?.dropped ?? 0),
       heardUntil: state?.position ?? 0,
       configuration: `${loadedProfile?.clock ?? ''} · ${loadedProfile?.model ?? ''} · ${state?.muted.some(Boolean) ? `muted ${state.muted.flatMap((muted, voice) => muted ? [`V${voice + 1}`] : []).join(', ')}` : 'full mix'}`,
@@ -359,6 +366,23 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     controls.setTimelineCenter(null);
     cursor = seconds;
     selectedEnd = end;
+    const snapshot = held;
+    const sequence = ++inspectionSequence;
+    snapshot.inspectionPending = false;
+    const captured = snapshot.overview ?? snapshot;
+    if (snapshot.epoch === state?.epoch && seconds >= captured.start && seconds < captured.end &&
+      !observationRegistersAt(snapshot, seconds, snapshot.endInclusive) &&
+      !(snapshot.inspection && observationRegistersAt(snapshot.inspection, seconds))) {
+      snapshot.inspectionPending = true;
+      void controls.inspectTimeline(seconds).then(observation => {
+        if (held !== snapshot || cursor !== seconds || sequence !== inspectionSequence) return;
+        if (observation) snapshot.inspection = {...observation, endInclusive:false};
+      }).catch(error => {
+        if (held === snapshot && cursor === seconds && sequence === inspectionSequence) report(error instanceof Error ? error.message : String(error), true);
+      }).finally(() => {
+        if (held === snapshot && cursor === seconds && sequence === inspectionSequence) { snapshot.inspectionPending = false; draw(); }
+      });
+    }
     draw();
   };
   const follow = () => { seekViewport = null; held = null; selectedEnd = null; timelineView = 'scroll'; controls.setTimelineCenter(null); draw(); };
@@ -438,7 +462,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     if (!state?.info || busy || state.seekTarget !== null || state.status === 'loading') return;
     const destination = Math.max(0, Math.min(timelineTotal(), target));
     const center = (plotStart + plotEnd) / 2;
-    seekViewport = {center, span:plotEnd - plotStart, heard:null, marker:timelineView === 'scroll' && destination > center ? destination : null};
+    seekViewport = timelineView === 'fit' ? null : {center, span:plotEnd - plotStart, heard:null, marker:destination > center ? destination : null};
     held = null;
     selectedEnd = null;
     void run(async () => {
@@ -741,7 +765,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     setText('inspector-title', held ? 'Held sound inspector' : 'Sound inspector');
     root.querySelector('.inspector')!.classList.toggle('held', Boolean(held));
     const coverage = held ? `Held ${inspectionSubject()} at ${time(cursor, true)}. ${state?.status === 'playing' ? 'Music continues; only inspection is frozen.' : 'Inspection is frozen independently of playback.'} ` : 'Following heard playback. ';
-    setText('inspector-note', `${coverage}${held && registers && cursor > held.heardUntil ? 'Prepared ahead of playback when held. ' : ''}${held ? `Captured ${held.configuration}. ` : ''}${registers ? 'Register settings below describe the selected moment, not instrument identity or measured envelope amplitude.' : 'No retained observation at this time. Use Follow to inspect new observations.'}`);
+    setText('inspector-note', `${coverage}${held && registers && cursor > held.heardUntil ? 'Prepared ahead of playback when held. ' : ''}${held ? `Captured ${held.configuration}. ` : ''}${held?.inspectionPending ? 'Loading selected settings…' : registers ? 'Register settings below describe the selected moment, not instrument identity or measured envelope amplitude.' : 'No retained observation at this time. Use Follow to inspect new observations.'}`);
     el('inspector-note').title = `Available ${time(coverageStart, true)}–${time(observedUntil, true)} · epoch ${held?.epoch ?? state?.epoch ?? 0}${registers ? ' · ordered writes applied through the cursor' : ''}${selectedEnd !== null ? ` · selected span ends ${time(selectedEnd, true)}` : ''}`;
     const chip = selectedFilterChip ?? Math.floor(selectedVoice / 3);
     const chipBase = chip * 32;
@@ -899,7 +923,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     }
     if (seekViewport && !seeking) {
       const elapsed = seekViewport.heard === null ? 0 : position - seekViewport.heard;
-      if (elapsed < 0 || timelineView === 'fit' && elapsed > 0) seekViewport = null;
+      if (elapsed < 0) seekViewport = null;
       else {
         if (state?.status === 'playing' && elapsed > 0) {
           // TIMELINE-3 in docs/PLAN.md pins right-side clicks to their note until center; only then does the line track heard time again.
@@ -911,6 +935,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
         if (seekViewport) seekViewport.heard = position;
       }
     }
+    controls.setTimelineOverview(timelineView === 'fit' && !held ? timelineTotal() : null);
     const observationSpan = timelineSpan + (seekViewport && timelineView === 'scroll' ? 2 * Math.abs(seekViewport.center - transportPosition) : 0);
     if (state?.timelineWindowSeconds !== observationSpan) controls.setTimelineWindow(observationSpan);
     const browsing = timelineView === 'scroll' && state?.timelineCenterSeconds != null;
@@ -920,12 +945,16 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       if (center !== state!.timelineCenterSeconds) controls.setTimelineCenter(center);
     }
     chartHeld = browsing ? null : held;
-    const observations = chartHeld ? timelineView === 'fit' ? chartHeld.history : chartHeld : liveObservations();
-    const {frames, writes, start: historyStart, end: observedUntil} = observations;
+    const observations = chartHeld ?? liveObservations();
+    const heldOverview = chartHeld?.overview ?? null;
+    const overview = timelineView === 'fit' ? chartHeld ? heldOverview : state?.overview :
+      chartHeld && (cursor < chartHeld.start || cursor >= chartHeld.end) ? heldOverview : null;
+    const chart = overview ?? observations;
+    const {frames, start: historyStart, end: observedUntil} = chart;
+    const writes = overview ? [] : observations.writes;
     const heardUntil = chartHeld?.heardUntil ?? position;
-    const chartEnd = timelineView === 'fit' ? Math.min(observedUntil, heardUntil) : observedUntil;
-    const window = seekViewport ? followingWindow(seekViewport.center, timelineView === 'fit' ? seekViewport.span : timelineSpan) : timelineView === 'fit'
-      ? fittedWindow(historyStart, chartEnd, held ? {start: cursor, end: selectedEnd ?? cursor} : undefined)
+    const chartEnd = observedUntil;
+    const window = timelineView === 'fit' ? fittedWindow(timelineTotal()) : seekViewport ? followingWindow(seekViewport.center, timelineSpan)
       : chartHeld ? {start: chartHeld.plotStart, end: chartHeld.plotEnd} : followingWindow(state?.timelineCenterSeconds ?? position, timelineSpan);
     plotStart = window.start;
     plotEnd = window.end;
@@ -944,23 +973,23 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     button('timeline-scroll-forward').disabled = scrollDisabled || plotEnd >= timelineTotal();
     button('timeline-scroll').setAttribute('aria-pressed', String(timelineView === 'scroll'));
     button('timeline-fit').setAttribute('aria-pressed', String(timelineView === 'fit'));
-    el('timeline-direction').hidden = timelineView !== 'scroll';
-    setText('timeline-earlier', browsing ? 'Earlier' : 'Past');
-    setText('timeline-later', browsing ? 'Later · prepared' : 'Upcoming · prepared');
+    el('timeline-direction').hidden = false;
+    setText('timeline-earlier', browsing || timelineView === 'fit' ? 'Earlier' : 'Past');
+    setText('timeline-later', browsing || timelineView === 'fit' ? 'Later · prepared' : 'Upcoming · prepared');
     const durationPrecision = timelineSpan < 1 ? 2 : 1;
-    setText('timeline-view-note', seekViewport ? '' : timelineView === 'scroll' ? browsing ? 'Browsing · playback position unchanged' : `${Number((timelineSpan / 2).toFixed(durationPrecision))} s past · ${Number((timelineSpan / 2).toFixed(durationPrecision))} s upcoming` : 'All retained heard history');
+    setText('timeline-view-note', seekViewport ? '' : timelineView === 'scroll' ? browsing ? 'Browsing · playback position unchanged' : `${Number((timelineSpan / 2).toFixed(durationPrecision))} s past · ${Number((timelineSpan / 2).toFixed(durationPrecision))} s upcoming` : state?.duration == null ? 'Explored range · duration unknown' : 'Whole song');
     el('timeline-zoom').hidden = timelineView !== 'scroll';
     button('timeline-zoom-out').disabled = timelineZoom === 0;
     button('timeline-zoom-in').disabled = timelineZoom === TIMELINE_DENSITIES.length - 1;
     setText('timeline-scale', `${timelineSpan.toFixed(durationPrecision)} s`);
     const plotFrames = visibleTimelineFrames(frames, Math.max(plotStart, historyStart), Math.min(plotEnd, chartEnd));
-    const dropped = chartHeld?.dropped ?? Math.max(observations.dropped, state?.dropped ?? 0);
-    el('history-summary').title = `${chartHeld ? 'HELD COPY' : timelineView === 'scroll' ? 'PREPARED OBSERVATIONS' : 'HEARD HISTORY'} ${time(historyStart, true)}–${time(observedUntil, true)} · ${frames.length} sampled frames · ${dropped} dropped writes · epoch ${chartHeld?.epoch ?? state?.epoch ?? 0}`;
+    const dropped = Math.max(chart.dropped, chartHeld?.dropped ?? Math.max(observations.dropped, state?.dropped ?? 0));
+    el('history-summary').title = `${chartHeld ? 'HELD COPY' : 'PREPARED OBSERVATIONS'} ${time(historyStart, true)}–${time(observedUntil, true)} · ${frames.length} sampled frames · ${dropped} dropped writes · epoch ${chartHeld?.epoch ?? state?.epoch ?? 0}`;
     setText('history-description', held ? `Inspecting ${inspectionSubject()} at ${time(cursor, true)}${browsing ? '; browsing another passage' : ' · chart held'}${state?.status === 'playing' ? '; music continues' : ''}.` : '');
     el('history-summary').hidden = !held && dropped === 0;
     const upcoming = chartEnd > heardUntil;
-    const loopBoundary = !chartHeld && !browsing && state?.loop && state.loop.end <= plotEnd ? ` Loop returns to ${time(state.loop.start, true)} at ${time(state.loop.end, true)}; wrapped preview is not shown.` : '';
-    setText('timeline-availability', chartHeld ? `Captured observations ${time(historyStart, true)}–${time(observedUntil, true)}. Heard through ${time(heardUntil, true)} when held.` : timelineView === 'scroll' ? `${browsing ? `Browsing ${time(plotStart, true)}–${time(plotEnd, true)}. ` : ''}${upcoming ? `Upcoming prepared to ${time(chartEnd, true)}.` : 'Upcoming observations unavailable.'}${loopBoundary}` : 'Only heard observations are shown.');
+    const loopBoundary = !chartHeld && !browsing && state?.loop && state.loop.end <= plotEnd ? ` Loop returns to ${time(state.loop.start, true)} at ${time(state.loop.end, true)}; ${timelineView === 'fit' ? 'the overview shows linear song material' : 'wrapped preview is not shown'}.` : '';
+    setText('timeline-availability', chartHeld ? `Captured observations ${time(historyStart, true)}–${time(observedUntil, true)}. Heard through ${time(heardUntil, true)} when held.` : `${browsing ? `Browsing ${time(plotStart, true)}–${time(plotEnd, true)}. ` : ''}${upcoming ? `Upcoming prepared to ${time(chartEnd, true)}.` : 'Upcoming observations unavailable.'}${loopBoundary}`);
     const heldDropped = chartHeld ? 0 : held?.dropped ?? 0;
     const traceWarnings = [
       dropped ? `Trace incomplete: ${dropped} dropped writes.` : '',
@@ -975,6 +1004,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     const inspectedTime = held ? cursor : position;
     let inspection = held ?? observations;
     let registers = observationRegistersAt(inspection, inspectedTime, inspection.endInclusive);
+    const capturedInspection = held?.overview ?? held;
+    if (held?.inspection && capturedInspection && inspectedTime >= capturedInspection.start && inspectedTime < capturedInspection.end) {
+      const exactRegisters = observationRegistersAt(held.inspection, inspectedTime);
+      if (exactRegisters) { inspection = held.inspection; registers = exactRegisters; }
+    }
     if (!registers) {
       const history = held?.history ?? heardObservations();
       const heardRegisters = observationRegistersAt(history, inspectedTime, history.endInclusive);

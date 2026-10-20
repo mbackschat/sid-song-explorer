@@ -69,6 +69,7 @@ async function dispatch(request: EngineRequest): Promise<EngineResult> {
     case 'render': return session.render(request.payload.frames);
     case 'seek': return session.seek(request.payload.seconds);
     case 'observe': return session.observe(request.payload.startSeconds, request.payload.endSeconds);
+    case 'overview': return session.overview(request.payload.startSeconds, request.payload.endSeconds);
     case 'mute': {
       cacheEpoch = request.cacheEpoch;
       const result = await session.mute(request.payload.mask);

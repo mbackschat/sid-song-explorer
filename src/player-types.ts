@@ -28,6 +28,12 @@ export interface WriteObservation {
   sidNumber: number;
 }
 export interface RegisterFrame { time: number; registers: number[] }
+export interface TimelineOverview {
+  start: number;
+  end: number;
+  frames: RegisterFrame[];
+  dropped: number;
+}
 export interface TimelineObservation {
   /** Actual retained coverage [start, end); the final register frame records state immediately before end. */
   start: number;
@@ -46,6 +52,7 @@ export interface PlayerState {
   pendingOperation: 'seek' | 'voice-mix' | null;
   preparedRange: {start: number; end: number} | null;
   preview: TimelineObservation | null;
+  overview: TimelineOverview | null;
   timelineWindowSeconds: number;
   timelineCenterSeconds: number | null;
   renderedUntil: number;
@@ -73,6 +80,8 @@ export interface PlayerControls {
   setMuted(mask: boolean[]): Promise<void>;
   setLoop(loop: {start: number; end: number} | null): Promise<void>;
   setTimelineWindow(seconds: number): void;
+  setTimelineOverview(end: number | null): void;
+  inspectTimeline(seconds: number): Promise<TimelineObservation | null>;
   setTimelineCenter(seconds: number | null): void;
   subscribe(listener: (state: PlayerState) => void): () => void;
   dispose(): void;

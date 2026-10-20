@@ -333,10 +333,12 @@ test('seek positioning preserves startup, browsed and fitted windows until Follo
       await expect(page.locator('#timeline-fit')).toHaveAttribute('aria-pressed','true');
     }
     const before = await range();
+    await lane.scrollIntoViewIfNeeded();
     const box = (await lane.boundingBox())!;
-    await lane.click({position:{x:box.width * .8,y:20}});
+    const clickX = Math.round(box.x + box.width * .8);
+    await lane.click({position:{x:clickX - box.x,y:20}});
     await expect(page.locator('#play-status')).toHaveText('Paused');
-    await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeCloseTo(Number(before.start) + (Number(before.end) - Number(before.start)) * .8,1);
+    await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeCloseTo(Number(before.start) + (Number(before.end) - Number(before.start)) * (clickX - box.x) / box.width,1);
     expect(await range(), view).toEqual(before);
     expect(await lane.boundingBox(), `${view} positioning must not change chart layout`).toEqual(box);
     if (view === 'fit') {
@@ -344,7 +346,7 @@ test('seek positioning preserves startup, browsed and fitted windows until Follo
       const heard = Number(await page.locator('#seek-slider').inputValue());
       await page.locator('#play-button').click();
       await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(heard + .2);
-      await expect.poll(range).not.toEqual(before);
+      expect(await range()).toEqual(before);
       await page.locator('#play-button').click();
     }
     await page.locator('#return-button').click();

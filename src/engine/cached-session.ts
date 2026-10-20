@@ -1,6 +1,6 @@
 import { SAMPLE_RATE, SidSession } from './session.ts';
 import type { LoadResult, MuteMask, PlaybackOptions, PositionResult, RenderResult, SessionOptions, SidWrite } from './session.ts';
-import type { TimelineObservation } from '../player-types.ts';
+import type { TimelineObservation, TimelineOverview } from '../player-types.ts';
 
 const DEFAULT_CACHE_BYTES = 32 * 1024 * 1024;
 const REGISTER_BYTES = 32;
@@ -172,17 +172,29 @@ export class CachedSidSession {
     return registers;
   }
 
-  /** Copy retained observations only; output limits shorten coverage rather than imply missing writes are complete. */
-  observe(startSeconds: number, endSeconds: number): TimelineObservation | null {
+  private retainedObservationRange(startSeconds: number, endSeconds: number): {start: number; end: number} | null {
     this.requireLoaded();
     if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds) || startSeconds < 0 ||
       endSeconds > 600 || endSeconds <= startSeconds) {
       throw new Error('Observation range must be within 0–600 seconds');
     }
     const start = Math.max(startSeconds, this.cacheStartFrame / SAMPLE_RATE);
-    let end = Math.min(endSeconds, this.frontier / SAMPLE_RATE);
+    const end = Math.min(endSeconds, this.frontier / SAMPLE_RATE);
+    return start < end ? {start, end} : null;
+  }
+
+  overview(startSeconds: number, endSeconds: number): TimelineOverview | null {
+    const range = this.retainedObservationRange(startSeconds, endSeconds);
+    return range ? this.sampleOverview(range.start, range.end) : null;
+  }
+
+  /** Copy retained observations only; output limits shorten coverage rather than imply missing writes are complete. */
+  observe(startSeconds: number, endSeconds: number): TimelineObservation | null {
+    const range = this.retainedObservationRange(startSeconds, endSeconds);
+    if (!range) return null;
+    const start = range.start;
+    let end = range.end;
     let continuationStart: number | undefined;
-    if (start >= end) return null;
     const writes: SidWrite[] = [];
     for (const block of this.blocks) {
       if (block.endFrame / SAMPLE_RATE <= start) continue;
@@ -202,10 +214,14 @@ export class CachedSidSession {
     }
     if (start >= end) return null;
     while (writes.length && writes.at(-1)!.timeSeconds >= end) writes.pop();
+    return {...this.sampleOverview(start, end), writes, ...(continuationStart === undefined ? {} : {continuationStart})};
+  }
+
+  private sampleOverview(start: number, end: number): TimelineOverview {
     const intervals = Math.min(MAX_OBSERVATION_INTERVALS, Math.ceil((end - start) / OBSERVATION_FRAME_SECONDS));
     const sampleTimes = Array.from({length: intervals + 1}, (_, index) =>
       index === intervals ? end : start + (end - start) * index / intervals);
-    const frames: TimelineObservation['frames'] = [];
+    const frames: TimelineOverview['frames'] = [];
     let sample = 0;
     let dropped = 0;
     for (const block of this.blocks) {
@@ -227,7 +243,7 @@ export class CachedSidSession {
       // The sample sweep leaves only exact block boundaries; rounding preserves their original PCM frame after the seconds conversion.
       frames.push({time: end, registers: this.registersAt(Math.round(end * SAMPLE_RATE))});
     }
-    return {start, end, frames, writes, dropped, ...(continuationStart === undefined ? {} : {continuationStart})};
+    return {start, end, frames, dropped};
   }
 
   render(frames: number): RenderResult {

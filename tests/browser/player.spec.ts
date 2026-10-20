@@ -111,7 +111,7 @@ test('voice activity follows playback at a fixed density and freezes its held wi
   await expect.poll(async () => (await range()).start).toBeGreaterThan(heldRange.start);
 });
 
-test('timeline switches between scrolling and fitted history without changing playback or held inspection', async ({page}) => {
+test('timeline switches between scrolling and fitted song without changing playback or held inspection', async ({page}) => {
   await page.goto('/');
   await expect(page.locator('#timeline-scroll')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('#load-button').click();
@@ -124,8 +124,8 @@ test('timeline switches between scrolling and fitted history without changing pl
   await expect.poll(async () => (await range()).start).toBeGreaterThan(20);
   await page.locator('#timeline-fit').click();
   await expect(page.locator('#timeline-fit')).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(async () => (await range()).start).toBeGreaterThanOrEqual(30);
-  expect((await range()).start).toBeLessThan(30.02);
+  expect((await range()).start).toBe(0);
+  expect((await range()).end).toBeCloseTo(Number(await page.locator('#seek-slider').getAttribute('max')), 2);
   await expect(page.locator('#play-status')).toHaveText('Live SID');
   await page.locator('#follow-button').click();
   const cursor = await page.locator('#inspection-time').textContent();
@@ -136,8 +136,8 @@ test('timeline switches between scrolling and fitted history without changing pl
   await expect(page.locator('#inspection-time')).toHaveText(cursor!);
   await expect(page.locator('#return-button')).toBeVisible();
   await page.locator('#timeline-fit').click();
-  await expect.poll(async () => (await range()).start).toBeGreaterThanOrEqual(30);
-  expect((await range()).start).toBeLessThan(30.02);
+  expect((await range()).start).toBe(0);
+  expect((await range()).end).toBeCloseTo(Number(await page.locator('#seek-slider').getAttribute('max')), 2);
   const held = await range();
   const heard = await page.locator('#heard-time').textContent();
   await expect(page.locator('#heard-time')).not.toHaveText(heard!);

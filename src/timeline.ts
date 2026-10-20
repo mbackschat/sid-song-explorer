@@ -1,4 +1,22 @@
-import type { TimelineObservation } from './player-types.ts';
+import type { TimelineObservation, TimelineOverview } from './player-types.ts';
+
+/** Retain prepared chart evidence across PCM eviction; callers reset it on configuration changes. */
+export function composeTimelineOverviews(previous: TimelineOverview | null, current: TimelineOverview | null): TimelineOverview | null {
+  if (!current) return previous;
+  if (!previous || previous.end < current.start || current.end < previous.start ||
+    previous.frames[0]?.registers.length !== current.frames[0]?.registers.length) return current;
+  if (previous.start <= current.start && previous.end >= current.end && previous.dropped >= current.dropped) return previous;
+  const frames = [
+    ...previous.frames.filter(frame => frame.time < current.start),
+    ...current.frames,
+    ...previous.frames.filter(frame => frame.time > current.end),
+  ];
+  return {
+    start:Math.min(previous.start,current.start), end:Math.max(previous.end,current.end),
+    frames:frames.length <= 1001 ? frames : Array.from({length:1001}, (_, index) => frames[Math.floor(index * (frames.length - 1) / 1000)]),
+    dropped:Math.max(previous.dropped,current.dropped),
+  };
+}
 
 export type DisplayedObservation = TimelineObservation & {endInclusive: boolean};
 
@@ -86,9 +104,8 @@ export function visibleTimelineFrames<T extends {time: number}>(frames: readonly
   return visible;
 }
 
-export function fittedWindow(historyStart: number, observedUntil: number, selection?: {start: number; end: number}) {
-  const start = Math.min(historyStart, selection?.start ?? historyStart);
-  return {start, end: Math.max(start + FOLLOW_WINDOW_SECONDS, observedUntil, selection?.end ?? 0)};
+export function fittedWindow(duration: number) {
+  return {start: 0, end: Math.min(600, Math.max(Number.EPSILON, duration))};
 }
 
 export function observationRegistersAt(observation: TimelineObservation, seconds: number, includeEnd = false): number[] | null {
