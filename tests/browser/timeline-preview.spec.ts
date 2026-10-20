@@ -205,7 +205,7 @@ test('centered timeline shows actual upcoming activity and holds future inspecti
   await page.screenshot({path:`build/timeline-preview/${test.info().project.name}-narrow.png`, fullPage:true});
 });
 
-test('centered timeline shades unavailable startup ending and loop regions and invalidates pending mixes', async ({page}) => {
+test('centered timeline shades unavailable startup and ending, shows song material beyond loops and invalidates pending mixes', async ({page}) => {
   await openPaused(page);
   await page.locator('#seek-slider').fill('0');
   await expect.poll(async () => (await chart(page)).observedUntil).toBeGreaterThanOrEqual(4.9);
@@ -245,11 +245,12 @@ test('centered timeline shades unavailable startup ending and loop regions and i
   await expect(page.locator('#play-status')).toHaveText('Paused');
   await expect.poll(async () => (await chart(page)).cursor).toBeCloseTo(31, 2);
   await expect.poll(async () => (await chart(page)).end).toBeCloseTo(31 + halfSpan, 1);
-  await expect.poll(async () => (await chart(page)).observedUntil).toBeCloseTo(32, 2);
+  await expect.poll(async () => { const view = await chart(page); return view.observedUntil - view.end; }).toBeGreaterThanOrEqual(-.01);
   await expect(page.locator('#timeline-availability')).toContainText('Loop returns to 0:30.00 at 0:32.00');
+  await expect(page.locator('#timeline-later')).toHaveText('Song continuation · loop active');
   await lane.focus();
   await lane.press('Shift+ArrowRight');
-  await expect(page.locator('#reg-frequency')).toHaveText('—');
+  await expect(page.locator('#reg-frequency')).not.toHaveText('—');
   await page.locator('#return-button').click();
 
   const release = await holdWorkerRequest(page, 'mute');
@@ -258,6 +259,6 @@ test('centered timeline shades unavailable startup ending and loop regions and i
   expect((await chart(page)).futureFrames).toBe(0);
   await release();
   await expect(page.locator('#mix-controls')).toHaveAttribute('aria-busy', 'false');
-  await expect.poll(async () => (await chart(page)).observedUntil).toBeCloseTo(32, 2);
+  await expect.poll(async () => { const view = await chart(page); return view.observedUntil - view.end; }).toBeGreaterThanOrEqual(-.01);
   await expect(page.locator('#solo-0')).toHaveAttribute('aria-pressed', 'true');
 });

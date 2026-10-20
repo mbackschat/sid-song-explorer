@@ -83,7 +83,10 @@ test('a short evidence annotation plays useful context while preserving its exac
   await expect(page.locator('#play-status')).toHaveText('Live SID');
   await expect(page.locator('#loop-end')).toHaveValue('4');
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number), {timeout:10000}).toBeGreaterThanOrEqual(2);
-  await expect(page.locator('#inspector-note')).toContainText('Held');
+  await expect(page.locator('#inspector-note')).toContainText('Following heard playback.');
+  await expect(page.locator('#reg-frequency')).not.toHaveText('—');
+  await expect(page.locator('#loop-indicator')).toBeVisible();
+  await expect(page.locator('#loop-details')).toHaveAttribute('open', '');
   await page.screenshot({path:`build/poc/${test.info().project.name}-exploring.png`,fullPage:true});
 });
 

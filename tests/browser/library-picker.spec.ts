@@ -1,7 +1,7 @@
 import {test, expect} from './fixtures.ts';
 import {holdWorkerRequest} from './worker-control.ts';
 import {
-  addFixtureSender, clearedSidTitle, dropBeforeQueuedSelection, installLibraryProvider, libraryAuthor, libraryOrigin,
+  addFixtureSender, clearedSidTitle, differentLibraryPath, differentSidTitle, dropBeforeQueuedSelection, installLibraryProvider, libraryAuthor, libraryOrigin,
   libraryPath, libraryReleased, libraryStil, libraryTitle, reloadBeforeQueuedSelection, selectionMessageCount, sendFixtureMessage,
 } from './library-picker-fixture.ts';
 import {resolve} from 'node:path';
@@ -128,6 +128,30 @@ test('missing metadata falls back to the SID and local or sample loading clears 
   await expect(page.locator('#library-info')).toBeHidden();
   await expect(page.locator('#library-path')).toBeEmpty();
   await expect(page.locator('#library-stil')).toBeEmpty();
+});
+
+test('another song from the retained library replaces the playing bytes and header metadata', async ({page}) => {
+  const provider = await installLibraryProvider(page);
+  await loadPausedSample(page);
+  await openLibrary(page);
+  const retainedFrame = await page.locator('#library-frame').elementHandle();
+  const widget = page.frameLocator('#library-frame');
+  await widget.getByRole('button', {name: 'Choose SID without metadata', exact: true}).click();
+  await expectLibraryLoaded(page);
+  await expect(page.locator('#track-title')).toHaveText(clearedSidTitle);
+  await page.locator('#play-button').click();
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(.25);
+  await openLibrary(page);
+  expect(await retainedFrame!.evaluate(element => element === document.querySelector('#library-frame'))).toBe(true);
+  await widget.getByRole('button', {name: 'Choose different SID without metadata', exact: true}).click();
+  await expectLibraryLoaded(page);
+  await expect(page.locator('#track-title')).toHaveText(differentSidTitle);
+  await expect(page.locator('#library-path')).toHaveText(differentLibraryPath);
+  expect(provider.requests()).toBe(1);
+  await expect(page.locator('#seek-slider')).toHaveValue('0');
+  await page.locator('#play-button').click();
+  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(.25);
+  await expect(page.locator('#peak-label')).not.toHaveText('−∞ dBFS');
 });
 
 test('malformed, unrelated and superseded iframe messages cannot replace the current tune', async ({page}) => {

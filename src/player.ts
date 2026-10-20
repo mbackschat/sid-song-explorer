@@ -120,15 +120,11 @@ export class ExplorerPlayer implements PlayerControls {
 
   private emit() { for (const listener of this.listeners) listener(this.state); }
 
-  private previewFitsFollowLoop(observation = this.state.preview): boolean {
-    return this.state.timelineCenterSeconds !== null || !this.state.loop || !observation || observation.end <= this.state.loop.end;
-  }
-
   private invalidatePreview(preserveAccepted = false) {
     this.previewRevision++;
     this.overviewKey = '';
     if (!preserveAccepted) this.state.overview = null;
-    if (!preserveAccepted || !this.previewFitsFollowLoop()) this.state.preview = null;
+    if (!preserveAccepted) this.state.preview = null;
     this.previewRequestedAt = -Infinity;
   }
 
@@ -166,11 +162,10 @@ export class ExplorerPlayer implements PlayerControls {
       !['ready', 'paused', 'playing', 'ended'].includes(this.state.status) || performance.now() - this.previewRequestedAt < (browsing ? 100 : 250)) return;
     const halfWindow = this.state.timelineWindowSeconds / 2;
     const center = this.state.timelineCenterSeconds ?? this.state.position;
-    const loopEnd = browsing ? Infinity : this.state.loop?.end ?? Infinity;
     const margin = browsing ? TIMELINE_BROWSE_MARGIN_SECONDS : TIMELINE_PREVIEW_MARGIN_SECONDS;
     const startSeconds = Math.max(0, center - halfWindow - (browsing ? margin : 0));
     // Offscreen observations keep movement covered between requests (tests/player.test.ts).
-    const endSeconds = Math.min(center + halfWindow + margin, this.state.duration ?? 600, 600, loopEnd);
+    const endSeconds = Math.min(center + halfWindow + margin, this.state.duration ?? 600, 600);
     if (startSeconds >= endSeconds) return;
     const engine = this.engine;
     const generation = this.generation;
@@ -183,7 +178,6 @@ export class ExplorerPlayer implements PlayerControls {
       () => generation === this.generation && engine === this.engine && !this.disposed,
     ).then(observation => {
       if (generation !== this.generation || engine !== this.engine || this.disposed) return;
-      if (!this.previewFitsFollowLoop(observation)) return;
       if (revision !== this.previewRevision && this.previewOverlap(observation) <= this.previewOverlap(this.state.preview)) return;
       this.state.preview = observation;
       this.emit();
@@ -443,7 +437,6 @@ export class ExplorerPlayer implements PlayerControls {
     }
     if (seconds === this.state.timelineCenterSeconds) return;
     this.state.timelineCenterSeconds = seconds;
-    if (!this.previewFitsFollowLoop()) this.state.preview = null;
     this.previewRevision++;
     this.emit();
     this.refreshPreview();

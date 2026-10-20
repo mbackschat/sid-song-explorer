@@ -152,6 +152,28 @@ test('a valid file handoff hides the retained frame before returning bytes and i
   assert.match(fixture.byId('library-status')?.textContent ?? '', /search|select|choose/i);
 });
 
+test('a reopened retained frame delivers each different selection without reusing the first payload', t => {
+  const fixture = setup(t);
+  fixture.open();
+  const frame = fixture.frame();
+  const first = selection();
+  fixture.send(first);
+  const secondBytes = sidBytes();
+  new Uint8Array(secondBytes)[100] = 42;
+  const second = selection({bytes: secondBytes, name: 'Another.sid', path: 'C64Music/Another.sid', title: 'Another tune', author: 'Another composer'});
+  fixture.open();
+  assert.equal(fixture.frame(), frame);
+  fixture.send(second);
+  assert.equal(fixture.selected.length, 2);
+  assert.equal(fixture.selected[0].path, first.path);
+  assert.deepEqual(fixture.selected[0].bytes, new Uint8Array(first.bytes));
+  assert.equal(fixture.selected[1].path, second.path);
+  assert.equal(fixture.selected[1].title, second.title);
+  assert.equal(fixture.selected[1].author, second.author);
+  assert.deepEqual(fixture.selected[1].bytes, new Uint8Array(secondBytes));
+  assert.notDeepEqual(fixture.selected[0].bytes, fixture.selected[1].bytes);
+});
+
 test('untrusted origins and unrelated windows cannot alter or complete the active picker', t => {
   const fixture = setup(t);
   fixture.open();

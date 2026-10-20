@@ -9,8 +9,11 @@ export const libraryReleased = '2026 <b>test release</b>';
 export const libraryStil = 'TITLE: <img src=x onerror="window.libraryMarkupRan=true">\nCOMMENT: <script>window.libraryMarkupRan=true</script>';
 const clearedSid = readFileSync('public/generated/rambo-loader-main.sid');
 export const clearedSidTitle = clearedSid.subarray(22, 54).toString('ascii').replace(/\0.*$/s, '').trim();
+const differentSid = readFileSync('public/generated/bach-toccata.sid');
+export const differentSidTitle = differentSid.subarray(22, 54).toString('ascii').replace(/\0.*$/s, '').trim();
+export const differentLibraryPath = 'C64Music/MUSICIANS/F/Fixture/Bach.sid';
 
-export type FixtureChoice = 'valid' | 'missing-metadata' | 'malformed' | 'rsid' | 'third-chip' | 'error' | 'ready';
+export type FixtureChoice = 'valid' | 'missing-metadata' | 'different' | 'malformed' | 'rsid' | 'third-chip' | 'error' | 'ready';
 type FixtureWindow = Window & {
   libraryFixtureChoose: (choice: FixtureChoice, checkpoint?: string) => void;
   libraryFixtureCheckpoints: string[];
@@ -27,6 +30,7 @@ export function fixtureSidBytes(subtunes = 1): Buffer {
 function providerHtml(parentOrigin: string, autoReady: boolean, subtunes = 1): string {
   const fixture = JSON.stringify({
     base64: fixtureSidBytes(subtunes).toString('base64'), path: libraryPath, title: libraryTitle,
+    differentBase64: differentSid.toString('base64'), differentPath: differentLibraryPath,
     author: libraryAuthor, released: libraryReleased, stil: libraryStil,
   }).replaceAll('<', '\\u003c');
   return `<!doctype html><html><head><title>Deterministic SID picker provider</title></head><body>
@@ -36,6 +40,7 @@ function providerHtml(parentOrigin: string, autoReady: boolean, subtunes = 1): s
     <div id="fixture-results" style="height:80px;overflow:auto"><div style="height:1000px">Library results</div></div>
     <button data-choice="valid" disabled>Choose valid SID</button>
     <button data-choice="missing-metadata" disabled>Choose SID without metadata</button>
+    <button data-choice="different" disabled>Choose different SID without metadata</button>
     <button data-choice="malformed" disabled>Send malformed selection</button>
     <button data-choice="rsid" disabled>Choose RSID</button>
     <button data-choice="third-chip" disabled>Choose third-chip SID</button>
@@ -50,14 +55,18 @@ function providerHtml(parentOrigin: string, autoReady: boolean, subtunes = 1): s
         if (choice === 'ready') message = {type:'hvsc:ready', mode:'file'};
         else if (choice === 'error') message = {type:'hvsc:error', message:'Fixture provider failure'};
         else {
-          bytes = Uint8Array.from(atob(fixture.base64), character => character.charCodeAt(0));
+          const different = choice === 'different';
+          bytes = Uint8Array.from(atob(different ? fixture.differentBase64 : fixture.base64), character => character.charCodeAt(0));
           if (choice === 'rsid') bytes.set([82, 83, 73, 68]);
           if (choice === 'third-chip') {
             new DataView(bytes.buffer).setUint16(4, 4);
             bytes[123] = 0x44;
           }
-          message = {type:'hvsc:selected', mode:'file', name:'fixture-rambo.sid', path:fixture.path, bytes:bytes.buffer};
-          if (choice !== 'missing-metadata') Object.assign(message, {
+          message = {
+            type:'hvsc:selected', mode:'file', bytes:bytes.buffer,
+            name:different ? 'fixture-bach.sid' : 'fixture-rambo.sid', path:different ? fixture.differentPath : fixture.path,
+          };
+          if (choice !== 'missing-metadata' && !different) Object.assign(message, {
             title:fixture.title, author:fixture.author, released:fixture.released, stil:fixture.stil,
           });
           if (choice === 'malformed') message.bytes = 'not an ArrayBuffer';

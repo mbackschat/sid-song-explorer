@@ -168,10 +168,10 @@ test('seeks and voice changes invalidate previews immediately and reject obsolet
   await flushReplies();
   assert.deepEqual(value.state.preview, preview(13, 24));
   const looping = value.player.setLoop({start: 10, end: 20});
-  assert.equal(value.state.preview, null);
+  assert.deepEqual(value.state.preview, preview(13, 24));
   worker.reply(worker.lastRequest('seek'), position(18));
   await looping;
-  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 13, endSeconds: 20});
+  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 13, endSeconds: 24});
 });
 
 test('prepared previews cover the moving visible right edge through the refresh interval and RPC delay', async (t) => {
@@ -381,7 +381,7 @@ test('browsing preserves pending seek and mute destinations and resets to heard-
   assert.deepEqual(replacement.lastRequest('observe').payload, {startSeconds: 0, endSeconds: 6});
 });
 
-test('browsing can inspect prepared regions beyond loop B while following stays clipped', async (t) => {
+test('browsing and following retain linear song observations beyond loop B without changing transport', async (t) => {
   const {value, worker} = await loaded(t);
   worker.reply(worker.lastRequest('observe'), preview(0, 6));
   await flushReplies();
@@ -391,11 +391,11 @@ test('browsing can inspect prepared regions beyond loop B while following stays 
   worker.reply(worker.lastRequest('observe'), preview(13, 24));
   await flushReplies();
   const looping = value.player.setLoop({start: 10, end: 20});
-  assert.equal(value.state.preview, null, 'a newly narrowed loop invalidates retained observations extending beyond loop B');
+  assert.deepEqual(value.state.preview, preview(13, 24), 'loop changes do not invalidate linear song observations');
   worker.reply(worker.lastRequest('seek'), position(18));
   await looping;
-  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 13, endSeconds: 20});
-  worker.reply(worker.lastRequest('observe'), preview(13, 20));
+  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 13, endSeconds: 24});
+  worker.reply(worker.lastRequest('observe'), preview(13, 24));
   await flushReplies();
   const transport = worker.requests.filter((request) => request.method !== 'observe');
   value.player.setTimelineCenter(40);
@@ -409,14 +409,35 @@ test('browsing can inspect prepared regions beyond loop B while following stays 
   const crossing = worker.lastRequest('observe');
   assert.deepEqual(crossing.payload, {startSeconds: 8, endSeconds: 28});
   value.player.setTimelineCenter(null);
-  assert.equal(value.state.preview, null, 'following a loop discards accepted browse data extending beyond loop B');
+  assert.deepEqual(value.state.preview, preview(30, 50), 'view changes retain accepted evidence until replacement');
   worker.reply(crossing, preview(8, 28));
   await flushReplies();
-  assert.equal(value.state.preview, null, 'a pending browse reply cannot restore activity after loop B');
+  assert.deepEqual(value.state.preview, preview(8, 28), 'a pending browse reply may improve coverage across loop B');
   value.advance(250);
-  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 13, endSeconds: 20});
+  assert.deepEqual(worker.lastRequest('observe').payload, {startSeconds: 13, endSeconds: 24});
   assert.deepEqual(worker.requests.filter((request) => request.method !== 'observe'), transport);
   assert.deepEqual(value.state.loop, {start: 10, end: 20});
+});
+
+test('the Rambo ending phrase loop keeps the visible song continuation prepared', async (t) => {
+  const {value, worker} = await loaded(t);
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const loop = {start: 179.03, end: 184.12};
+  const looping = value.player.setLoop(loop);
+  worker.reply(worker.lastRequest('seek'), position(0));
+  await looping;
+  worker.reply(worker.lastRequest('observe'), preview(0, 6));
+  await flushReplies();
+  const seeking = value.player.seek(182.33);
+  worker.reply(worker.lastRequest('seek'), position(182.33));
+  await seeking;
+  const request = worker.lastRequest('observe');
+  assert.ok(Number(request.payload.endSeconds) >= value.state.position + 5, 'preview must cover the visible right edge beyond loop B');
+  worker.reply(request, preview(Number(request.payload.startSeconds), Number(request.payload.endSeconds)));
+  await flushReplies();
+  assert.ok(value.state.preview!.end > loop.end);
+  assert.deepEqual(value.state.loop, loop, 'visual continuation does not extend the playback loop');
 });
 
 test('entering browsing reuses useful in-flight follow data while a padded request catches up', async (t) => {
