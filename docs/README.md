@@ -9,6 +9,7 @@
 - [Founding design](design/web-player-and-analyser.md): scope, interactions, evidence semantics, engine constraints and prototype gates.
 - [Seeking performance](research/seek-performance.md): replay, caching and state-snapshot alternatives, reproducible measurements and PCM/trace clock correction.
 - [Application research](research/web-music-explorers.md): dated comparisons, upstream citations and reuse alternatives.
+- [Online SID library picker](research/sid-library-picker.md): existing browser comparison, verified SIDquake file/metadata handoff, provider terms and remaining integration gates.
 - [Crafter handoff and shared knowledge](integration/crafter-handoff.md): ownership, source revision, normalized catalog integration, pin updates and transfer record.
 - [Project identity](../assets/branding/README.md): selected sound-lens logo, compact icons, wordmarks and reproducible exports.
 - [Current plan](PLAN.md): accepted mono POC, centered timeline, width-aware zoom, voice-switching task, completion gates and deferred work.
