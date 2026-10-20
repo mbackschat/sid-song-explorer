@@ -63,7 +63,7 @@ The application uses TypeScript 5.9.3, Vite 7.3.1 and `libsidplayfp-wasm` 1.1.0/
 | --- | --- | --- |
 | Install pinned dependencies | `pnpm install --frozen-lockfile` | Standalone lockfile installation; no sibling source dependency. |
 | Build the raw-chip engine | `pnpm prepare:engine` | Pinned source build and real-WASM raw routing/mono equality gate; bounded stages and retained logs in ignored `build/stereo-gate/`. |
-| Verify the catalog migration candidate | `pnpm catalog:check` | Pinned index bytes and unchanged runtime catalog; [activation gate](docs/integration/crafter-handoff.md#normalized-catalog-integration). |
+| Verify the pinned catalog | `pnpm catalog:check` | Pinned index bytes and runtime equality; [integration contract](docs/integration/crafter-handoff.md#normalized-catalog-integration). |
 | Prepare deployment assets | `pnpm prepare:assets` | Verified sample files and verified custom engine/runtime/license/notices/modifications/complete source in ignored `public/generated/`. |
 | Start development | `pnpm dev` | Local Vite application; playback requires user interaction. |
 | Check focused software behavior | `pnpm test` | Catalog, engine and timeline guards; no human listening verdict. |

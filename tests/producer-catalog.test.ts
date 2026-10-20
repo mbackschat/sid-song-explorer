@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -271,6 +271,44 @@ test('handles decoded HTTP bytes and explicit local input without a sibling depe
     const linkedIndex = path.join(directory, 'linked-index.json');
     await symlink(indexFile, linkedIndex);
     await assert.rejects(loadPinnedCatalog(pin, { indexFile: linkedIndex }), /non-regular/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test('sample preparation checks the producer catalog before writing deployment assets', async () => {
+  await mkdir(new URL('../build/catalog-migration/', import.meta.url), { recursive: true });
+  const directory = await mkdtemp(fileURLToPath(new URL('../build/catalog-migration/prepare-', import.meta.url)));
+  try {
+    for (const file of ['src/catalog.ts', 'src/producer-catalog.ts', 'scripts/import-catalog.ts', 'scripts/verified-input.ts', 'scripts/prepare-samples.ts']) {
+      await mkdir(path.dirname(path.join(directory, file)), { recursive: true });
+      await copyFile(new URL(`../${file}`, import.meta.url), path.join(directory, file));
+    }
+    const value = fixture();
+    const sourceRoot = path.join(directory, 'source');
+    for (const [kind, asset] of Object.entries(value.entries[0].files) as [string, any][]) {
+      const data = Buffer.from(`prepared ${kind}`);
+      Object.assign(asset, { bytes: data.length, sha256: sha256(data) });
+      await mkdir(path.dirname(path.join(sourceRoot, asset.path)), { recursive: true });
+      await writeFile(path.join(sourceRoot, asset.path), data);
+    }
+    value.entries[0].analysis.sidSha256 = (value.entries[0].files.sid as any).sha256;
+    const { pin, bytes } = pinned(value);
+    const runtime = adaptProducerCatalog(value);
+    await mkdir(path.join(directory, 'config'));
+    await writeFile(path.join(directory, 'config/catalog-pin.json'), JSON.stringify(pin));
+    await writeFile(path.join(directory, 'config/catalog-index.json'), bytes);
+    await writeFile(path.join(directory, 'config/catalog.json'), JSON.stringify(runtime));
+    const args = [path.join(directory, 'scripts/prepare-samples.ts'), '--source-root', sourceRoot];
+    await execute(process.execPath, args, { timeout: 5000 });
+    const generated = path.join(directory, 'public/generated');
+    assert.equal((await readFile(path.join(generated, runtime.entries[0].files.sid.filename))).toString(), 'prepared sid');
+    await rm(generated, { recursive: true });
+    runtime.entries[0].title = 'unreviewed change';
+    await writeFile(path.join(directory, 'config/catalog.json'), JSON.stringify(runtime));
+    await assert.rejects(execute(process.execPath, args, { timeout: 5000 }), /Generated catalog differs/);
+    await assert.rejects(readFile(path.join(generated, runtime.entries[0].files.sid.filename)), { code: 'ENOENT' });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

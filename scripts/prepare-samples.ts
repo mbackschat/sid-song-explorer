@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { assetSourcePath, MAX_ASSET_BYTES, parseCatalog } from '../src/catalog.ts';
 import type { Catalog } from '../src/catalog.ts';
 import { downloadVerifiedInput, readVerifiedInput } from './verified-input.ts';
+import { importCatalog } from './import-catalog.ts';
+import { parseProducerJson } from '../src/producer-catalog.ts';
 
 type PreparationOptions = {
   outputDirectory: string;
@@ -44,7 +46,12 @@ async function main(args: string[]): Promise<void> {
     sourceRoot = path.resolve(args[1]);
   }
   const root = fileURLToPath(new URL('../', import.meta.url));
-  const catalog = parseCatalog(JSON.parse(await readFile(path.join(root, 'config/catalog.json'), 'utf8')));
+  const pin = parseProducerJson(await readFile(path.join(root, 'config/catalog-pin.json'), 'utf8'));
+  const catalog = await importCatalog(pin, {
+    indexFile: path.join(root, 'config/catalog-index.json'),
+    outputFile: path.join(root, 'config/catalog.json'),
+    check: true,
+  });
   const files = await prepareSamples(catalog, { outputDirectory: path.join(root, 'public/generated'), sourceRoot });
   for (const file of files) process.stdout.write(`${file.status}: public/generated/${file.filename}\n`);
 }
