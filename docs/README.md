@@ -9,6 +9,9 @@
 - [Founding design](design/web-player-and-analyser.md): scope, interactions, evidence semantics, engine constraints and prototype gates.
 - [Seeking performance](research/seek-performance.md): replay, caching and state-snapshot alternatives, reproducible measurements and PCM/trace clock correction.
 - [Application research](research/web-music-explorers.md): dated comparisons, upstream citations and reuse alternatives.
+- [Assess headless SID analysis](research/sid-analysis-capabilities.md): retrievable metadata, execution metrics, inference limits and the recommended Node reuse scope.
+- [Headless analysis proposal](design/headless-sid-analysis.md): user-facing findings, reusable analysis/UI boundary and bounded spike criteria.
+- [Headless analysis spike results](validation/headless-sid-analysis-spike.md): measured Node runs, independent metric guards, finding-selection correction and report review.
 - [Library picker validation](validation/library-picker.md): usage, integrated loader and metadata checks, live-provider evidence and remaining Safari/publication gates.
 - [Online SID library picker](research/sid-library-picker.md): existing browser comparison, verified SIDquake file/metadata handoff, provider terms and remaining integration gates.
 - [Crafter handoff and shared knowledge](integration/crafter-handoff.md): ownership, source revision, normalized catalog integration, pin updates and transfer record.

@@ -177,6 +177,12 @@ Completion evidence: red/green receiver and integration guards cover valid selec
 
 Status: implemented locally following the user’s authorization on 2026-10-20. Deterministic integration and live-provider playback checks passed in Chrome and macOS WebKit. The [integration validation](validation/library-picker.md) records the complete Explorer flow separately from the original isolated provider check. Publication and real Safari/iPhone acceptance remain separate gates.
 
+## Headless SID analysis spike (`ANALYSIS-1`)
+
+On 2026-10-20 the user requested a proposal followed by a spike, preserving a headless analyser with UI layered on top. [The proposal](design/headless-sid-analysis.md) owns the bounded scope and review criteria; [the research](research/sid-analysis-capabilities.md) owns source evidence. The spike evaluates navigable changes, voice/chip summaries and PCM statistics using the existing session, a Node JSON runner and a thin report viewer. Production Explorer integration and broader musical inference are not yet accepted.
+
+Status: the [bounded spike is complete](validation/headless-sid-analysis-spike.md), with 23 passing guards, three real mono/stereo runs and a JSON-backed review UI. The headless/UI separation is established. Initial retrigger-heavy findings prompted one tested sustained-waveform refinement; selection remains heuristic. Human usefulness review and production integration are open. Recommend retaining the architecture and reviewing the results before adding an Explorer adapter.
+
 ## Excluded scope
 
 No composition editor, backend service, accounts, uploads, original emulator, automatic score recovery or musical-quality ranking. Crafter's study corpus and Git history stay there; the POC imports only the pinned metadata described above and retrieves cleared assets into ignored deployment output. ROMs and original reference binaries are excluded from committed/deployed assets. GitHub Pages hosting and the README-aligned catalog were explicitly authorized on 2026-10-19; other hosting services and expansion of Explorer’s own published catalog remain outside this task. The separate `LIBRARY-1` retrieves user-selected files through a provider’s existing picker without importing its collection into Explorer’s catalog.
