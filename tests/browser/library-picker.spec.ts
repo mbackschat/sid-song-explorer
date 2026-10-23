@@ -139,27 +139,28 @@ test('missing metadata falls back to the SID and local or sample loading clears 
   await expect(page.locator('#library-stil')).toBeEmpty();
 });
 
-test('another song from the retained library replaces the playing bytes and header metadata', async ({page}) => {
+test('three native pointer selections from the retained library replace playback', async ({page}) => {
   const provider = await installLibraryProvider(page);
   await loadPausedSample(page);
-  await openLibrary(page);
-  const retainedFrame = await page.locator('#library-frame').elementHandle();
-  await chooseFixtureWithPointer(page, 'missing-metadata');
-  await expectLibraryLoaded(page);
-  await expect(page.locator('#track-title')).toHaveText(clearedSidTitle);
-  await page.locator('#play-button').click();
-  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(.25);
-  await openLibrary(page);
-  expect(await retainedFrame!.evaluate(element => element === document.querySelector('#library-frame'))).toBe(true);
-  await chooseFixtureWithPointer(page, 'different');
-  await expectLibraryLoaded(page);
-  await expect(page.locator('#track-title')).toHaveText(differentSidTitle);
-  await expect(page.locator('#library-path')).toHaveText(differentLibraryPath);
-  expect(provider.requests()).toBe(1);
-  await expect(page.locator('#seek-slider')).toHaveValue('0');
-  await page.locator('#play-button').click();
-  await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(.25);
-  await expect(page.locator('#peak-label')).not.toHaveText('−∞ dBFS');
+  let retainedFrame;
+  for (const [choice, title, path] of [
+    ['missing-metadata', clearedSidTitle, libraryPath],
+    ['different', differentSidTitle, differentLibraryPath],
+    ['missing-metadata', clearedSidTitle, libraryPath],
+  ] as const) {
+    await openLibrary(page);
+    retainedFrame ??= await page.locator('#library-frame').elementHandle();
+    expect(await retainedFrame!.evaluate(element => element === document.querySelector('#library-frame'))).toBe(true);
+    await page.frameLocator('#library-frame').locator(`button[data-choice="${choice}"]`).click();
+    await expectLibraryLoaded(page);
+    await expect(page.locator('#track-title')).toHaveText(title);
+    await expect(page.locator('#library-path')).toHaveText(path);
+    expect(provider.requests()).toBe(1);
+    await expect(page.locator('#seek-slider')).toHaveValue('0');
+    await page.locator('#play-button').click();
+    await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number), {timeout: 10000}).toBeGreaterThan(5);
+    await expect(page.locator('#peak-label')).not.toHaveText('−∞ dBFS');
+  }
 });
 
 test('malformed, unrelated and superseded iframe messages cannot replace the current tune', async ({page}) => {

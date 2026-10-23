@@ -78,7 +78,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
           </section>
           <div class="inspection-sidebar"><aside class="panel inspector" aria-labelledby="inspector-title"><div class="panel-header"><h2 id="inspector-title" tabindex="-1">Sound inspector</h2><span id="inspection-time" class="inspection-time mono">0:00.00</span></div><div class="inspector-body"><p id="inspector-note" class="inspector-note">Following heard playback. Register settings are derived observations, not recovered instruments or measured envelope amplitude.</p><div class="voice-tabs" role="group" aria-label="Inspect voice">${VOICES.map(voice => `<button id="inspect-${voice}" class="small" aria-pressed="${voice === 0}"${voice >= 3 ? ' hidden' : ''}>Voice ${voice + 1}</button>`).join('')}</div>
             <dl class="register-grid"><div><dt>Frequency register</dt><dd id="reg-frequency">—</dd></div><div><dt>Derived oscillator Hz</dt><dd id="reg-hz">—</dd></div><div class="wide"><dt>Waveform selection</dt><dd id="reg-waveform">—</dd></div><div><dt>Gate / Test</dt><dd id="reg-gate">—</dd></div><div><dt>Pulse width · 12-bit</dt><dd id="reg-pulse">—</dd></div><div><dt>AD / SR settings</dt><dd id="reg-adsr">—</dd></div><div><dt>Ring / Sync</dt><dd id="reg-coupling">—</dd></div></dl>
-            <h3 id="filter-title" class="inspector-subhead">One filter · all three voices</h3><div id="filter-details" class="shared-filter">No observed register frame.</div><details class="inspector-writes"><summary>Ordered writes ≤ cursor</summary><ol id="write-list" class="write-list"><li class="write-empty">Load and play to collect writes.</li></ol></details></div></aside>
+            <details class="shared-filter"><summary id="filter-title">One filter · all three voices</summary><div id="filter-details"><dl class="filter-registers"><div><dt>Cutoff</dt><dd id="filter-cutoff">—</dd></div><div><dt>Resonance</dt><dd id="filter-resonance">—</dd></div><div><dt>Low-pass</dt><dd id="filter-low-pass">—</dd></div><div><dt>Band-pass</dt><dd id="filter-band-pass">—</dd></div><div><dt>High-pass</dt><dd id="filter-high-pass">—</dd></div><div><dt>Routed voices</dt><dd id="filter-routed">—</dd></div><div><dt>Master volume</dt><dd id="filter-volume">—</dd></div><div><dt>Voice 3 direct</dt><dd id="filter-direct">—</dd></div></dl><p id="filter-note">No observed register frame at the selected time.</p></div></details><details class="inspector-writes"><summary>Ordered writes ≤ cursor</summary><ol id="write-list" class="write-list"><li class="write-empty">Load and play to collect writes.</li></ol></details></div></aside>
           <section class="panel" aria-labelledby="output-title"><div class="panel-header"><h2 id="output-title">Audio output</h2><span id="output-profile-badge" class="badge" hidden></span></div><div class="audio-body">
             <div id="audio-channel-left" class="audio-channel audio-left" role="group"><span id="audio-channel-label-left" class="audio-channel-name mono" aria-label="Left channel" hidden>L</span><div class="meter-label peak-reading"><span id="peak-title">Peak · measured PCM</span><span id="peak-label" class="mono">−∞ dBFS</span></div><div class="meter-track"><span id="peak-meter" class="meter-level"></span></div><div class="meter-label rms-reading"><span id="rms-title">RMS</span><span id="rms-label" class="mono">−∞ dBFS</span></div><canvas id="waveform-plot" class="audio-plot" aria-label="Actual output waveform"></canvas><div class="plot-caption"><span>WAVEFORM</span><span id="waveform-source">Audio output</span></div></div>
             <div id="audio-channel-right" class="audio-channel audio-right" role="group" hidden><span class="audio-channel-name mono" aria-label="Right channel">R</span><div class="meter-label peak-reading"><span>Peak</span><span id="peak-label-right" class="mono">−∞ dBFS</span></div><div class="meter-track"><span id="peak-meter-right" class="meter-level"></span></div><div class="meter-label rms-reading"><span>RMS</span><span id="rms-label-right" class="mono">−∞ dBFS</span></div><canvas id="waveform-plot-right" class="audio-plot" aria-label="Actual right output waveform"></canvas></div>
@@ -352,7 +352,13 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     if (state?.status === 'playing') controls.pause();
     else { await controls.play(); notice = ''; }
   }); });
-  button('restart-button').addEventListener('click', () => { seekViewport = null; void run(async () => { reference.pause(); controls.setTimelineCenter(null); await controls.seek(0); notice = ''; }); });
+  button('restart-button').addEventListener('click', () => {
+    seekViewport = timelineView === 'scroll' ? {center:timelineSpan / 2, span:timelineSpan, heard:null, marker:null} : null;
+    held = null;
+    selectedEnd = null;
+    compositionPanel.follow();
+    void run(async () => { reference.pause(); controls.setTimelineCenter(null); await controls.seek(0); notice = ''; });
+  });
   reference.addEventListener('play', () => { controls.pause(); report('Retained reference playing. Its native transport is independent of live SID time.'); });
   reference.addEventListener('error', () => { if (reference.hasAttribute('src')) report('The retained reference could not be opened. Live SID playback remains available.', true); });
   input('seek-slider').addEventListener('input', () => { seekDragging = true; setText('heard-time', time(Number(input('seek-slider').value))); });
@@ -919,7 +925,10 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     setText('filter-title', chipCount() > 1 ? `SID ${chip + 1} filter · its three voices` : 'One filter · all three voices');
     el('filter-details').dataset.sidNumber = String(chip);
     const ids = ['reg-frequency', 'reg-hz', 'reg-waveform', 'reg-gate', 'reg-pulse', 'reg-adsr', 'reg-coupling'];
-    if (!registers) { for (const id of ids) setText(id, '—'); setText('filter-details', 'No observed register frame at the selected time.'); }
+    if (!registers) {
+      for (const id of [...ids, 'filter-cutoff', 'filter-resonance', 'filter-low-pass', 'filter-band-pass', 'filter-high-pass', 'filter-routed', 'filter-volume', 'filter-direct']) setText(id, '—');
+      setText('filter-note', 'No observed register frame at the selected time.');
+    }
     else {
       const r = registers;
       const base = chipBase + selectedVoice % 3 * 7;
@@ -936,9 +945,14 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       setText('reg-coupling', `${control & 4 ? 'On' : 'Off'} / ${control & 2 ? 'On' : 'Off'}`);
       const route = r[chipBase + 23] ?? 0;
       const modeVolume = r[chipBase + 24] ?? 0;
-      const modes = ['Low-pass', 'Band-pass', 'High-pass'].filter((_, index) => modeVolume & (16 << index));
       const voices = [0, 1, 2].filter(voice => route & (1 << voice)).map(voice => `V${voice + 1}`);
-      setText('filter-details', `Cutoff ${((r[chipBase + 22] ?? 0) << 3) | ((r[chipBase + 21] ?? 0) & 7)} / 2047 · resonance ${route >> 4} / 15. ${modes.join(' + ') || 'No filter mode'}. Routed: ${voices.join(', ') || 'none'}. Master volume ${modeVolume & 15} / 15${modeVolume & 128 ? ' · V3 direct off' : ''}. Settings, not a measured frequency response.`);
+      setText('filter-cutoff', `${((r[chipBase + 22] ?? 0) << 3) | ((r[chipBase + 21] ?? 0) & 7)} / 2047`);
+      setText('filter-resonance', `${route >> 4} / 15`);
+      for (const [index, mode] of ['low-pass', 'band-pass', 'high-pass'].entries()) setText(`filter-${mode}`, modeVolume & (16 << index) ? 'On' : 'Off');
+      setText('filter-routed', voices.join(', ') || 'None');
+      setText('filter-volume', `${modeVolume & 15} / 15`);
+      setText('filter-direct', modeVolume & 128 ? 'Off' : 'On');
+      setText('filter-note', 'Settings, not a measured frequency response.');
     }
     const ordered: WriteObservation[] = [];
     for (let index = writes.length - 1; registers && index >= 0 && ordered.length < 7; index--) {

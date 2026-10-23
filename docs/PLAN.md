@@ -39,7 +39,7 @@ Implemented: zoom changes time density by a factor of two across seven levels. A
 
 ## Unified timeline and transport (`TIMELINE-3`)
 
-Implemented with the playhead handoff accepted on 2026-10-20. The shared panel combines playback/zoom controls, lane mute/solo and a proportional scrollbar. Browsing updates continuously without seeking. Normal timeline clicks seek; Shift-click inspects; Hold freezes inspection without pausing audio; Follow centers current playback and releases browsing/inspection. The [interaction principle and detailed design](design/web-player-and-analyser.md#interaction-principle) own the agreed behavior, including the clicked-note return to center at song speed.
+Implemented with the playhead handoff accepted on 2026-10-20. The shared panel combines playback/zoom controls, lane mute/solo and a proportional scrollbar. Restart releases held inspection and starts Scroll at zero, then resumes centered following as playback reaches the middle; [restart validation](validation/mono-poc.md#restart-viewport) owns the guard. Browsing updates continuously without seeking. Normal timeline clicks seek; Shift-click inspects; Hold freezes inspection without pausing audio; Follow centers current playback and releases browsing/inspection. The [interaction principle and detailed design](design/web-player-and-analyser.md#interaction-principle) own the agreed behavior, including the clicked-note return to center at song speed.
 
 Selected A/B bounds are visible independently of playback repetition, using a violet ruler bracket, draggable handles and dashed lane boundaries without additional background shading. Clear removes the selection without collapsing allocated ruler space. Hear phrase uses fresh destination observations, expands loop controls and shows Loop on beside transport time. The chart remains a linear song view beyond B while playback repeats at B. [Loop validation](validation/mono-poc.md#loop-bracket-and-handles) and [phrase listening](validation/composition-exploration.md#phrase-listening-and-live-observations) own the guards and acceptance scope.
 
@@ -79,7 +79,7 @@ The user accepted the view and the corrected late-switch/held-shading behavior. 
 
 Implemented: raw chip routing, frame-correct interleaved transport/cache storage, six chip-owned voice controls, independent filter histories and Rambo/Bach stereo entries. Both chip models are covered by mono-equality, channel-separation and seek-continuation oracles. Dense observation pagination preserves chart coverage. The compact output panel provides L/R meters and waveforms plus a shared colour-labelled spectrum; mono retains its single-channel presentation.
 
-The user accepted Safari/iPhone stereo on 2026-10-20; exact device/browser versions were not supplied. [Stereo validation](validation/stereo.md) owns the scope, independent oracles and remaining limitations. Audio output sits directly below the compact Sound inspector, with ordered writes expandable. Broader workspace reordering remains deferred.
+The user accepted Safari/iPhone stereo on 2026-10-20; exact device/browser versions were not supplied. [Stereo validation](validation/stereo.md) owns the scope, independent oracles and remaining limitations. Audio output sits directly below the compact Sound inspector, with shared-filter settings collapsed by default and ordered writes expandable. Expanded filter settings use stable labelled rows to avoid moving subsequent content as values change. Broader workspace reordering remains deferred.
 
 ## Catalog integration and deferred breadth
 

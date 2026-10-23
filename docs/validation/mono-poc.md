@@ -44,6 +44,8 @@ Starting an empty audio queue prepares the existing 250 ms scheduling reserve in
 
 Live history retains at most 6,000 register snapshots and 200,000 ordered writes. Snapshots are sampled from observed writes at roughly 20 ms intervals; the inspector applies retained writes through its cursor. Held inspection copies its data and survives live seeks/mix changes, while tune/profile reload resets it. Evidence cards retain exact annotation ranges with at least four seconds of separately labelled listening context when duration permits. Missing coverage, old epochs and dropped records are explicit. Displayed addresses use each chip's declared SID base; raw cycles/offsets remain available through the adapter. Registers describe programmed settings, not measured envelope amplitudes or recovered instrument identities. [Trace calibration](../architecture/playback-adapter.md#pcm-trace-timing-and-coverage) remains approximate relative to audible sound.
 
+Shared-filter settings start collapsed in a native disclosure. Expanded settings use separate labelled rows, including each filter mode, so changing register values preserve the position of ordered writes and Audio output. The [filter-layout guard](../../tests/browser/filter-layout.spec.ts) exercises minimum/maximum settings through real-engine seeks at desktop, intermediate and narrow widths; this establishes layout behavior, not a new Safari listening verdict.
+
 The supported callable PSID/profile subset is defined by [the adapter](../architecture/playback-adapter.md); RSID, ROM-dependent formats, accounts, uploads and composition editing remain excluded.
 
 ## Interaction feedback
@@ -133,6 +135,10 @@ The proportional scrollbar browses observations without seeking or rendering aud
 ### Seek transition stability
 
 Pending seeks must preserve chart, scrollbar and button geometry, clicked range and accepted same-configuration observations. A held-worker browser oracle checks before/during/after geometry at desktop and 390-pixel widths, including release of a held view. Conditional status content formerly moved the chart 29/38 CSS pixels; fixed allocation and below-chart feedback remove that mechanism. Load, mix, failure and disposal still invalidate observations.
+
+### Restart viewport
+
+Restart from beginning releases held inspection and shows a Scroll viewport starting at zero throughout the pending seek and after completion. Playback advances from the left edge to center before normal centered following resumes. Fit keeps its range, and explicit Follow still centers immediately. [The rewind guards](../../tests/browser/rewind.spec.ts) hold the real seek request for pending assertions, then verify completion and sample viewport/heard-time relationships atomically through the center handoff.
 
 ### Clicked-note marker clarification
 
