@@ -1,11 +1,15 @@
-export interface LibrarySelection {
-  bytes: Uint8Array;
+export interface LibraryMetadata {
+  provider: 'SIDquake' | 'HVSC';
   name: string;
   path: string;
   title: string;
   author: string;
   released: string;
   stil: string;
+}
+
+export interface LibrarySelection extends LibraryMetadata {
+  bytes: Uint8Array;
 }
 
 const PROVIDER_ORIGIN = 'https://sidquake.c64demo.com';
@@ -30,7 +34,7 @@ function parseSelection(data: Record<string, unknown>): LibrarySelection | null 
   const released = optionalText(data.released, 1024);
   const stil = optionalText(data.stil, 65_536);
   if (title === null || author === null || released === null || stil === null) return null;
-  return {bytes: contents, name, path, title, author, released, stil};
+  return {provider: 'SIDquake', bytes: contents, name, path, title, author, released, stil};
 }
 
 export function mountLibraryPicker(container: HTMLElement, trigger: HTMLButtonElement, onSelect: (selection: LibrarySelection) => void): {close(): void; dispose(): void} {

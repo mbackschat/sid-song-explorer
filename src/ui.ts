@@ -3,7 +3,8 @@ import type { PlayerControls, PlayerState, Profile, RegisterFrame, WriteObservat
 import { FOLLOW_WINDOW_SECONDS, followingWindow, fittedWindow, visibleTimelineFrames, observationRegistersAt, composeTimelineObservations } from './timeline.ts';
 import type { DisplayedObservation } from './timeline.ts';
 import {timelineScrollbarGeometry, timelineViewportStart} from './timeline-scrollbar.ts';
-import {mountLibraryPicker, type LibrarySelection} from './library-picker.ts';
+import {mountLibraryPicker, type LibraryMetadata} from './library-picker.ts';
+import {SID_HIGHLIGHTS, fetchHighlight} from './sid-highlights.ts';
 import {SongLengthLookup} from './song-lengths.ts';
 import {matchingCompositionPackage} from './composition-package.ts';
 import type {PlaybackCompositionPackage} from './composition-time.ts';
@@ -56,11 +57,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
         <section><div class="eyebrow">Your listening desk</div><div class="library-mark"><span class="sid-icon mono">SID</span><div><strong>Published samples</strong><small>Source-backed listening</small></div></div>
           <label for="sample-select">Sample library</label><select id="sample-select" class="library-select"></select><button id="use-sample-button" class="small quiet library-load">Load selected sample →</button><p id="library-summary" class="library-summary"></p><details id="local-build-materials" class="local-materials"><summary>Local-build arrangements</summary><p>No audio download: build these locally using Crafter’s materials.</p><ul></ul></details>
         </section>
-        <section class="local-section"><h2>Open music</h2><div id="local-drop-target" class="local-drop-target"><input id="local-file" type="file" accept=".sid,audio/prs.sid" hidden /><button id="open-local-file" class="file-button" type="button" aria-describedby="local-drop-hint">Open SID file</button><p id="local-drop-hint">or drop a SID file here</p></div><button id="browse-library" class="library-browse">Browse SID library</button><p class="privacy-note">Local files stay on your device. No uploads, file-hash requests or metadata lookups. Mono or dual-SID PSID · max 65,662 bytes.</p></section>
+        <section class="local-section"><h2>Open music</h2><div id="local-drop-target" class="local-drop-target"><input id="local-file" type="file" accept=".sid,audio/prs.sid" hidden /><button id="open-local-file" class="file-button" type="button" aria-describedby="local-drop-hint">Open SID file</button><p id="local-drop-hint">or drop a SID file here</p></div><button id="browse-library" class="library-browse">Browse SID library</button><div class="sid-highlights"><label for="sid-highlights">SID highlights</label><select id="sid-highlights" class="library-select" aria-describedby="highlights-note"><option value="">Choose a highlight…</option></select><p id="highlights-note">Loads from <a href="https://www.hvsc.c64.org/" target="_blank" rel="noreferrer">HVSC</a>. Picks from <a href="https://chiptune.app/" target="_blank" rel="noreferrer">Chip Player JS</a> · press Play to listen.</p></div><p class="privacy-note">Local files stay on your device. No uploads, file-hash requests or metadata lookups. Mono or dual-SID PSID · max 65,662 bytes.</p></section>
         <div class="sidebar-footer"><span class="eyebrow">Made to explore</span><p>Three voices per chip.<br />One shared filter per chip.</p><p style="margin-top:12px"><a href="https://github.com/mbackschat/sid-song-explorer" target="_blank" rel="noreferrer">Project & source ↗</a></p></div>
       </aside>
       <main class="workspace">
-        <section aria-labelledby="track-title"><div class="track-heading"><div><div class="eyebrow" id="source-kind" hidden></div><h1 id="track-title">Choose a SID to explore</h1><p id="track-description" class="track-description">Listen to a phrase, hold a moment, and see what the SID voices are doing.</p><details id="library-info" class="library-info" hidden><summary>Library information</summary><p>Provided by SIDquake / HVSC</p><dl><div><dt>Collection path</dt><dd id="library-path"></dd></div></dl><pre id="library-stil"></pre></details><div class="track-profile"><span id="profile-badge" class="badge" hidden></span><span id="chip-profile-badge" class="badge" hidden></span><span id="routing-badge" class="badge" hidden>Player routing · SID 1 left / SID 2 right</span><span id="analysis-badge" class="badge">Generic inspection</span></div></div><span id="play-status" class="badge">Ready to load</span></div></section>
+        <section aria-labelledby="track-title"><div class="track-heading"><div><div class="eyebrow" id="source-kind" hidden></div><h1 id="track-title">Choose a SID to explore</h1><p id="track-description" class="track-description">Listen to a phrase, hold a moment, and see what the SID voices are doing.</p><details id="library-info" class="library-info" hidden><summary>Library information</summary><p id="library-provider"></p><dl><div><dt>Collection path</dt><dd id="library-path"></dd></div></dl><pre id="library-stil"></pre></details><div class="track-profile"><span id="profile-badge" class="badge" hidden></span><span id="chip-profile-badge" class="badge" hidden></span><span id="routing-badge" class="badge" hidden>Player routing · SID 1 left / SID 2 right</span><span id="analysis-badge" class="badge">Generic inspection</span></div></div><span id="play-status" class="badge">Ready to load</span></div></section>
         <div class="inspection-grid">
           <section id="timeline-panel" class="panel unified-panel" aria-labelledby="timeline-title">
             <div class="unified-toolbar"><div class="transport-buttons"><button id="play-button" class="primary" disabled>▶ Play</button><button id="restart-button" class="small quiet" disabled aria-label="Restart from beginning" title="Restart from beginning">↺</button><div class="time-display"><span id="heard-time">0:00</span> <small id="duration-label">/ —</small></div><span id="loop-indicator" class="badge loop-indicator" role="status" hidden>Loop on</span></div>
@@ -110,8 +111,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let openedBytes: Uint8Array | null = null;
   let sourceMode: 'catalog' | 'local' | 'library' = 'catalog';
   let openedName = '';
-  let libraryChoice: LibrarySelection | null = null;
-  let loadedLibrary: LibrarySelection | null = null;
+  let libraryChoice: LibraryMetadata | null = null;
+  let loadedLibrary: LibraryMetadata | null = null;
   let loadedProfile: Profile | null = null;
   let state: PlayerState | null = null;
   let held: HeldHistory | null = null;
@@ -201,7 +202,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     input('loop-end').value = markers?.end == null ? '' : String(markers.end);
   };
   const resetInspection = () => { setSelectedLoopMarkers(null); fittedEnd = null; seekViewport = null; held = null; cursor = 0; selectedEnd = null; timelineLimit = 30; evidenceKey = ''; sourceKey = ''; };
-  const loadBytes = async (bytes: Uint8Array, entry: Entry | null, library: LibrarySelection | null = null) => {
+  const loadBytes = async (bytes: Uint8Array, entry: Entry | null, library: LibraryMetadata | null = null) => {
     reference.pause();
     const profile = currentProfile();
     loadedEntry = null;
@@ -227,9 +228,10 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     const released = library?.released || state?.info?.released;
     setText('track-title', entry?.title ?? (library?.title || state?.info?.title || openedName));
     setText('track-description', entry?.description ?? `${author}${released ? ` · ${released}` : ''}. Generic inspection from locally observed SID registers.`);
-    setText('source-kind', entry ? 'From the sample library' : library ? 'SIDquake · HVSC' : `Local file · ${openedName}`);
+    setText('source-kind', entry ? 'From the sample library' : library ? (library.provider === 'SIDquake' ? 'SIDquake · HVSC' : 'HVSC · SID highlight') : `Local file · ${openedName}`);
     el('library-info').hidden = library === null;
     el<HTMLDetailsElement>('library-info').open = false;
+    setText('library-provider', library ? `Provided by ${library.provider === 'SIDquake' ? 'SIDquake / HVSC' : 'HVSC'}` : '');
     setText('library-path', library?.path ?? '');
     setText('library-stil', library?.stil ?? '');
     el('library-stil').hidden = !library?.stil;
@@ -265,7 +267,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       draw();
     }
   };
-  const openSid = async (name: string, readBytes: () => Promise<Uint8Array>, library: LibrarySelection | null = null) => {
+  const openSid = async (name: string, readBytes: () => Promise<Uint8Array>, library: LibraryMetadata | null = null) => {
     if (busy) return;
     busy = true;
     draw();
@@ -296,7 +298,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       openedBytes = bytes;
       openedName = name;
       libraryChoice = library;
-      report(library ? 'Opening SID from SIDquake…' : 'Opening local SID on this device…');
+      report(library ? `Opening SID from ${library.provider}…` : 'Opening local SID on this device…');
       await loadBytes(bytes, null, library);
     } finally {
       busy = false;
@@ -313,6 +315,28 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     void run(() => openSid(selection.name, async () => selection.bytes, selection));
   });
   window.addEventListener('pagehide', () => libraryPicker.close());
+  const highlightSelect = select('sid-highlights');
+  for (const chips of [1, 2] as const) {
+    const group = document.createElement('optgroup');
+    group.label = chips === 1 ? 'Mono · one SID' : 'Stereo · two SIDs';
+    for (const highlight of SID_HIGHLIGHTS.filter(entry => entry.chips === chips)) {
+      const option = document.createElement('option');
+      option.value = highlight.id;
+      option.textContent = `${highlight.title} — ${highlight.author} · ${chips === 2 ? '2 × ' : ''}${highlight.model.slice(3)}`;
+      group.append(option);
+    }
+    highlightSelect.append(group);
+  }
+  highlightSelect.addEventListener('change', () => {
+    const highlight = SID_HIGHLIGHTS.find(entry => entry.id === highlightSelect.value);
+    highlightSelect.value = '';
+    if (!highlight || busy) return;
+    report(`Fetching ${highlight.title} from HVSC…`);
+    void run(() => openSid(highlight.path.split('/').pop()!, () => fetchHighlight(highlight), {
+      provider: 'HVSC', name: highlight.path.split('/').pop()!, path: highlight.path,
+      title: highlight.title, author: highlight.author, released: '', stil: '',
+    }));
+  });
 
   sampleSelect.addEventListener('change', () => {
     chosenEntry = catalog.entries.find(entry => entry.id === sampleSelect.value) ?? null;
@@ -765,7 +789,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       links.append(attribution);
       links.title = loadedEntry.rights.attribution;
     } else {
-      if (loadedLibrary) links.append(link('SIDquake ↗', 'https://sidquake.c64demo.com/'), link('HVSC ↗', 'https://hvsc.c64.org/'));
+      if (loadedLibrary) {
+        if (loadedLibrary.provider === 'SIDquake') links.append(link('SIDquake ↗', 'https://sidquake.c64demo.com/'));
+        else links.append(link('Discovered in Chip Player JS ↗', 'https://chiptune.app/'));
+        links.append(link('HVSC ↗', 'https://hvsc.c64.org/'));
+      }
       links.append(link('Explorer · GPL-3.0-or-later ↗', 'https://github.com/mbackschat/sid-song-explorer/blob/main/LICENSE'));
     }
   };
@@ -1033,7 +1061,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     button('use-sample-button').disabled = changing || !chosenEntry;
     button('browse-library').disabled = changing;
     button('open-local-file').disabled = changing;
-    for (const id of ['clock-select', 'model-select', 'subtune-select', 'sample-select']) select(id).disabled = changing;
+    for (const id of ['clock-select', 'model-select', 'subtune-select', 'sample-select', 'sid-highlights']) select(id).disabled = changing;
     input('local-file').disabled = changing;
     setText('play-button', seeking ? preparationLabel : state?.status === 'playing' ? 'Ⅱ Pause' : '▶ Play');
     const labels: Record<string, string> = { empty: 'Ready to load', loading: 'Loading…', ready: 'Ready', playing: 'Live SID', paused: 'Paused', seeking: 'Seeking…', ended: 'Ended', error: 'Playback error' };

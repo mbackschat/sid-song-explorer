@@ -123,6 +123,8 @@ Completion evidence: red/green receiver and integration guards cover valid selec
 
 Status: implemented. The [integration validation](validation/library-picker.md) owns deterministic and live-provider Chrome/macOS WebKit evidence. Actual Safari/iPhone review remains open; release checks are separate.
 
+**SID highlights** adds a fixed, metadata-only shortlist below the library launcher: ten curated Chip Player JS discoveries, including four genuine dual-SID tunes and both chip models. Selection downloads one tune directly from official HVSC into tab memory and loads it; Play remains explicit. This is not a popularity chart or an expansion of the cleared sample catalog. The [highlights contract](validation/library-picker.md#sid-highlights) owns delivery, failure handling and validation.
+
 Source controls distinguish the pending sample from the loaded tune. **Open SID file** and its visible drop target share the device-local intake path. [Source-control validation](validation/library-picker.md#source-controls-and-repeated-selection) covers initial state, repeated library selection and local file replacement.
 
 ## Headless SID analysis spike (`ANALYSIS-1`)

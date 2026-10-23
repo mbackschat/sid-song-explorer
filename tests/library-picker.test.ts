@@ -141,6 +141,7 @@ test('a valid file handoff hides the retained frame before returning bytes and i
   fixture.send(message);
   assert.equal(fixture.selected.length, 1);
   assert.deepEqual(fixture.selected[0], {
+    provider: 'SIDquake',
     bytes: new Uint8Array(message.bytes), name: message.name, path: message.path,
     title: message.title, author: message.author, released: message.released, stil: message.stil,
   });

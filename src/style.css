@@ -65,6 +65,9 @@ h3 { font-size: 14px; font-weight: 650; }
 .local-drop-target p { margin-top: 8px; text-align: center; font-size: 11px; color: var(--muted); }
 .local-drop-target.drop-active { border-color: var(--cyan); background: #193337; }
 .library-browse { width: 100%; margin-top: 8px; }
+.sid-highlights { margin-top: 16px; }
+.sid-highlights .library-select { min-width: 0; max-width: 100%; margin: 7px 0; }
+.sid-highlights p { font-size: 10px; color: var(--muted); line-height: 1.6; }
 .library-info { margin-top: 10px; color: #b0bad3; font-size: 12px; }
 .library-info summary { cursor: pointer; color: #c2b2e1; padding: 5px 0; }
 .library-info dl { margin: 8px 0; }
