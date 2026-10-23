@@ -3,6 +3,7 @@ import type { CacheCoverage, EngineEvent, EngineReply } from './engine/protocol.
 import { collectObservationWindow } from './engine/observation-window.ts';
 import type { PlayerControls, PlayerState, Profile, TimelineObservation, TimelineOverview, TuneDetails, WriteObservation } from './player-types.ts';
 import { positionAt, trimHistory, validateLoop, composeTimelineOverviews, type AudioSegment } from './timeline.ts';
+import {sampleTimelineRegisters, timelineSampleTimes} from './timeline-sampling.ts';
 
 const TIMELINE_PREVIEW_MARGIN_SECONDS = 1;
 const TIMELINE_BROWSE_MARGIN_SECONDS = 5;
@@ -459,14 +460,14 @@ export class ExplorerPlayer implements PlayerControls {
   private record(block: RenderBlock) {
     this.state.dropped += block.dropped;
     this.state.writes.push(...block.writes);
+    const times = timelineSampleTimes(block.startFrame / 44100,block.endFrame / 44100);
+    const frames = sampleTimelineRegisters(this.registers,block.writes,times);
+    if (frames[0]?.time === this.state.frames.at(-1)?.time) this.state.frames.pop();
+    this.state.frames.push(...frames);
     for (const write of block.writes) {
       const base = this.state.info!.sidChipBases[write.sidNumber];
       const register = write.address >= 0xd400 ? write.address - base : write.address;
       if (base !== undefined && register >= 0 && register < 32) this.registers[write.sidNumber * 32 + register] = write.value;
-      const last = this.state.frames.at(-1);
-      if (!last || write.timeSeconds - last.time >= 0.02) {
-        this.state.frames.push({time: write.timeSeconds, registers: this.registers.slice()});
-      }
     }
     trimHistory(this.state.frames, 6000);
     const removed = trimHistory(this.state.writes, 200_000);

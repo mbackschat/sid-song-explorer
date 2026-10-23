@@ -1,6 +1,7 @@
 import { SAMPLE_RATE, SidSession } from './session.ts';
 import type { LoadResult, MuteMask, PlaybackOptions, PositionResult, RenderResult, SessionOptions, SidWrite } from './session.ts';
 import type { TimelineObservation, TimelineOverview } from '../player-types.ts';
+import {sampleTimelineRegisters, timelineObservationTimes} from '../timeline-sampling.ts';
 
 const DEFAULT_CACHE_BYTES = 32 * 1024 * 1024;
 const REGISTER_BYTES = 32;
@@ -71,6 +72,10 @@ function unpackWrite(packed: Float64Array, offset: number): SidWrite {
     timeSeconds: packed[offset], cyclePhi1: packed[offset + 1], address: packed[offset + 2],
     value: packed[offset + 3], sidNumber: packed[offset + 4],
   };
+}
+
+function* unpackWrites(packed: Float64Array): Generator<SidWrite> {
+  for (let offset = 0; offset < packed.length; offset += WRITE_FIELDS) yield unpackWrite(packed,offset);
 }
 
 /** A bounded PCM/write history over one SidSession producer; callers serialize all operations. */
@@ -314,12 +319,12 @@ export class CachedSidSession {
     }
     if (start >= end) return null;
     while (writes.length && writes.at(-1)!.timeSeconds >= end) writes.pop();
-    return {...this.sampleOverview(start, end), writes, ...(continuationStart === undefined ? {} : {continuationStart})};
+    return {...this.sampleOverview(start, end, timelineObservationTimes(start,end)), writes, ...(continuationStart === undefined ? {} : {continuationStart})};
   }
 
-  private sampleOverview(start: number, end: number): TimelineOverview {
+  private sampleOverview(start: number, end: number, requestedTimes?: number[]): TimelineOverview {
     const intervals = Math.min(MAX_OBSERVATION_INTERVALS, Math.ceil((end - start) / OBSERVATION_FRAME_SECONDS));
-    const sampleTimes = Array.from({length: intervals + 1}, (_, index) =>
+    const sampleTimes = requestedTimes ?? Array.from({length: intervals + 1}, (_, index) =>
       index === intervals ? end : start + (end - start) * index / intervals);
     const frames: TimelineOverview['frames'] = [];
     let sample = 0;
@@ -328,16 +333,11 @@ export class CachedSidSession {
       if (block.endFrame / SAMPLE_RATE <= start) continue;
       if (block.startFrame / SAMPLE_RATE >= end) break;
       dropped += block.dropped;
-      const registers = Array.from(block.registers);
-      let offset = 0;
+      const times: number[] = [];
       while (sample < sampleTimes.length && sampleTimes[sample] < block.endFrame / SAMPLE_RATE) {
-        const time = sampleTimes[sample++];
-        while (offset < block.writes.length && block.writes[offset] < time) {
-          registers[block.writes[offset + 4] * REGISTER_BYTES + block.writes[offset + 2]] = block.writes[offset + 3];
-          offset += WRITE_FIELDS;
-        }
-        frames.push({time, registers: registers.slice()});
+        times.push(sampleTimes[sample++]);
       }
+      frames.push(...sampleTimelineRegisters(Array.from(block.registers),unpackWrites(block.writes),times));
     }
     if (sample < sampleTimes.length) {
       // The sample sweep leaves only exact block boundaries; rounding preserves their original PCM frame after the seconds conversion.

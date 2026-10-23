@@ -173,7 +173,7 @@ test('centered timeline shows actual upcoming activity and holds future inspecti
   const lane = page.locator('#voice-lane-0');
   const box = (await lane.boundingBox())!;
   await lane.click({position:{x:box.width * .75, y:20}, modifiers:['Shift']});
-  await expect(page.locator('#inspector-note')).toContainText('Prepared ahead of playback when held');
+  await expect(page.locator('#inspector-tip-text')).toContainText('Prepared ahead of playback when held');
   await expect(page.locator('#reg-frequency')).not.toHaveText('—');
   const captured = await page.locator('#write-list').textContent();
   const selection = await page.locator('#inspection-time').textContent();
@@ -189,7 +189,7 @@ test('centered timeline shows actual upcoming activity and holds future inspecti
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(minutes * 60 + seconds + .1);
   await expect(page.locator('#inspection-time')).toHaveText(selection!);
   await expect(page.locator('#write-list')).toHaveText(captured!);
-  await expect(page.locator('#inspector-note')).toContainText('Prepared ahead of playback when held');
+  await expect(page.locator('#inspector-tip-text')).toContainText('Prepared ahead of playback when held');
   await page.locator('#play-button').click();
   await page.locator('#seek-slider').fill('60');
   await expect(page.locator('#play-button')).toBeEnabled();
@@ -249,7 +249,7 @@ test('centered timeline shades unavailable startup and ending, shows song materi
   await expect.poll(async () => (await chart(page)).end).toBeCloseTo(31 + halfSpan, 1);
   await expect.poll(async () => { const view = await chart(page); return view.observedUntil - view.end; }).toBeGreaterThanOrEqual(-.01);
   await expect(page.locator('#timeline-availability')).toContainText('Loop returns to 0:30.00 at 0:32.00');
-  await expect(page.locator('#timeline-later')).toHaveText('Song continuation · loop active');
+  await expect(page.locator('#loop-indicator')).toBeVisible();
   await lane.focus();
   await lane.press('Shift+ArrowRight');
   await expect(page.locator('#reg-frequency')).not.toHaveText('—');

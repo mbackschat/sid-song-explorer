@@ -2,8 +2,12 @@ import type { Catalog } from './catalog.ts';
 import type { PlayerControls, PlayerState, Profile, RegisterFrame, WriteObservation, TimelineObservation, TimelineOverview } from './player-types.ts';
 import { FOLLOW_WINDOW_SECONDS, followingWindow, fittedWindow, visibleTimelineFrames, observationRegistersAt, composeTimelineObservations } from './timeline.ts';
 import type { DisplayedObservation } from './timeline.ts';
+import {createVoiceMix, updateVoiceMix, voiceIsSolo, voiceMixMask, type VoiceMixAction} from './voice-mix.ts';
+import {timelinePlotFrames} from './timeline-sampling.ts';
 import {timelineScrollbarGeometry, timelineViewportStart} from './timeline-scrollbar.ts';
 import {mountLibraryPicker, type LibraryMetadata} from './library-picker.ts';
+import {RecentSongs} from './recent-songs.ts';
+import {fetchHvscSong} from './hvsc-download.ts';
 import {SID_HIGHLIGHTS, fetchHighlight} from './sid-highlights.ts';
 import {SongLengthLookup} from './song-lengths.ts';
 import {matchingCompositionPackage} from './composition-package.ts';
@@ -57,28 +61,30 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
         <section><div class="eyebrow">Your listening desk</div><div class="library-mark"><span class="sid-icon mono">SID</span><div><strong>Published samples</strong><small>Source-backed listening</small></div></div>
           <label for="sample-select">Sample library</label><select id="sample-select" class="library-select"></select><button id="use-sample-button" class="small quiet library-load">Load selected sample →</button><p id="library-summary" class="library-summary"></p><details id="local-build-materials" class="local-materials"><summary>Local-build arrangements</summary><p>No audio download: build these locally using Crafter’s materials.</p><ul></ul></details>
         </section>
-        <section class="local-section"><h2>Open music</h2><div id="local-drop-target" class="local-drop-target"><input id="local-file" type="file" accept=".sid,audio/prs.sid" hidden /><button id="open-local-file" class="file-button" type="button" aria-describedby="local-drop-hint">Open SID file</button><p id="local-drop-hint">or drop a SID file here</p></div><button id="browse-library" class="library-browse">Browse SID library</button><div class="sid-highlights"><label for="sid-highlights">SID highlights</label><select id="sid-highlights" class="library-select" aria-describedby="highlights-note"><option value="">Choose a highlight…</option></select><p id="highlights-note">Loads from <a href="https://www.hvsc.c64.org/" target="_blank" rel="noreferrer">HVSC</a>. Picks from <a href="https://chiptune.app/" target="_blank" rel="noreferrer">Chip Player JS</a> · press Play to listen.</p></div><p class="privacy-note">Local files stay on your device. No uploads, file-hash requests or metadata lookups. Mono or dual-SID PSID · max 65,662 bytes.</p></section>
+        <section class="local-section"><h2>Open music</h2><div id="local-drop-target" class="local-drop-target"><input id="local-file" type="file" accept=".sid,audio/prs.sid" hidden /><button id="open-local-file" class="file-button" type="button" aria-describedby="local-drop-hint">Open SID file</button><p id="local-drop-hint">or drop a SID file here</p></div><button id="browse-library" class="library-browse">Browse SID library</button><div id="recent-songs-section" class="recent-songs" hidden><div class="recent-songs-heading"><label for="recent-songs">Recently played</label><button id="clear-recent-songs" class="small quiet">Clear history</button></div><select id="recent-songs" class="library-select"><option value="">Choose a recent song…</option></select></div><div class="sid-highlights"><label for="sid-highlights">SID highlights</label><select id="sid-highlights" class="library-select" aria-describedby="highlights-note"><option value="">Choose a highlight…</option></select><p id="highlights-note">Loads from <a href="https://www.hvsc.c64.org/" target="_blank" rel="noreferrer">HVSC</a>. <a href="https://www.transbyte.org/SID/HVSC_Top100.html" target="_blank" rel="noreferrer">Chart picks</a> &amp; <a href="https://csdb.dk/" target="_blank" rel="noreferrer">scene favourites</a> · default-subtune durations. Press Play to listen.</p></div><p class="privacy-note">Local files stay on your device. No uploads, file-hash requests or metadata lookups. Mono or dual-SID PSID · max 65,662 bytes.</p></section>
         <div class="sidebar-footer"><span class="eyebrow">Made to explore</span><p>Three voices per chip.<br />One shared filter per chip.</p><p style="margin-top:12px"><a href="https://github.com/mbackschat/sid-song-explorer" target="_blank" rel="noreferrer">Project & source ↗</a></p></div>
       </aside>
       <main class="workspace">
-        <section aria-labelledby="track-title"><div class="track-heading"><div><div class="eyebrow" id="source-kind" hidden></div><h1 id="track-title">Choose a SID to explore</h1><p id="track-description" class="track-description">Listen to a phrase, hold a moment, and see what the SID voices are doing.</p><details id="library-info" class="library-info" hidden><summary>Library information</summary><p id="library-provider"></p><dl><div><dt>Collection path</dt><dd id="library-path"></dd></div></dl><pre id="library-stil"></pre></details><div class="track-profile"><span id="profile-badge" class="badge" hidden></span><span id="chip-profile-badge" class="badge" hidden></span><span id="routing-badge" class="badge" hidden>Player routing · SID 1 left / SID 2 right</span><span id="analysis-badge" class="badge">Generic inspection</span></div></div><span id="play-status" class="badge">Ready to load</span></div></section>
+        <section aria-labelledby="track-title"><div class="track-heading"><div><div class="eyebrow" id="source-kind" hidden></div><h1 id="track-title">Choose a SID to explore</h1><div class="track-description-row"><p id="track-description" class="track-description">Listen to a phrase, hold a moment, and see what the SID voices are doing.</p><button id="library-info-button" class="small quiet" popovertarget="library-info" hidden>Library info</button></div><div id="library-info" class="library-info" popover aria-labelledby="library-info-title"><div class="library-info-heading"><h2 id="library-info-title">Library information</h2><button class="small quiet" popovertarget="library-info" popovertargetaction="hide" aria-label="Close library information">×</button></div><p id="library-provider"></p><dl><div><dt>Collection path</dt><dd id="library-path"></dd></div></dl><pre id="library-stil"></pre></div><div class="track-profile"><span id="profile-badge" class="badge" hidden></span><span id="chip-profile-badge" class="badge" hidden></span><span id="routing-badge" class="badge" hidden>Player routing · SID 1 left / SID 2 right</span><span id="analysis-badge" class="badge">Generic inspection</span></div></div><span id="play-status" class="badge">Ready to load</span></div></section>
         <div class="inspection-grid">
           <section id="timeline-panel" class="panel unified-panel" aria-labelledby="timeline-title">
             <div class="unified-toolbar"><div class="transport-buttons"><button id="play-button" class="primary" disabled>▶ Play</button><button id="restart-button" class="small quiet" disabled aria-label="Restart from beginning" title="Restart from beginning">↺</button><div class="time-display"><span id="heard-time">0:00</span> <small id="duration-label">/ —</small></div><span id="loop-indicator" class="badge loop-indicator" role="status" hidden>Loop on</span></div>
               <button id="load-button" class="small quiet">Load sample</button><div class="follow-controls"><div class="timeline-modes" role="group" aria-label="Timeline view"><button id="timeline-scroll" class="small" aria-pressed="true" title="Center heard playback with equal past and upcoming space">Scroll</button><button id="timeline-fit" class="small" aria-pressed="false" title="Fit the whole song into the chart">Fit song</button></div><div id="timeline-zoom" class="timeline-zoom" role="group" aria-label="Timeline zoom"><button id="timeline-zoom-out" class="small" aria-label="Zoom out" title="Zoom out: show twice as much time">−</button><span id="timeline-scale" class="mono"></span><button id="timeline-zoom-in" class="small" aria-label="Zoom in" title="Zoom in: show twice the detail">+</button></div><button id="follow-button" class="small quiet" title="Hold the current moment in the Sound inspector">Hold</button><button id="return-button" class="small" aria-pressed="true" title="Return to centered playback and release held inspection">Follow</button></div></div>
-            <div class="unified-heading"><h2 id="timeline-title">Voice activity</h2><small id="timeline-view-note">Centered on heard playback</small><button id="restore-button" class="small quiet" disabled>Full mix</button></div>
-            <div id="mix-controls" class="lane-list" aria-busy="false"><div id="timeline-direction" class="timeline-direction"><span id="timeline-earlier">Past</span><span id="timeline-later">Upcoming · prepared</span></div>${CHIPS.map(chip => `<div id="chip-lanes-${chip}" class="chip-lanes"${chip ? ' hidden' : ''}><div id="chip-heading-${chip}" class="chip-heading" hidden>SID ${chip + 1}</div>${[0, 1, 2].map(localVoice => {
+            <div class="unified-heading"><h2 id="timeline-title">Voice activity</h2><small id="timeline-view-note" hidden>Centered on heard playback</small></div>
+            <div class="lane-list">${CHIPS.map(chip => `<div id="chip-lanes-${chip}" class="chip-lanes"${chip ? ' hidden' : ''}><div id="chip-heading-${chip}" class="chip-heading" hidden>SID ${chip + 1}</div>${[0, 1, 2].map(localVoice => {
               const voice = chip * 3 + localVoice;
-              return `<div class="voice-lane" style="--voice:${COLORS[localVoice]}"><div class="voice-label"><strong id="voice-label-${voice}">Voice ${localVoice + 1}</strong><small id="lane-wave-${voice}">No observation</small><div class="lane-mix"><button id="mute-${voice}" class="small" aria-label="Mute voice ${voice + 1}" aria-pressed="false" disabled title="Mute voice ${voice + 1}">M</button><button id="solo-${voice}" class="small" aria-label="Solo voice ${voice + 1}" aria-pressed="false" disabled title="Solo voice ${voice + 1}">S</button></div></div><canvas id="voice-lane-${voice}" class="lane-plot" tabindex="0" role="slider" aria-label="Select inspection time for voice ${voice + 1}" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0" data-sid-number="${chip}"></canvas></div>`;
-            }).join('')}<div class="voice-lane filter-lane" style="--voice:#b2a1ff"><div class="voice-label"><strong>Shared filter</strong><small>Cutoff register</small></div><canvas id="${filterLaneId(chip)}" class="lane-plot" tabindex="0" role="slider" aria-label="Select shared filter inspection time" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0" data-sid-number="${chip}"></canvas></div></div>`).join('')}<div id="timeline-ruler" class="timeline-ruler"><div id="timeline-loop" hidden></div><input id="seek-slider" type="range" min="0" max="30" step="0.01" value="0" disabled aria-label="Seek playback in seconds" title="Click or drag the ruler to seek; arrow keys adjust playback" /><div class="timeline-key mono"><span id="timeline-start">0:00</span><span id="timeline-cursor">Heard playhead</span><span id="timeline-end">0:30</span></div></div><div class="timeline-scrollbar"><button id="timeline-scroll-back" class="small" aria-label="Scroll timeline earlier">◀</button><div id="timeline-scroll-track" tabindex="0" role="scrollbar" aria-label="Browse timeline" aria-controls="voice-lane-0 voice-lane-1 voice-lane-2 filter-lane" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><div id="timeline-scroll-thumb"></div></div><button id="timeline-scroll-forward" class="small" aria-label="Scroll timeline later">▶</button><div class="timeline-scroll-range mono"><span id="timeline-range-start">0:00</span><span id="timeline-range-end"></span></div></div>
-            </div><div class="timeline-feedback"><span id="timeline-availability"></span><div id="status-message" class="status-line" role="status" aria-live="polite">Choose a sample to begin.</div></div>
+              return `<div class="voice-lane" style="--voice:${COLORS[localVoice]}"><div class="voice-label"><strong id="voice-label-${voice}">Voice ${localVoice + 1}</strong><small id="lane-wave-${voice}">No observation</small></div><canvas id="voice-lane-${voice}" class="lane-plot" tabindex="0" role="slider" aria-label="Select inspection time for voice ${voice + 1}" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0" data-sid-number="${chip}"></canvas></div>`;
+            }).join('')}<div class="voice-lane filter-lane" style="--voice:#b2a1ff"><div class="voice-label"><strong>Shared filter</strong><small>Cutoff register</small></div><canvas id="${filterLaneId(chip)}" class="lane-plot" tabindex="0" role="slider" aria-label="Select shared filter inspection time" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0" data-sid-number="${chip}"></canvas></div></div>`).join('')}<div id="timeline-ruler" class="timeline-ruler"><div id="timeline-loop" hidden></div><input id="seek-slider" type="range" min="0" max="30" step="0.01" value="0" disabled aria-label="Seek playback in seconds" title="Click or drag the ruler to seek; arrow keys adjust playback" /><div class="timeline-key mono"><span id="timeline-start">0:00</span><span id="timeline-cursor">0:00.00</span><span id="timeline-end">0:30</span></div></div><div class="timeline-scrollbar"><button id="timeline-scroll-back" class="small" aria-label="Scroll timeline earlier">◀</button><div id="timeline-scroll-track" tabindex="0" role="scrollbar" aria-label="Browse timeline" aria-controls="voice-lane-0 voice-lane-1 voice-lane-2 filter-lane" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><div id="timeline-scroll-thumb"></div></div><button id="timeline-scroll-forward" class="small" aria-label="Scroll timeline later">▶</button><div class="timeline-scroll-range mono"><span id="timeline-range-start">0:00</span><span id="timeline-range-end"></span></div></div>
+            </div><div class="timeline-feedback"><div id="status-message" class="status-line" role="status" aria-live="polite">Choose a sample to begin.</div></div>
             <div id="history-summary" class="history-summary"><span id="history-description">No retained observations yet.</span> <span id="trace-warning" role="status" hidden></span> <a id="view-inspector" href="#inspector-title" hidden>View inspector →</a></div>
-            <p id="voice-mix-status" class="intervention-note" role="status" aria-live="polite" aria-atomic="true"></p>
             <div class="panel-options"><details id="loop-details"><summary>Loop A–B</summary>
-            <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restarts may briefly pause; playback is not gapless.</span></div></details><details id="playback-setup"><summary>Playback setup</summary><div class="settings"><label><span>Clock</span><select id="clock-select"><option>PAL</option><option>NTSC</option></select></label><label><span id="chip-model-label">Chip model</span><select id="model-select"><option value="MOS6581">MOS 6581</option><option value="MOS8580">MOS 8580</option></select></label><label><span>Subtune</span><select id="subtune-select"><option value="1">1</option></select></label><p id="settings-note" class="settings-note">Settings apply when you load. Prepared audio supports quick seeking; other positions need preparation. Trace timestamp alignment is approximate.</p></div></details><details id="timeline-help"><summary>Help & details</summary><p class="timeline-help">Drag the proportional scrollbar to browse without changing sound. Click or drag the time ruler to seek when released. Click a lane to seek playback. Shift-click a lane to inspect its settings; Hold captures the current heard position. Follow returns to centered playback. Drag the violet A/B loop handles; release to apply, or press Escape to cancel. Arrow keys adjust by 0.1 seconds, or 1 second with Shift. Zoom changes detail; wider charts show more time at the same zoom. Shading marks unavailable observations. Fit song shows the known duration. When length is unknown, Fit timeline fits the current range and keeps its scale fixed; click it again to update. A line shows register frequency, not loudness; gate clear can still release sound.</p><div class="transport-foot"><span id="seek-note"></span><span id="render-lead"></span></div></details></div>
+            <div class="loop-row"><label><span>A · seconds</span><input id="loop-start" class="loop-time" type="number" min="0" step="0.01" value="" aria-label="Loop start in seconds" /></label><button id="mark-a" class="small quiet" disabled>Set A</button><label><span>B · seconds</span><input id="loop-end" class="loop-time" type="number" min="0" step="0.01" value="" aria-label="Loop end in seconds" /></label><button id="mark-b" class="small quiet" disabled>Set B</button><button id="loop-button" class="small" aria-pressed="false" disabled>Loop A–B</button><button id="clear-loop" class="small quiet" disabled>Clear</button><span id="loop-summary" class="loop-summary">Set A before B. Loop restarts may briefly pause; playback is not gapless.</span></div></details><details id="playback-setup"><summary>Playback setup</summary><div class="settings"><label><span>Clock</span><select id="clock-select"><option>PAL</option><option>NTSC</option></select></label><label><span id="chip-model-label">Chip model</span><select id="model-select"><option value="MOS6581">MOS 6581</option><option value="MOS8580">MOS 8580</option></select></label><label><span>Subtune</span><select id="subtune-select"><option value="1">1</option></select></label><p id="settings-note" class="settings-note">Settings apply when you load. Prepared audio supports quick seeking; other positions need preparation. Trace timestamp alignment is approximate.</p></div></details><details id="timeline-help"><summary>Help & details</summary><p class="timeline-help">Drag the proportional scrollbar to browse without changing sound. Click or drag the time ruler to seek when released. Click a lane to seek playback. Shift-click a lane to inspect its settings; Hold captures the current heard position. Follow returns to centered playback. Drag the violet A/B loop handles; release to apply, or press Escape to cancel. Arrow keys adjust by 0.1 seconds, or 1 second with Shift. Zoom changes detail; wider charts show more time at the same zoom. Shading marks unavailable observations. Fit song shows the known duration. When length is unknown, Fit timeline fits the current range and keeps its scale fixed; click it again to update. A line shows register frequency, not loudness; gate clear can still release sound.</p><div class="transport-foot"><span id="seek-note"></span></div></details><button id="diagnosis-mode" class="diagnosis-mode" role="switch" aria-checked="false" aria-controls="diagnostics timeline-view-note">Diagnosis mode</button><div id="diagnostics" class="diagnostics-body" hidden><p id="timeline-availability"></p><p id="render-lead"></p><p id="audio-diagnostics">Device-local playback · no backend</p></div></div>
           </section>
-          <div class="inspection-sidebar"><aside class="panel inspector" aria-labelledby="inspector-title"><div class="panel-header"><h2 id="inspector-title" tabindex="-1">Sound inspector</h2><span id="inspection-time" class="inspection-time mono">0:00.00</span></div><div class="inspector-body"><p id="inspector-note" class="inspector-note">Following heard playback. Register settings are derived observations, not recovered instruments or measured envelope amplitude.</p><div class="voice-tabs" role="group" aria-label="Inspect voice">${VOICES.map(voice => `<button id="inspect-${voice}" class="small" aria-pressed="${voice === 0}"${voice >= 3 ? ' hidden' : ''}>Voice ${voice + 1}</button>`).join('')}</div>
-            <dl class="register-grid"><div><dt>Frequency register</dt><dd id="reg-frequency">—</dd></div><div><dt>Derived oscillator Hz</dt><dd id="reg-hz">—</dd></div><div class="wide"><dt>Waveform selection</dt><dd id="reg-waveform">—</dd></div><div><dt>Gate / Test</dt><dd id="reg-gate">—</dd></div><div><dt>Pulse width · 12-bit</dt><dd id="reg-pulse">—</dd></div><div><dt>AD / SR settings</dt><dd id="reg-adsr">—</dd></div><div><dt>Ring / Sync</dt><dd id="reg-coupling">—</dd></div></dl>
+          <div class="inspection-sidebar"><aside class="panel inspector" aria-labelledby="inspector-title"><div class="panel-header"><h2 id="inspector-title" tabindex="-1">Sound inspector</h2><span id="inspection-time" class="inspection-time mono">0:00.00</span></div><div class="inspector-body"><div id="inspector-note-row" class="inspector-note-row"><span id="inspector-note">Following playback</span><button id="inspector-tip-button" class="info-tip-button" aria-label="About sound inspection" aria-describedby="inspector-tip" aria-expanded="false" aria-controls="inspector-tip">ⓘ</button><div id="inspector-tip" class="info-tip" role="tooltip" popover><p id="inspector-tip-text"></p><p id="inspector-tip-range" hidden></p></div></div><div id="mix-controls" class="inspector-mixer" aria-busy="false"><div class="mixer-heading"><span>Voices</span><button id="restore-button" class="small quiet" disabled>Full mix</button></div><div class="mixer-chips">${CHIPS.map(chip => `<section id="mixer-chip-${chip}" class="mixer-chip" aria-label="SID ${chip + 1} voices"${chip ? ' hidden' : ''}><div class="mixer-heading"><strong>SID ${chip + 1}</strong><button id="chip-enabled-${chip}" class="small chip-switch" role="switch" aria-checked="true" aria-label="Enable SID ${chip + 1} voices" disabled>On</button></div><div class="mixer-voices">${[0, 1, 2].map(localVoice => {
+              const voice = chip * 3 + localVoice;
+              return `<div class="mixer-voice" style="--voice:${COLORS[localVoice]}"><button id="inspect-${voice}" class="small" aria-pressed="${voice === 0}">Voice ${localVoice + 1}</button><div class="voice-actions"><button id="mute-${voice}" class="small" aria-label="Mute voice ${voice + 1}" aria-pressed="false" disabled title="Mute voice ${voice + 1}">M</button><button id="solo-${voice}" class="small" aria-label="Solo voice ${voice + 1}" aria-pressed="false" disabled title="Solo voice ${voice + 1}">S</button></div></div>`;
+            }).join('')}</div></section>`).join('')}</div><p id="voice-mix-status" class="intervention-note" role="status" aria-live="polite" aria-atomic="true"></p></div>
+            <details id="voice-registers" class="voice-registers"><summary>Voice registers</summary><dl class="register-grid"><div><dt>Frequency register</dt><dd id="reg-frequency">—</dd></div><div><dt>Derived oscillator Hz</dt><dd id="reg-hz">—</dd></div><div class="wide"><dt>Waveform selection</dt><dd id="reg-waveform">—</dd></div><div><dt>Gate / Test</dt><dd id="reg-gate">—</dd></div><div><dt>Pulse width · 12-bit</dt><dd id="reg-pulse">—</dd></div><div><dt>AD / SR settings</dt><dd id="reg-adsr">—</dd></div><div><dt>Ring / Sync</dt><dd id="reg-coupling">—</dd></div></dl></details>
             <details class="shared-filter"><summary id="filter-title">One filter · all three voices</summary><div id="filter-details"><dl class="filter-registers"><div><dt>Cutoff</dt><dd id="filter-cutoff">—</dd></div><div><dt>Resonance</dt><dd id="filter-resonance">—</dd></div><div><dt>Low-pass</dt><dd id="filter-low-pass">—</dd></div><div><dt>Band-pass</dt><dd id="filter-band-pass">—</dd></div><div><dt>High-pass</dt><dd id="filter-high-pass">—</dd></div><div><dt>Routed voices</dt><dd id="filter-routed">—</dd></div><div><dt>Master volume</dt><dd id="filter-volume">—</dd></div><div><dt>Voice 3 direct</dt><dd id="filter-direct">—</dd></div></dl><p id="filter-note">No observed register frame at the selected time.</p></div></details><details class="inspector-writes"><summary>Ordered writes ≤ cursor</summary><ol id="write-list" class="write-list"><li class="write-empty">Load and play to collect writes.</li></ol></details></div></aside>
           <section class="panel" aria-labelledby="output-title"><div class="panel-header"><h2 id="output-title">Audio output</h2><span id="output-profile-badge" class="badge" hidden></span></div><div class="audio-body">
             <div id="audio-channel-left" class="audio-channel audio-left" role="group"><span id="audio-channel-label-left" class="audio-channel-name mono" aria-label="Left channel" hidden>L</span><div class="meter-label peak-reading"><span id="peak-title">Peak · measured PCM</span><span id="peak-label" class="mono">−∞ dBFS</span></div><div class="meter-track"><span id="peak-meter" class="meter-level"></span></div><div class="meter-label rms-reading"><span id="rms-title">RMS</span><span id="rms-label" class="mono">−∞ dBFS</span></div><canvas id="waveform-plot" class="audio-plot" aria-label="Actual output waveform"></canvas><div class="plot-caption"><span>WAVEFORM</span><span id="waveform-source">Audio output</span></div></div>
@@ -88,7 +94,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
           </div>
           <section class="panel evidence-panel" aria-labelledby="evidence-title"><div class="panel-header"><h2 id="evidence-title">Listen a little closer</h2><span class="badge">Linked evidence</span></div><div class="evidence-body"><div id="composition-analysis"></div><details id="playback-evidence" open><summary id="playback-evidence-summary" hidden>Playback evidence</summary><p id="evidence-scope" class="evidence-scope">Authored annotations apply only to their exact catalog file, clock, chip model and subtune.</p><div id="evidence-cards"></div></details></div></section>
         </div>
-        <footer class="source-footer"><div id="source-links" class="source-links"></div><span id="audio-diagnostics">Device-local playback · no backend</span><div id="engine-links" class="source-links" aria-label="Playback engine licenses and source"></div></footer>
+        <footer class="source-footer"><div id="source-links" class="source-links"></div><div id="engine-links" class="source-links" aria-label="Playback engine licenses and source"></div></footer>
       </main>
     </div>`;
 
@@ -115,12 +121,25 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   let loadedLibrary: LibraryMetadata | null = null;
   let loadedProfile: Profile | null = null;
   let state: PlayerState | null = null;
+  let voiceMix = createVoiceMix(1);
+  let diagnosisMode = false;
   let held: HeldHistory | null = null;
   let chartHeld: HeldHistory | null = null;
   let inspectionSequence = 0;
   let timelineView: 'scroll' | 'fit' = 'scroll';
   let fittedEnd: number | null = null;
   const songLengths = new SongLengthLookup();
+  const recentStorage = () => {
+    try { return window.localStorage; } catch { return null; }
+  };
+  const recentSongs = new RecentSongs(recentStorage());
+  const renderRecentSongs = () => {
+    const entries = recentSongs.entries();
+    select('recent-songs').replaceChildren(new Option('Choose a recent song…', ''));
+    for (const song of entries) select('recent-songs').add(new Option(`${song.title}${song.author ? ` — ${song.author}` : ''}`, song.path));
+    el('recent-songs-section').hidden = entries.length === 0;
+  };
+  renderRecentSongs();
   let timelineZoom = TIMELINE_DENSITIES.indexOf(64);
   let timelineSpan = FOLLOW_WINDOW_SECONDS;
   let seekViewport: {center: number; span: number; heard: number | null; marker: number | null} | null = null;
@@ -204,14 +223,15 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
   const startViewport = () => {
     seekViewport = timelineView === 'scroll' ? {center:timelineSpan / 2, span:timelineSpan, heard:null, marker:null} : null;
   };
-  const resetInspection = () => { setSelectedLoopMarkers(null); fittedEnd = null; startViewport(); held = null; cursor = 0; selectedEnd = null; timelineLimit = 30; evidenceKey = ''; sourceKey = ''; };
+  const resetInspection = () => { voiceMix = createVoiceMix(chipCount() === 2 ? 2 : 1); setSelectedLoopMarkers(null); fittedEnd = null; startViewport(); held = null; cursor = 0; selectedEnd = null; timelineLimit = 30; evidenceKey = ''; sourceKey = ''; };
   const loadBytes = async (bytes: Uint8Array, entry: Entry | null, library: LibraryMetadata | null = null) => {
     reference.pause();
     const profile = currentProfile();
     loadedEntry = null;
     loadedLibrary = null;
     loadedProfile = null;
-    el('library-info').hidden = true;
+    if (el('library-info').matches(':popover-open')) el('library-info').hidePopover();
+    el('library-info-button').hidden = true;
     setText('library-path', '');
     setText('library-stil', '');
     evidenceKey = '';
@@ -232,13 +252,17 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     setText('track-title', entry?.title ?? (library?.title || state?.info?.title || openedName));
     setText('track-description', entry?.description ?? `${author}${released ? ` · ${released}` : ''}. Generic inspection from locally observed SID registers.`);
     setText('source-kind', entry ? 'From the sample library' : library ? (library.provider === 'SIDquake' ? 'SIDquake · HVSC' : 'HVSC · SID highlight') : `Local file · ${openedName}`);
-    el('library-info').hidden = library === null;
-    el<HTMLDetailsElement>('library-info').open = false;
+    el('library-info-button').hidden = library === null;
     setText('library-provider', library ? `Provided by ${library.provider === 'SIDquake' ? 'SIDquake / HVSC' : 'HVSC'}` : '');
     setText('library-path', library?.path ?? '');
     setText('library-stil', library?.stil ?? '');
     el('library-stil').hidden = !library?.stil;
+    if (library) {
+      recentSongs.remember({path: library.path, title: el('track-title').textContent || library.name, author});
+      renderRecentSongs();
+    }
     setText('load-button', 'Reload settings');
+    el('settings-note').before(button('load-button'));
     updateReference();
     report('Loaded. Press Play to start live SID emulation.');
   };
@@ -318,6 +342,21 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     void run(() => openSid(selection.name, async () => selection.bytes, selection));
   });
   window.addEventListener('pagehide', () => libraryPicker.close());
+  select('recent-songs').addEventListener('change', () => {
+    const song = recentSongs.entries().find(song => song.path === select('recent-songs').value);
+    select('recent-songs').value = '';
+    if (!song || busy) return;
+    const name = song.path.split('/').pop()!;
+    report(`Fetching ${song.title} from HVSC…`);
+    void run(() => openSid(name, () => fetchHvscSong(song), {
+      provider: 'HVSC', name, ...song, released: '', stil: '',
+    }));
+  });
+  button('clear-recent-songs').addEventListener('click', () => {
+    recentSongs.clear();
+    renderRecentSongs();
+    button('browse-library').focus();
+  });
   const highlightSelect = select('sid-highlights');
   for (const chips of [1, 2] as const) {
     const group = document.createElement('optgroup');
@@ -325,7 +364,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     for (const highlight of SID_HIGHLIGHTS.filter(entry => entry.chips === chips)) {
       const option = document.createElement('option');
       option.value = highlight.id;
-      option.textContent = `${highlight.title} — ${highlight.author} · ${chips === 2 ? '2 × ' : ''}${highlight.model.slice(3)}`;
+      option.textContent = `${highlight.title} · ${time(highlight.durationSeconds)}${highlight.subtune > 1 ? ` · subtune ${highlight.subtune}` : ''} — ${highlight.author} · ${chips === 2 ? '2 × ' : ''}${highlight.model.slice(3)}`;
       group.append(option);
     }
     highlightSelect.append(group);
@@ -346,6 +385,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     sourceMode = 'catalog';
     applyCatalogDefaults();
     setText('load-button', 'Load sample');
+    root.querySelector('.follow-controls')!.before(button('load-button'));
     report('Sample selected. Load sample applies its profile and replaces the current tune.');
   });
   button('load-button').addEventListener('click', () => { void loadSelected(); });
@@ -599,21 +639,61 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     },
     onCommit: markers => { void run(() => editLoopMarkers(markers)); },
   });
+  const applyVoiceMix = async (action: VoiceMixAction) => {
+    if (!state?.info || busy || state.seekTarget != null || ['loading', 'error'].includes(state.status)) return;
+    const next = updateVoiceMix(voiceMix, action);
+    const mask = voiceMixMask(next);
+    if (mask.some((muted, voice) => muted !== state!.muted[voice])) await controls.setMuted(mask);
+    voiceMix = next;
+    evidenceKey = '';
+    draw();
+  };
   for (const voice of VOICES) {
     button(`inspect-${voice}`).addEventListener('click', () => { selectedVoice = voice; selectedFilterChip = null; compositionPanel.selectAt(held ? cursor : state?.position ?? 0, voice + 1, held ? 'hold' : 'follow'); draw(); });
-    button(`mute-${voice}`).addEventListener('click', () => { void run(async () => {
-      const mask = [...state!.muted];
-      mask[voice] = !mask[voice];
-      await controls.setMuted(mask);
-      evidenceKey = '';
-    }); });
-    button(`solo-${voice}`).addEventListener('click', () => { void run(async () => {
-      const soloed = state?.muted.every((muted, index) => muted === (index !== voice));
-      await controls.setMuted(state!.muted.map((_, index) => !soloed && index !== voice));
-      evidenceKey = '';
-    }); });
+    for (const type of ['mute', 'solo'] as const) button(`${type}-${voice}`).addEventListener('click', () => { void run(() => applyVoiceMix({type, voice})); });
   }
-  button('restore-button').addEventListener('click', () => { void run(async () => { await controls.setMuted(state!.muted.map(() => false)); evidenceKey = ''; }); });
+  for (const chip of CHIPS) button(`chip-enabled-${chip}`).addEventListener('click', () => { void run(() => applyVoiceMix({type: 'chip', chip})); });
+  button('restore-button').addEventListener('click', () => { void run(() => applyVoiceMix({type: 'restore'})); });
+  button('diagnosis-mode').addEventListener('click', () => {
+    diagnosisMode = !diagnosisMode;
+    button('diagnosis-mode').setAttribute('aria-checked', String(diagnosisMode));
+    el('diagnostics').hidden = !diagnosisMode;
+    el('timeline-view-note').hidden = !diagnosisMode;
+    el('inspector-tip-range').hidden = !diagnosisMode;
+  });
+  const positionPopover = (popup: HTMLElement, trigger: HTMLElement) => {
+    if (!popup.matches(':popover-open')) return;
+    const anchor = trigger.getBoundingClientRect();
+    const bounds = popup.getBoundingClientRect();
+    popup.style.left = `${Math.max(12, Math.min(anchor.right - bounds.width, innerWidth - bounds.width - 12))}px`;
+    popup.style.top = `${Math.max(12, Math.min(anchor.bottom + 8, innerHeight - bounds.height - 12))}px`;
+  };
+  const tip = el('inspector-tip');
+  const tipButton = button('inspector-tip-button');
+  const tipRow = el('inspector-note-row');
+  let tipPinned = false;
+  const showTip = () => { tip.showPopover(); positionPopover(tip, tipButton); };
+  const hideTip = () => { if (tip.matches(':popover-open')) tip.hidePopover(); tipPinned = false; };
+  tipRow.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') showTip(); });
+  tipRow.addEventListener('pointerleave', () => { if (!tipPinned && !tipButton.matches(':focus')) hideTip(); });
+  tipButton.addEventListener('focus', showTip);
+  tipButton.addEventListener('blur', hideTip);
+  tipButton.addEventListener('click', () => {
+    if (tipPinned) hideTip();
+    else { showTip(); tipPinned = true; }
+  });
+  tip.addEventListener('toggle', () => {
+    const open = tip.matches(':popover-open');
+    tipButton.setAttribute('aria-expanded', String(open));
+    if (!open) tipPinned = false;
+  });
+  const positionPopovers = () => {
+    positionPopover(el('library-info'), button('library-info-button'));
+    positionPopover(tip, tipButton);
+  };
+  el('library-info').addEventListener('toggle', positionPopovers);
+  window.addEventListener('resize', positionPopovers);
+  window.addEventListener('scroll', positionPopovers, true);
   for (const lane of [...VOICES.map(voice => ({id: `voice-lane-${voice}`, voice, chip: Math.floor(voice / 3)})), ...CHIPS.map(chip => ({id: filterLaneId(chip), voice: null, chip}))]) {
     const {id, voice, chip} = lane;
     const canvas = el<HTMLCanvasElement>(id);
@@ -794,7 +874,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     } else {
       if (loadedLibrary) {
         if (loadedLibrary.provider === 'SIDquake') links.append(link('SIDquake ↗', 'https://sidquake.c64demo.com/'));
-        else links.append(link('Discovered in Chip Player JS ↗', 'https://chiptune.app/'));
+        else links.append(link('SID charts ↗', 'https://www.transbyte.org/SID/HVSC_Top100.html'), link('Scene releases ↗', 'https://csdb.dk/'));
         links.append(link('HVSC ↗', 'https://hvsc.c64.org/'));
       }
       links.append(link('Explorer · GPL-3.0-or-later ↗', 'https://github.com/mbackschat/sid-song-explorer/blob/main/LICENSE'));
@@ -837,13 +917,11 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     ctx.fillRect(0, 0, minX, height);
     if (selectedEnd !== null) { ctx.fillStyle = '#8b72d322'; ctx.fillRect(x(cursor), 0, x(selectedEnd) - x(cursor), height); }
     let previous: RegisterFrame | null = null;
-    const stride = Math.max(1, Math.floor(frames.length / Math.max(1, width * 2)));
     ctx.strokeStyle = voice === null ? '#b2a1ff' : COLORS[voice % 3]!;
     ctx.lineWidth = 1.4;
     ctx.beginPath();
     let started = false;
-    for (let index = 0; index < frames.length; index += stride) {
-      const frame = frames[index]!;
+    for (const frame of frames) {
       if (frame.time < Math.max(plotStart, coverageStart) || frame.time > observedUntil) continue;
       const registers = frame.registers;
       const chipBase = chip * 32;
@@ -948,8 +1026,9 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     setText('inspector-title', held ? 'Held sound inspector' : 'Sound inspector');
     root.querySelector('.inspector')!.classList.toggle('held', Boolean(held));
     const coverage = held ? `Held ${inspectionSubject()} at ${time(cursor, true)}. ${state?.status === 'playing' ? 'Music continues; only inspection is frozen.' : 'Inspection is frozen independently of playback.'} ` : 'Following heard playback. ';
-    setText('inspector-note', `${coverage}${held && registers && cursor > held.heardUntil ? 'Prepared ahead of playback when held. ' : ''}${held ? `Captured ${held.configuration}. ` : ''}${held?.inspectionPending ? 'Loading selected settings…' : registers ? 'Register settings below describe the selected moment, not instrument identity or measured envelope amplitude.' : 'No retained observation at this time. Use Follow to inspect new observations.'}`);
-    el('inspector-note').title = `Available ${time(coverageStart, true)}–${time(observedUntil, true)} · epoch ${held?.epoch ?? state?.epoch ?? 0}${registers ? ' · ordered writes applied through the cursor' : ''}${selectedEnd !== null ? ` · selected span ends ${time(selectedEnd, true)}` : ''}`;
+    setText('inspector-note', held ? `Inspecting ${time(cursor, true)}${held.inspectionPending ? ' · loading…' : ''}` : 'Following playback');
+    setText('inspector-tip-text', `${coverage}${held && registers && cursor > held.heardUntil ? 'Prepared ahead of playback when held. ' : ''}${held ? `Captured ${held.configuration}. ` : ''}${held?.inspectionPending ? 'Loading selected settings…' : registers ? 'Register settings below describe the selected moment, not instrument identity or measured envelope amplitude.' : 'No retained observation at this time. Use Follow to inspect new observations.'}`);
+    setText('inspector-tip-range', `Available ${time(coverageStart, true)}–${time(observedUntil, true)} · epoch ${held?.epoch ?? state?.epoch ?? 0}${registers ? ' · ordered writes applied through the cursor' : ''}${selectedEnd !== null ? ` · selected span ends ${time(selectedEnd, true)}` : ''}`);
     const chip = selectedFilterChip ?? Math.floor(selectedVoice / 3);
     const chipBase = chip * 32;
     for (const voice of VOICES) button(`inspect-${voice}`).setAttribute('aria-pressed', String(voice === selectedVoice));
@@ -1010,13 +1089,17 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     if (selectedFilterChip !== null && selectedFilterChip >= chipCount()) selectedFilterChip = null;
     for (const chip of CHIPS) {
       el(`chip-lanes-${chip}`).hidden = chip >= chipCount();
+      el(`mixer-chip-${chip}`).hidden = chip >= chipCount();
+      button(`chip-enabled-${chip}`).setAttribute('aria-checked', String(voiceMix.enabledChips[chip] ?? true));
+      setText(`chip-enabled-${chip}`, (voiceMix.enabledChips[chip] ?? true) ? 'On' : 'Off');
       el(`chip-heading-${chip}`).hidden = !stereo;
       setText(`chip-heading-${chip}`, `SID ${chip + 1} · $${hex(state?.info?.sidChipBases[chip] ?? 0xd400, 4)} · ${chip === 0 ? 'Left' : 'Right'}`);
       el(filterLaneId(chip)).setAttribute('aria-label', stereo ? `Select SID ${chip + 1} shared filter inspection time` : 'Select shared filter inspection time');
     }
     for (const voice of VOICES) {
       button(`inspect-${voice}`).hidden = voice >= voiceCount();
-      setText(`inspect-${voice}`, stereo ? `SID ${Math.floor(voice / 3) + 1} · V${voice % 3 + 1}` : `Voice ${voice + 1}`);
+      setText(`inspect-${voice}`, `Voice ${voice % 3 + 1}`);
+      button(`inspect-${voice}`).setAttribute('aria-label', `Inspect ${voiceName(voice, stereo)}`);
       setText(`voice-label-${voice}`, `Voice ${voice % 3 + 1}`);
       const name = voiceName(voice, stereo).replace('Voice', 'voice');
       el(`voice-lane-${voice}`).setAttribute('aria-label', `Select inspection time for ${name}`);
@@ -1060,11 +1143,13 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     const changing = busy || state?.status === 'loading' || seeking;
     for (const id of ['play-button', 'restart-button', 'restore-button', 'mark-a', 'mark-b', 'loop-button', 'clear-loop']) button(id).disabled = !loaded || changing;
     for (const voice of VOICES) for (const operation of ['mute', 'solo']) button(`${operation}-${voice}`).disabled = !loaded || changing || voice >= voiceCount();
+    for (const chip of CHIPS) button(`chip-enabled-${chip}`).disabled = !loaded || changing || chip >= chipCount();
     button('load-button').disabled = changing || sourceMode === 'catalog' && !chosenEntry;
     button('use-sample-button').disabled = changing || !chosenEntry;
     button('browse-library').disabled = changing;
+    button('clear-recent-songs').disabled = changing;
     button('open-local-file').disabled = changing;
-    for (const id of ['clock-select', 'model-select', 'subtune-select', 'sample-select', 'sid-highlights']) select(id).disabled = changing;
+    for (const id of ['clock-select', 'model-select', 'subtune-select', 'sample-select', 'sid-highlights', 'recent-songs']) select(id).disabled = changing;
     input('local-file').disabled = changing;
     setText('play-button', seeking ? preparationLabel : state?.status === 'playing' ? 'Ⅱ Pause' : '▶ Play');
     const labels: Record<string, string> = { empty: 'Ready to load', loading: 'Loading…', ready: 'Ready', playing: 'Live SID', paused: 'Paused', seeking: 'Seeking…', ended: 'Ended', error: 'Playback error' };
@@ -1083,7 +1168,6 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
       el('status-message').classList.remove('error');
     }
     el('status-message').hidden = loaded && !changing && !state?.error && !notice && state?.status !== 'ended';
-    el('timeline-availability').hidden = !el('status-message').hidden;
     const position = state?.position ?? 0;
     const transportPosition = state?.seekTarget ?? position;
     timelineLimit = Math.min(MAX_SEEK_SECONDS, Math.max(timelineLimit, position + 10, state?.renderedUntil ?? 0));
@@ -1110,8 +1194,8 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     button('return-button').setAttribute('aria-pressed', String(!held && !seekViewport && state?.timelineCenterSeconds == null && timelineView === 'scroll'));
     el('view-inspector').hidden = !held;
     for (const voice of VOICES) {
-      button(`mute-${voice}`).setAttribute('aria-pressed', String(Boolean(state?.muted[voice])));
-      button(`solo-${voice}`).setAttribute('aria-pressed', String(state?.muted.every((muted, index) => muted === (index !== voice)) ?? false));
+      button(`mute-${voice}`).setAttribute('aria-pressed', String(Boolean(voiceMix.muted[voice])));
+      button(`solo-${voice}`).setAttribute('aria-pressed', String(voice < voiceMix.muted.length && voiceIsSolo(voiceMix, voice)));
     }
     const measuredSpan = Math.max(1, el<HTMLCanvasElement>('voice-lane-0').clientWidth) / TIMELINE_DENSITIES[timelineZoom]!;
     if (timelineSpan !== measuredSpan) {
@@ -1184,17 +1268,15 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     button('timeline-fit').setAttribute('aria-pressed', String(timelineView === 'fit'));
     setText('timeline-fit', state?.duration == null ? 'Fit timeline' : 'Fit song');
     button('timeline-fit').title = state?.duration == null ? 'Fit the current timeline range. Click again to update; song length is unknown.' : 'Fit the whole song into the chart';
-    el('timeline-direction').hidden = false;
     const loopInView = !chartHeld && !browsing && state?.loop && state.loop.end >= plotStart && state.loop.end <= plotEnd ? state.loop : null;
-    setText('timeline-earlier', browsing || timelineView === 'fit' ? 'Earlier' : 'Past');
-    setText('timeline-later', loopInView ? 'Song continuation · loop active' : browsing || timelineView === 'fit' ? 'Later · prepared' : 'Upcoming · prepared');
     const durationPrecision = timelineSpan < 1 ? 2 : 1;
     setText('timeline-view-note', seekViewport ? '' : timelineView === 'scroll' ? browsing ? 'Browsing · playback position unchanged' : `${Number((timelineSpan / 2).toFixed(durationPrecision))} s past · ${Number((timelineSpan / 2).toFixed(durationPrecision))} s upcoming` : state?.duration == null ? 'Length unknown · click Fit timeline to update' : 'Whole song');
     el('timeline-zoom').hidden = timelineView !== 'scroll';
     button('timeline-zoom-out').disabled = timelineZoom === 0;
     button('timeline-zoom-in').disabled = timelineZoom === TIMELINE_DENSITIES.length - 1;
     setText('timeline-scale', `${timelineSpan.toFixed(durationPrecision)} s`);
-    const plotFrames = visibleTimelineFrames(frames, Math.max(plotStart, historyStart), Math.min(plotEnd, chartEnd));
+    const plotFrames = overview ? visibleTimelineFrames(frames, Math.max(plotStart, historyStart), Math.min(plotEnd, chartEnd))
+      : timelinePlotFrames(observations, plotStart, plotEnd, Math.max(2, el<HTMLCanvasElement>('voice-lane-0').clientWidth * 2));
     const dropped = Math.max(chart.dropped, chartHeld?.dropped ?? Math.max(observations.dropped, state?.dropped ?? 0));
     el('history-summary').title = `${chartHeld ? 'HELD COPY' : 'PREPARED OBSERVATIONS'} ${time(historyStart, true)}–${time(observedUntil, true)} · ${frames.length} sampled frames · ${dropped} dropped writes · epoch ${chartHeld?.epoch ?? state?.epoch ?? 0}`;
     setText('history-description', held ? `Inspecting ${inspectionSubject()} at ${time(cursor, true)}${browsing ? '; browsing another passage' : ' · chart held'}${state?.status === 'playing' ? '; music continues' : ''}.` : '');
@@ -1212,7 +1294,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     el('history-summary').classList.toggle('held', Boolean(held));
     setText('timeline-start', time(plotStart, plotEnd - plotStart < 2));
     setText('timeline-end', time(plotEnd, plotEnd - plotStart < 2));
-    setText('timeline-cursor', held ? `Held ${time(cursor, true)}` : seekViewport?.marker != null ? `Seek ${time(seekViewport.marker, true)}` : `Heard ${time(position, true)}`);
+    setText('timeline-cursor', held ? `Held ${time(cursor, true)}` : seekViewport?.marker != null ? `Seek ${time(seekViewport.marker, true)}` : time(position, true));
     const inspectedTime = held ? cursor : position;
     const matchedComposition = state && !['loading', 'error'].includes(state.status) ? matchingCompositionPackage(compositionPackage, loadedEntry, loadedProfile, state.info) : null;
     compositionPanel.update({package: matchedComposition, timeSeconds: inspectedTime, voice: selectedFilterChip === null ? selectedVoice + 1 : null, disabled: changing || !loaded, intervention: state?.muted.some(Boolean)});

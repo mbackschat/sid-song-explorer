@@ -6,9 +6,12 @@ async function pauseAfterPlayback(page: Page) {
   await page.locator('#play-button').click();
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(.1);
   await page.locator('#play-button').click();
+  await expect(page.locator('#play-status')).toHaveText('Paused');
 }
 
 async function expectLabelPlacement(page: Page) {
+  await expect(page.locator('#timeline-direction')).toHaveCount(0);
+  await expect(page.locator('#timeline-cursor')).toHaveText(/^\d+:\d{2}\.\d{2}$/);
   const geometry = await page.evaluate(() => {
     const bounds = (selector: string) => {
       const {x, y, width, height} = document.querySelector(selector)!.getBoundingClientRect();

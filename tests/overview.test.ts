@@ -102,7 +102,18 @@ test('overview preserves sampled coverage after eviction while exact observation
     assert.equal(retained.end, cached.cacheEndFrame / SAMPLE_RATE);
     const exact = cached.observe(0, 1)!;
     assert.equal(exact.start, cached.cacheStartFrame / SAMPLE_RATE);
-    assert.deepEqual(cached.overview(exact.start, exact.end)!.frames, exact.frames);
+    const coarse = cached.overview(exact.start, exact.end)!;
+    assert.equal(coarse.start,exact.start);
+    assert.equal(coarse.end,exact.end);
+    const registers = exact.frames[0].registers.slice();
+    let offset = 0;
+    for (const frame of coarse.frames) {
+      while (offset < exact.writes.length && exact.writes[offset].timeSeconds < frame.time) {
+        const write = exact.writes[offset++];
+        registers[write.sidNumber * 32 + write.address] = write.value;
+      }
+      assert.deepEqual(frame.registers,registers,`coarse and detailed sampling describe the same ordered state before ${frame.time}`);
+    }
     for (const [start, end] of [[-1, 1], [0, 0], [1, 0], [NaN, 1], [0, Infinity], [0, 600.001], [599, 601]]) {
       assert.throws(() => cached.overview(start, end), /range|seconds/i);
     }

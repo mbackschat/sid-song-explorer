@@ -31,6 +31,8 @@ The [adapter decision](architecture/playback-adapter.md) owns the adopted engine
 
 Implemented and accepted: Scroll places the heard playhead approximately halfway between past and upcoming activity, using actual prepared observations. Startup, ending and unavailable coverage remain explicit; no notes are extrapolated and playback does not wait for the preview. Hold captures inspection independently of playback. An off-screen observation margin covers movement between refreshes.
 
+Detailed preview and played curves use the same absolute-time sampling grid, with ordered-write projection preserving their shape across the playhead; [sampling validation](validation/mono-poc.md#stable-preview-to-playback-curves) owns that invariant.
+
 The [preview validation](validation/mono-poc.md#centered-timeline-spike) owns continuous-rendering comparisons, cache/position invariants and refresh-cost evidence. Width-aware zoom supersedes the spike's original fixed ten-second viewport; configurable past/future ratios remain excluded.
 
 ## Timeline zoom (`TIMELINE-2`)
@@ -39,11 +41,13 @@ Implemented: zoom changes time density by a factor of two across seven levels. A
 
 ## Unified timeline and transport (`TIMELINE-3`)
 
-Implemented with the playhead handoff accepted on 2026-10-20. The shared panel combines playback/zoom controls, lane mute/solo and a proportional scrollbar. Loading or restarting a tune releases held inspection and starts Scroll at zero, then resumes centered following as playback reaches the middle; [restart validation](validation/mono-poc.md#restart-viewport) owns the guard. Browsing updates continuously without seeking. Normal timeline clicks seek; Shift-click inspects; Hold freezes inspection without pausing audio; Follow centers current playback and releases browsing/inspection. The [interaction principle and detailed design](design/web-player-and-analyser.md#interaction-principle) own the agreed behavior, including the clicked-note return to center at song speed.
+Implemented with the playhead handoff accepted on 2026-10-20. The shared panel combines playback/zoom controls and a proportional scrollbar; voice mute/solo, Full mix and per-chip switches live in Sound inspector. Voice registers start collapsed, and the inspector explanation is an on-demand tip; Reload settings lives in Playback setup. Loading or restarting a tune releases held inspection and starts Scroll at zero, then resumes centered following as playback reaches the middle; [restart validation](validation/mono-poc.md#restart-viewport) owns the guard. Browsing updates continuously without seeking. Normal timeline clicks seek; Shift-click inspects; Hold freezes inspection without pausing audio; Follow centers current playback and releases browsing/inspection. The [interaction principle and detailed design](design/web-player-and-analyser.md#interaction-principle) own the agreed behavior, including the clicked-note return to center at song speed.
 
 Selected A/B bounds are visible independently of playback repetition, using a violet ruler bracket, draggable handles and dashed lane boundaries without additional background shading. Clear removes the selection without collapsing allocated ruler space. Hear phrase uses fresh destination observations, expands loop controls and shows Loop on beside transport time. The chart remains a linear song view beyond B while playback repeats at B. [Loop validation](validation/mono-poc.md#loop-bracket-and-handles) and [phrase listening](validation/composition-exploration.md#phrase-listening-and-live-observations) own the guards and acceptance scope.
 
-Chart labels describe the visible time window; scrollbar labels describe the whole song. Unknown-duration files use a stable **Fit timeline** range captured on demand. [Unified-panel validation](validation/mono-poc.md#unified-timeline-panel) owns browsing, seeking and layout invariants.
+The default-off **Diagnosis mode** switch reveals preparation counters and past/upcoming window captions; playback status, errors and incomplete-data warnings remain visible. The [Diagnosis mode contract](validation/mono-poc.md#diagnosis-mode) owns its scope and guards.
+
+Chart labels describe the visible time window without a separate direction row or a Heard prefix; scrollbar labels describe the whole song. Unknown-duration files use a stable **Fit timeline** range captured on demand. [Unified-panel validation](validation/mono-poc.md#unified-timeline-panel) owns browsing, seeking and layout invariants.
 
 ## Bounded live-voice prototype
 
@@ -123,7 +127,9 @@ Completion evidence: red/green receiver and integration guards cover valid selec
 
 Status: implemented. The [integration validation](validation/library-picker.md) owns deterministic and live-provider Chrome/macOS WebKit evidence. Actual Safari/iPhone review remains open; release checks are separate.
 
-**SID highlights** adds a fixed, metadata-only shortlist below the library launcher: ten curated Chip Player JS discoveries, including four genuine dual-SID tunes and both chip models. Selection downloads one tune directly from official HVSC into tab memory and loads it; Play remains explicit. This is not a popularity chart or an expansion of the cleared sample catalog. The [highlights contract](validation/library-picker.md#sid-highlights) owns delivery, failure handling and validation.
+**SID highlights** adds a fixed, metadata-only shortlist below the library launcher: twenty curated tunes drawn from a historical SID chart, scene release ratings and retained favourites, including six genuine dual-SID tunes and both chip models. Each default subtune has an HVSC reference length over two minutes and within the ten-minute player limit; the dropdown shows that duration and identifies non-first subtunes. Selection downloads one tune directly from official HVSC into tab memory and loads it; Play remains explicit. This is not a popularity chart or an expansion of the cleared sample catalog. The [highlights contract](validation/library-picker.md#sid-highlights) owns delivery, failure handling and validation.
+
+**Recently played** remembers ten successfully loaded library selections, including highlights, with local metadata storage and a Clear history action. The [recent-song contract](validation/library-picker.md#recent-library-songs) owns persistence, deduplication, delivery and local-file exclusion.
 
 Source controls distinguish the pending sample from the loaded tune. **Open SID file** and its visible drop target share the device-local intake path. [Source-control validation](validation/library-picker.md#source-controls-and-repeated-selection) covers initial state, repeated library selection and local file replacement.
 

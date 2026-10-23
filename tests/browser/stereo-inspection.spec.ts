@@ -28,7 +28,7 @@ test('dual-SID inspection and seeking retain chip ownership across responsive la
   await expect(page.locator('#chip-heading-0')).toContainText('SID 1');
   await expect(page.locator('#chip-heading-1')).toContainText('SID 2');
   await expect(page.locator('.voice-lane:visible')).toHaveCount(8);
-  await expect(page.locator('.voice-tabs button:visible')).toHaveCount(6);
+  await expect(page.locator('.mixer-voice > button:visible')).toHaveCount(6);
   await page.locator('#play-button').click();
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(1);
   await page.locator('#inspect-3').click();
@@ -57,7 +57,7 @@ test('dual-SID inspection and seeking retain chip ownership across responsive la
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
   await expect(page.locator('#chip-lanes-1')).toBeHidden();
-  await expect(page.locator('.voice-tabs button:visible')).toHaveCount(3);
+  await expect(page.locator('.mixer-voice > button:visible')).toHaveCount(3);
   await expect(page.locator('#inspect-0')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#filter-details')).toHaveAttribute('data-sid-number', '0');
   await expect(page.locator('#routing-badge')).toBeHidden();
@@ -102,7 +102,7 @@ test('local dual-SID PSID opening keeps chip inspection device-local', async ({p
   await page.locator('#play-button').click();
   await expect.poll(() => page.locator('#seek-slider').inputValue().then(Number)).toBeGreaterThan(1);
   await page.locator('#filter-lane-1').press('ArrowRight');
-  await expect(page.locator('#inspector-note')).toContainText('SID 2 shared filter');
+  await expect(page.locator('#inspector-tip-text')).toContainText('SID 2 shared filter');
   await expect(page.locator('#filter-details')).toHaveAttribute('data-sid-number', '1');
   await expect(page.locator('#write-list')).toHaveAttribute('data-sid-number', '1');
   expect(remoteRequests).toEqual([]);
@@ -202,6 +202,7 @@ for (const model of ['MOS6581', 'MOS8580'] as const) {
     await releaseRestart();
     await expect(page.locator('#play-status')).toHaveText('Paused');
     await expect(page.locator('#seek-slider')).toHaveValue('0');
+    await page.locator('#playback-setup > summary').click();
     await page.locator('#load-button').click();
     await expect(page.locator('#play-button')).toBeEnabled();
     await expect(page.locator('#play-status')).toHaveText('Ready');

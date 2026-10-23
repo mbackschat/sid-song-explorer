@@ -78,6 +78,33 @@ The user approved separate length lookup on 2026-10-20. The official `Songlength
 
 ## Highlight discovery and delivery
 
-On 2026-10-23 the user approved ten curated highlights from [Chip Player JS](https://chiptune.app/), including genuine dual-SID files and both chip models. Its public all-time plays, recent plays and favorites endpoints returned no SID files among the first 100 entries of each list; the inspected [chart component](https://github.com/mmontag/chip-player-js/blob/master/src/components/TopCharts.js) and [server](https://github.com/mmontag/chip-player-js/blob/master/server/index.js) supplied no SID-only chart contract. Label the result **SID highlights**, not “top 10”; retain the curated identities in the [runtime shortlist](../../src/sid-highlights.ts), rather than duplicating a ranking here.
+The [runtime shortlist](../../src/sid-highlights.ts) owns exact files, models, default subtunes and duration values. It is a curated selection, not a single “top 20” chart. Chip Player JS’s public all-time plays, recent plays and favorites endpoints returned no SID files among the first 100 entries of each list on 2026-10-23; the inspected [chart component](https://github.com/mmontag/chip-player-js/blob/master/src/components/TopCharts.js) and [server](https://github.com/mmontag/chip-player-js/blob/master/server/index.js) supplied no SID-only chart contract. DeepSID's ratings search uses the signed-in user's ratings, not an aggregate popularity chart; its [source documentation](https://github.com/Chordian/deepsid) also attributes folder quality filters to a selected user's ratings.
 
-Chip Player JS’s catalog file host did not return an allow-origin header for a localhost request. Official HVSC individual-file GETs do return `Access-Control-Allow-Origin: *`, so highlights use the official `https://www.hvsc.c64.org/download/C64Music/` endpoint. This is a bounded shortcut to selected tunes, not a replacement browser, proxy or catalog mirror. SIDquake’s deep-link parameter previews a tune but does not automatically emit its file-mode selection, so it cannot implement immediate dropdown loading through the documented handoff. The [HVSC copyright notice](https://www.hvsc.c64.org/info) continues to apply; discovery links and successful playback do not grant publication rights.
+Classic additions use [LaLa's fan-voted HVSC Top 100](https://www.transbyte.org/SID/HVSC_Top100.html), dated 2000-07-05. These are historical file-level ranks, not modern play counts or ratings of individual subtunes. Current paths and playable defaults are checked against official HVSC bytes. International Karate exceeds the player's ten-minute limit, Delta's default is too short and Arkanoid uses unsupported RSID, so their historical rank does not make them eligible.
+
+| Highlight | Selection evidence |
+| --- | --- |
+| Wizball | Historical HVSC rank 1. |
+| The Last Ninja | Historical HVSC rank 2. |
+| Sanxion | Historical HVSC rank 3. |
+| Commando | Historical HVSC rank 4. |
+| Cybernoid II | Historical HVSC rank 6. |
+| Monty on the Run | Historical HVSC rank 8. |
+| Cybernoid | Historical HVSC rank 9. |
+| Last Ninja 3 | Historical HVSC rank 10. |
+| Last Ninja 2 | Historical HVSC rank 12. |
+| Mutants | Historical HVSC rank 13. |
+| Knucklebusters | Historical HVSC rank 14. |
+| Crazy Comets | Historical HVSC rank 16. |
+| Ultimate Axel F. | [Exact Nordischsound release](https://csdb.dk/release/?id=228585): 9.6/10 from 21 votes. |
+| R-Type: Amiga to 2SID | [Exact Jason Page release](https://csdb.dk/release/?id=228298): first in Game Music Remix Compo 2023; 9.8/10 from 25 votes. |
+| Raindropsies | [Exact Shogoon stereo release](https://csdb.dk/release/?id=160314): 9.8/10 from 47 votes. |
+| Get Lucky | [Exact Nordischsound stereo release](https://csdb.dk/release/?id=243079): 9.7/10 from 20 votes. |
+| Monty on the Run (D'n'B edit) | [Exact MCH remix](https://csdb.dk/release/?id=192902): 9.7/10 from 14 votes; separate from the original's historical rank. |
+| Sleepwalk | Retained curated dual-MOS6581 choice; [exact SID record](https://csdb.dk/sid/?id=44891) supplies identity but no usable popularity score. |
+| Zoids 2SID-Remake | Retained curated stereo choice; [exact Proton release](https://csdb.dk/release/?id=248190) has insufficient votes for a published score. The original's rank is not transferred to this remake. |
+| Ghostbusters | Retained curated mono-MOS8580 choice; [exact Nordischsound SID record](https://csdb.dk/sid/?id=63224) supplies identity but no usable direct tune score. Real Ghostbusters is a different file. |
+
+CSDb scores and vote counts above were observed on 2026-10-23 and are per-release user scores, not invented ordinal ranks. They do not establish duration, compatibility or stereo intent. The [integration validation](../validation/library-picker.md#sid-highlights) owns exact-file duration and engine checks; at least one quarter of the list must be genuine dual-SID stereo, and every advertised default must exceed two minutes. A 2SID filename alone is insufficient: some multi-chip releases explicitly request mono playback.
+
+Official HVSC individual-file GETs return `Access-Control-Allow-Origin: *`; highlights use `https://www.hvsc.c64.org/download/C64Music/`. Chip Player JS's catalog host did not permit the tested localhost request. SIDquake's deep-link parameter previews a tune but does not automatically emit its file-mode selection. Direct official delivery therefore supplies the bounded shortcut without a replacement browser, proxy or catalog mirror. The [HVSC copyright notice](https://www.hvsc.c64.org/info) continues to apply; discovery links and successful playback do not grant publication rights.

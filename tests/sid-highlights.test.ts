@@ -2,18 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SID_HIGHLIGHTS, highlightUrl, fetchHighlight, type SidHighlight} from '../src/sid-highlights.ts';
 
-const highlights: SidHighlight[] = [
-  {id: 'h-Ch6K1h', title: 'Axel F.', author: 'Chris Hülsbeck', path: 'MUSICIANS/H/Huelsbeck_Chris/Axel_F.sid', model: 'MOS6581', chips: 1},
-  {id: 'QfM49EtP', title: 'Cybernoid II', author: 'Jeroen Tel', path: 'MUSICIANS/T/Tel_Jeroen/Cybernoid_II.sid', model: 'MOS6581', chips: 1},
-  {id: 'UpU3jayw', title: 'Commando', author: 'Rob Hubbard', path: 'MUSICIANS/H/Hubbard_Rob/Commando.sid', model: 'MOS6581', chips: 1},
-  {id: 'UopzMIF-', title: 'Monty on the Run', author: 'Rob Hubbard', path: 'MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid', model: 'MOS6581', chips: 1},
-  {id: 'XGpHOfuE', title: 'Ghostbusters', author: 'Benjamin Dibbert (Nordischsound)', path: 'MUSICIANS/N/Nordischsound/Ghostbusters.sid', model: 'MOS8580', chips: 1},
-  {id: 'gNRPKidk', title: 'Pink Panther', author: 'Thomas E. Petersen (Laxity)', path: 'MUSICIANS/L/Laxity/Pink_Panther.sid', model: 'MOS6581', chips: 1},
-  {id: 'GBRDw0sq', title: 'Sleepwalk', author: 'Lasse Öörni (Cadaver)', path: 'MUSICIANS/C/Cadaver/Sleepwalk_2SID.sid', model: 'MOS6581', chips: 2},
-  {id: 'ApA9_eLG', title: 'Phonky', author: 'Mihály Horváth (Hermit)', path: 'MUSICIANS/H/Hermit/Phonky_2SID.sid', model: 'MOS8580', chips: 2},
-  {id: 'LOKaOUbV', title: 'R-Type: Amiga to 2SID', author: 'Jason Page', path: 'MUSICIANS/P/Page_Jason/R-Type_Amiga_to_2SID_2SID.sid', model: 'MOS8580', chips: 2},
-  {id: '4D2HfMg6', title: 'Zoids 2SID-Remake', author: 'Sami Louko (Proton)', path: 'MUSICIANS/P/Proton/Zoids_2SID-Remake_2SID.sid', model: 'MOS8580', chips: 2},
-];
+const highlights = SID_HIGHLIGHTS;
+const mono6581 = highlights.find(entry => entry.chips === 1 && entry.model === 'MOS6581')!;
+const stereo6581 = highlights.find(entry => entry.chips === 2 && entry.model === 'MOS6581')!;
+const stereo8580 = highlights.find(entry => entry.chips === 2 && entry.model === 'MOS8580')!;
 
 function sid(entry: SidHighlight, size = 128): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(size);
@@ -21,22 +13,38 @@ function sid(entry: SidHighlight, size = 128): Uint8Array<ArrayBuffer> {
   const header = new DataView(bytes.buffer);
   header.setUint16(4, entry.chips === 2 ? 3 : 2);
   header.setUint16(6, 124);
+  header.setUint16(14, entry.subtune);
+  header.setUint16(16, entry.subtune);
   const modelBits = entry.model === 'MOS6581' ? 1 : 2;
   header.setUint16(118, 4 | modelBits << 4 | (entry.chips === 2 ? modelBits << 6 : 0));
   bytes[122] = entry.chips === 2 ? 0x42 : 0;
   return bytes;
 }
 
-test('the static highlights preserve the ten verified files and their advertised profiles', () => {
-  assert.deepEqual(SID_HIGHLIGHTS, highlights);
-  assert.equal(new Set(SID_HIGHLIGHTS.map(entry => entry.id)).size, 10);
-  assert.equal(SID_HIGHLIGHTS.filter(entry => entry.chips === 2).length, 4);
-  assert.deepEqual([...new Set(SID_HIGHLIGHTS.map(entry => entry.model))].sort(), ['MOS6581', 'MOS8580']);
-  assert.equal(SID_HIGHLIGHTS.some(entry => /rambo/i.test(entry.path)), false);
+test('the twenty highlights have unique identities, eligible default durations and all four chip profiles', () => {
+  assert.equal(highlights.length, 20);
+  assert.equal(new Set(highlights.map(entry => entry.id)).size, 20);
+  assert.equal(new Set(highlights.map(entry => entry.path)).size, 20);
+  assert.ok(highlights.every(entry => Number.isFinite(entry.durationSeconds) && entry.durationSeconds > 120 && entry.durationSeconds <= 600));
+  assert.ok(highlights.every(entry => Number.isInteger(entry.subtune) && entry.subtune > 0));
+  assert.ok(highlights.filter(entry => entry.chips === 2).length >= highlights.length / 4);
+  assert.deepEqual([...new Set(highlights.map(entry => `${entry.model}:${entry.chips}`))].sort(), ['MOS6581:1', 'MOS6581:2', 'MOS8580:1', 'MOS8580:2']);
+  assert.equal(highlights.some(entry => /rambo|Pink_Panther|Phonky|Huelsbeck_Chris\/Axel_F\.sid/i.test(entry.path)), false);
+});
+
+test('independent HVSC default-subtune evidence preserves Cybernoid II and selects Wizball tune four', () => {
+  assert.deepEqual(highlights.find(entry => entry.id === 'QfM49EtP'), {
+    id: 'QfM49EtP', title: 'Cybernoid II', author: 'Jeroen Tel', path: 'MUSICIANS/T/Tel_Jeroen/Cybernoid_II.sid',
+    model: 'MOS6581', chips: 1, subtune: 1, durationSeconds: 346,
+  });
+  assert.deepEqual(highlights.find(entry => entry.id === 'wizball'), {
+    id: 'wizball', title: 'Wizball', author: 'Martin Galway', path: 'MUSICIANS/G/Galway_Martin/Wizball.sid',
+    model: 'MOS6581', chips: 1, subtune: 4, durationSeconds: 214.895,
+  });
 });
 
 test('highlight URLs use the official HVSC origin and encode each path segment', () => {
-  assert.equal(highlightUrl(highlights[0]), 'https://www.hvsc.c64.org/download/C64Music/MUSICIANS/H/Huelsbeck_Chris/Axel_F.sid');
+  assert.equal(highlightUrl(highlights.find(entry => entry.id === 'QfM49EtP')!), 'https://www.hvsc.c64.org/download/C64Music/MUSICIANS/T/Tel_Jeroen/Cybernoid_II.sid');
   assert.equal(highlightUrl({...highlights[0], path: 'MUSICIANS/Ö örni/A #?%.sid'}), 'https://www.hvsc.c64.org/download/C64Music/MUSICIANS/%C3%96%20%C3%B6rni/A%20%23%3F%25.sid');
 });
 
@@ -169,14 +177,28 @@ test('a truncated extended PSID header is rejected', async () => {
 });
 
 test('mono and dual-SID downloads must match the advertised chip count', async () => {
-  await assert.rejects(fetchHighlight(highlights[0], async () => new Response(sid(highlights[6]))), /chip/i);
-  await assert.rejects(fetchHighlight(highlights[6], async () => new Response(sid(highlights[0]))), /chip/i);
+  await assert.rejects(fetchHighlight(mono6581, async () => new Response(sid({...mono6581, chips: 2}))), /chip/i);
+  await assert.rejects(fetchHighlight(stereo6581, async () => new Response(sid({...stereo6581, chips: 1}))), /chip/i);
 });
 
 test('both declared models of a dual-SID download must match the label', async () => {
   for (const modelBits of [0, 1, 3]) {
-    const bytes = sid(highlights[7]);
+    const bytes = sid(stereo8580);
     bytes[119] = (bytes[119] & ~192) | modelBits << 6;
-    await assert.rejects(fetchHighlight(highlights[7], async () => new Response(bytes)), /model/i);
+    await assert.rejects(fetchHighlight(stereo8580, async () => new Response(bytes)), /model/i);
   }
+});
+
+test('a changed header default subtune cannot acquire the highlight duration', async () => {
+  const entry = {...mono6581, subtune: 4, durationSeconds: 214.895};
+  const bytes = sid(entry);
+  new DataView(bytes.buffer).setUint16(16, 3);
+  await assert.rejects(fetchHighlight(entry, async () => new Response(bytes)), /subtune|default/i);
+});
+
+test('the advertised default subtune must exist in the downloaded song count', async () => {
+  const entry = {...mono6581, subtune: 4, durationSeconds: 214.895};
+  const bytes = sid(entry);
+  new DataView(bytes.buffer).setUint16(14, 3);
+  await assert.rejects(fetchHighlight(entry, async () => new Response(bytes)), /subtune|song count/i);
 });

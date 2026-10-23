@@ -47,8 +47,10 @@ test('voice changes explain the interruption beside the controls and clear feedb
   await expect(feedback).toHaveClass(/preparing/);
   await releaseFailure('Injected voice-mix failure');
   await expect(feedback).toContainText('Injected voice-mix failure');
+  await expect(page.locator('#mute-2')).toHaveAttribute('aria-pressed', 'true');
   await expect(feedback).not.toHaveClass(/preparing/);
   await expect(page.locator('#mix-controls')).toHaveAttribute('aria-busy', 'false');
+  await page.locator('#playback-setup > summary').click();
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
   await expect(feedback).not.toContainText('failure');

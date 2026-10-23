@@ -97,13 +97,28 @@ test('selected SID uses the existing pending loader and keeps provider metadata 
   await expect(page.locator('#track-description')).toContainText(libraryAuthor);
   await expect(page.locator('#track-description')).toContainText(libraryReleased);
   expect(await page.locator('#source-links').getAttribute('title') ?? '').toBe('');
-  await page.locator('#library-info > summary').click();
+  const timelineTop = await page.locator('#timeline-panel').evaluate(element => element.getBoundingClientRect().top + scrollY);
+  await page.locator('#library-info-button').click();
+  await expect(page.locator('#library-info')).toBeVisible();
+  expect(await page.locator('#timeline-panel').evaluate(element => element.getBoundingClientRect().top + scrollY)).toBe(timelineTop);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#library-info')).toBeHidden();
+  await page.locator('#library-info-button').click();
   await expect(page.locator('#library-info')).toContainText('Provided by SIDquake / HVSC');
   await expect(page.locator('#library-path')).toHaveText(libraryPath);
   await expect(page.locator('#library-stil')).toHaveText(libraryStil);
   await expect(page.locator('#track-title img, #track-description b, #library-stil img, #library-stil script')).toHaveCount(0);
   expect(await page.evaluate(() => 'libraryMarkupRan' in window)).toBe(false);
   await expect(page.locator('#analysis-badge')).toHaveText('Generic inspection');
+  await page.locator('#library-info').screenshot({path: `build/ui-controls/${test.info().project.name}-library-info.png`});
+  await page.setViewportSize({width: 390, height: 844});
+  await expect.poll(() => page.locator('#library-info').evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    return bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight;
+  })).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('button', {name: 'Close library information'}).click();
+  await page.locator('#playback-setup > summary').click();
   await page.locator('#load-button').click();
   await expectLibraryLoaded(page);
   await expect(page.locator('#track-title')).toHaveText(libraryTitle);
@@ -118,7 +133,7 @@ test('missing metadata falls back to the SID and local or sample loading clears 
   await chooseFixtureWithPointer(page, 'missing-metadata');
   await expectLibraryLoaded(page);
   await expect(page.locator('#track-title')).toHaveText(clearedSidTitle);
-  await page.locator('#library-info > summary').click();
+  await page.locator('#library-info-button').click();
   await expect(page.locator('#library-path')).toHaveText(libraryPath);
   await expect(page.locator('#library-stil')).toBeHidden();
   await page.locator('#local-file').setInputFiles(sample);
@@ -279,6 +294,7 @@ test('library search, folder and result position survive closing and selecting w
   await expect(widget.locator('#fixture-folder')).toHaveValue('HVSC');
   expect(provider.requests()).toBe(2);
   await page.getByRole('button', {name: 'Close library browser'}).click();
+  await page.locator('#playback-setup > summary').click();
   await page.locator('#load-button').click();
   await expect(page.locator('#play-button')).toBeEnabled();
   await page.locator('#play-button').click();

@@ -1,3 +1,5 @@
+import {fetchHvscSong, hvscSongUrl} from './hvsc-download.ts';
+
 export interface SidHighlight {
   id: string;
   title: string;
@@ -5,55 +7,35 @@ export interface SidHighlight {
   path: string;
   model: 'MOS6581' | 'MOS8580';
   chips: 1 | 2;
+  subtune: number;
+  durationSeconds: number;
 }
 
 export const SID_HIGHLIGHTS: readonly SidHighlight[] = [
-  {id: 'h-Ch6K1h', title: 'Axel F.', author: 'Chris Hülsbeck', path: 'MUSICIANS/H/Huelsbeck_Chris/Axel_F.sid', model: 'MOS6581', chips: 1},
-  {id: 'QfM49EtP', title: 'Cybernoid II', author: 'Jeroen Tel', path: 'MUSICIANS/T/Tel_Jeroen/Cybernoid_II.sid', model: 'MOS6581', chips: 1},
-  {id: 'UpU3jayw', title: 'Commando', author: 'Rob Hubbard', path: 'MUSICIANS/H/Hubbard_Rob/Commando.sid', model: 'MOS6581', chips: 1},
-  {id: 'UopzMIF-', title: 'Monty on the Run', author: 'Rob Hubbard', path: 'MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid', model: 'MOS6581', chips: 1},
-  {id: 'XGpHOfuE', title: 'Ghostbusters', author: 'Benjamin Dibbert (Nordischsound)', path: 'MUSICIANS/N/Nordischsound/Ghostbusters.sid', model: 'MOS8580', chips: 1},
-  {id: 'gNRPKidk', title: 'Pink Panther', author: 'Thomas E. Petersen (Laxity)', path: 'MUSICIANS/L/Laxity/Pink_Panther.sid', model: 'MOS6581', chips: 1},
-  {id: 'GBRDw0sq', title: 'Sleepwalk', author: 'Lasse Öörni (Cadaver)', path: 'MUSICIANS/C/Cadaver/Sleepwalk_2SID.sid', model: 'MOS6581', chips: 2},
-  {id: 'ApA9_eLG', title: 'Phonky', author: 'Mihály Horváth (Hermit)', path: 'MUSICIANS/H/Hermit/Phonky_2SID.sid', model: 'MOS8580', chips: 2},
-  {id: 'LOKaOUbV', title: 'R-Type: Amiga to 2SID', author: 'Jason Page', path: 'MUSICIANS/P/Page_Jason/R-Type_Amiga_to_2SID_2SID.sid', model: 'MOS8580', chips: 2},
-  {id: '4D2HfMg6', title: 'Zoids 2SID-Remake', author: 'Sami Louko (Proton)', path: 'MUSICIANS/P/Proton/Zoids_2SID-Remake_2SID.sid', model: 'MOS8580', chips: 2},
+  {id: 'wizball', title: 'Wizball', author: 'Martin Galway', path: 'MUSICIANS/G/Galway_Martin/Wizball.sid', model: 'MOS6581', chips: 1, subtune: 4, durationSeconds: 214.895},
+  {id: 'last-ninja', title: 'The Last Ninja', author: 'Ben Daglish & Anthony Lees', path: 'MUSICIANS/D/Daglish_Ben/Last_Ninja.sid', model: 'MOS6581', chips: 1, subtune: 3, durationSeconds: 261},
+  {id: 'sanxion', title: 'Sanxion', author: 'Rob Hubbard', path: 'MUSICIANS/H/Hubbard_Rob/Sanxion.sid', model: 'MOS6581', chips: 1, subtune: 1, durationSeconds: 334},
+  {id: 'UpU3jayw', title: 'Commando', author: 'Rob Hubbard', path: 'MUSICIANS/H/Hubbard_Rob/Commando.sid', model: 'MOS6581', chips: 1, subtune: 1, durationSeconds: 235.594},
+  {id: 'QfM49EtP', title: 'Cybernoid II', author: 'Jeroen Tel', path: 'MUSICIANS/T/Tel_Jeroen/Cybernoid_II.sid', model: 'MOS6581', chips: 1, subtune: 1, durationSeconds: 346},
+  {id: 'UopzMIF-', title: 'Monty on the Run', author: 'Rob Hubbard', path: 'MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid', model: 'MOS6581', chips: 1, subtune: 1, durationSeconds: 350},
+  {id: 'cybernoid', title: 'Cybernoid', author: 'Jeroen Tel', path: 'MUSICIANS/T/Tel_Jeroen/Cybernoid.sid', model: 'MOS6581', chips: 1, subtune: 1, durationSeconds: 400},
+  {id: 'last-ninja-3', title: 'Last Ninja 3', author: 'Reyn Ouwehand', path: 'MUSICIANS/O/Ouwehand_Reyn/Last_Ninja_3.sid', model: 'MOS6581', chips: 1, subtune: 3, durationSeconds: 287},
+  {id: 'last-ninja-2', title: 'Last Ninja 2', author: 'Matt Gray', path: 'MUSICIANS/G/Gray_Matt/Last_Ninja_2.sid', model: 'MOS6581', chips: 1, subtune: 1, durationSeconds: 267},
+  {id: 'mutants', title: 'Mutants', author: 'Fred Gray', path: 'MUSICIANS/G/Gray_Fred/Mutants.sid', model: 'MOS6581', chips: 1, subtune: 1, durationSeconds: 250},
+  {id: 'knucklebusters', title: 'Knucklebusters', author: 'Rob Hubbard', path: 'MUSICIANS/H/Hubbard_Rob/Knucklebusters.sid', model: 'MOS6581', chips: 1, subtune: 2, durationSeconds: 202},
+  {id: 'crazy-comets', title: 'Crazy Comets', author: 'Rob Hubbard', path: 'MUSICIANS/H/Hubbard_Rob/Crazy_Comets.sid', model: 'MOS6581', chips: 1, subtune: 1, durationSeconds: 276},
+  {id: 'ultimate-axel-f', title: 'Ultimate Axel F.', author: 'Benjamin Dibbert (Nordischsound)', path: 'MUSICIANS/N/Nordischsound/Ultimate_Axel_F.sid', model: 'MOS8580', chips: 1, subtune: 1, durationSeconds: 133.468},
+  {id: 'XGpHOfuE', title: 'Ghostbusters', author: 'Benjamin Dibbert (Nordischsound)', path: 'MUSICIANS/N/Nordischsound/Ghostbusters.sid', model: 'MOS8580', chips: 1, subtune: 1, durationSeconds: 157.169},
+  {id: 'GBRDw0sq', title: 'Sleepwalk', author: 'Lasse Öörni (Cadaver)', path: 'MUSICIANS/C/Cadaver/Sleepwalk_2SID.sid', model: 'MOS6581', chips: 2, subtune: 1, durationSeconds: 292},
+  {id: 'LOKaOUbV', title: 'R-Type: Amiga to 2SID', author: 'Jason Page', path: 'MUSICIANS/P/Page_Jason/R-Type_Amiga_to_2SID_2SID.sid', model: 'MOS8580', chips: 2, subtune: 1, durationSeconds: 291.5},
+  {id: '4D2HfMg6', title: 'Zoids 2SID-Remake', author: 'Sami Louko (Proton)', path: 'MUSICIANS/P/Proton/Zoids_2SID-Remake_2SID.sid', model: 'MOS8580', chips: 2, subtune: 1, durationSeconds: 283.455},
+  {id: 'raindropsies-2sid', title: 'Raindropsies', author: 'Wojciech Radziejewski (Shogoon)', path: 'MUSICIANS/S/Shogoon/Raindropsies_2SID.sid', model: 'MOS8580', chips: 2, subtune: 1, durationSeconds: 179},
+  {id: 'get-lucky-2sid', title: 'Get Lucky', author: 'Benjamin Dibbert (Nordischsound)', path: 'MUSICIANS/N/Nordischsound/Get_Lucky_2SID.sid', model: 'MOS8580', chips: 2, subtune: 1, durationSeconds: 199.184},
+  {id: 'monty-on-the-run-d-n-b-edit-2sid', title: "Monty on the Run (D'n'B edit)", author: 'mch', path: 'MUSICIANS/M/MCH/Monty_on_the_Run_D_n_B_edit_2SID.sid', model: 'MOS8580', chips: 2, subtune: 1, durationSeconds: 254.128},
 ];
 
-const MAX_SID_BYTES = 65_662;
-
 export function highlightUrl(entry: SidHighlight): string {
-  return `https://www.hvsc.c64.org/download/C64Music/${entry.path.split('/').map(encodeURIComponent).join('/')}`;
-}
-
-function cancelStream(stream: ReadableStream<Uint8Array> | ReadableStreamDefaultReader<Uint8Array>): void {
-  void stream.cancel().catch(() => {});
-}
-
-async function readSid(body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<Uint8Array> {
-  const reader = body.getReader();
-  const cancel = () => cancelStream(reader);
-  const bytes = new Uint8Array(MAX_SID_BYTES);
-  let size = 0;
-  signal.addEventListener('abort', cancel, {once: true});
-  try {
-    signal.throwIfAborted();
-    while (true) {
-      const {done, value} = await reader.read();
-      signal.throwIfAborted();
-      if (done) break;
-      if (value.byteLength > MAX_SID_BYTES - size) throw new Error(`The SID download exceeds ${MAX_SID_BYTES.toLocaleString('en-US')} bytes.`);
-      bytes.set(value, size);
-      size += value.byteLength;
-    }
-    return bytes.slice(0, size);
-  } catch (error) {
-    cancel();
-    throw error;
-  } finally {
-    signal.removeEventListener('abort', cancel);
-    reader.releaseLock();
-  }
+  return hvscSongUrl(entry);
 }
 
 function checkProfile(bytes: Uint8Array, entry: SidHighlight): void {
@@ -63,6 +45,9 @@ function checkProfile(bytes: Uint8Array, entry: SidHighlight): void {
   const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const version = header.getUint16(4);
   if (version < 2 || version > 4) throw new Error('The highlight requires a PSID version 2–4 header with explicit clock and model declarations.');
+  if (header.getUint16(16) !== entry.subtune || header.getUint16(14) < entry.subtune) {
+    throw new Error(`The highlight download does not declare the expected default subtune ${entry.subtune}.`);
+  }
   const chips = version >= 3 && bytes[122] ? 2 : 1;
   if (bytes[123] || chips !== entry.chips) throw new Error(`The highlight download does not declare the expected ${entry.chips} SID chip${entry.chips === 1 ? '' : 's'}.`);
   const flags = header.getUint16(118);
@@ -74,18 +59,7 @@ function checkProfile(bytes: Uint8Array, entry: SidHighlight): void {
 }
 
 export async function fetchHighlight(entry: SidHighlight, fetcher: typeof fetch = globalThis.fetch.bind(globalThis)): Promise<Uint8Array> {
-  const signal = AbortSignal.timeout(15_000);
-  const response = await fetcher(highlightUrl(entry), {credentials: 'omit', referrerPolicy: 'no-referrer', signal});
-  if (!response.ok) {
-    if (response.body) cancelStream(response.body);
-    throw new Error(`Could not download ${entry.title} from HVSC: HTTP ${response.status} ${response.statusText}.`);
-  }
-  if (!response.body) throw new Error('HVSC returned an empty SID response body.');
-  if (Number(response.headers.get('content-length')) > MAX_SID_BYTES) {
-    cancelStream(response.body);
-    throw new Error(`The SID download exceeds ${MAX_SID_BYTES.toLocaleString('en-US')} bytes.`);
-  }
-  const bytes = await readSid(response.body, signal);
+  const bytes = await fetchHvscSong(entry, fetcher);
   checkProfile(bytes, entry);
   return bytes;
 }

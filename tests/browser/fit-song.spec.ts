@@ -55,7 +55,7 @@ test('Fit song keeps the full range through seeks and playback and inspects prep
   const target = 15;
   await lane.click({position:{x:box.width * target / duration,y:20}, modifiers:['Shift']});
   await expect(page.locator('#reg-frequency')).not.toHaveText('—');
-  await expect(page.locator('#inspector-note')).toContainText('Prepared ahead of playback when held');
+  await expect(page.locator('#inspector-tip-text')).toContainText('Prepared ahead of playback when held');
   const selected = await page.locator('#inspection-time').textContent();
   const settings = await page.locator('#reg-frequency').textContent();
   await page.locator('#timeline-scroll').click();
