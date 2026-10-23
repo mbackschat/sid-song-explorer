@@ -5,7 +5,7 @@ import {mkdir, readFile, readdir, rm, writeFile} from 'node:fs/promises';
 import {resolve, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {sealArtifact, verifyArtifact} from './release-artifact.ts';
-import {UNIT_SHARDS, BROWSER_SHARDS, BROWSER_GLOBAL_TIMEOUT_MS, releaseBrowserMatrix} from './release-settings.ts';
+import {BROWSER_SHARDS, BROWSER_GLOBAL_TIMEOUT_MS, releaseBrowserMatrix} from './release-settings.ts';
 import {validateReleaseInventory, type ReleaseBrowserReceipt} from './release-browser-reporter.ts';
 
 interface Candidate {commit: string; status: string}
@@ -28,6 +28,22 @@ export function assertUnitResults(tap: string): number {
   assert.equal(value('pass'), count, 'Incomplete passing unit execution');
   for (const key of ['fail', 'cancelled', 'skipped', 'todo']) assert.equal(value(key), 0, `Unexpected unit ${key}`);
   return count;
+}
+
+interface UnitFileResult {file: string; tests: number}
+
+export function unitFileStages(files: readonly string[]): {name: string; file: string}[] {
+  assert.ok(files.length > 0 && new Set(files).size === files.length, 'Empty or duplicate unit inventory');
+  return [...files].sort().map(file => {
+    assert.match(file, /^tests\/[^/]+\.test\.ts$/, 'Invalid unit inventory file');
+    return {name:`units-${file.slice('tests/'.length, -'.test.ts'.length)}`, file};
+  });
+}
+
+export function assertUnitCoverage(files: readonly string[], results: readonly UnitFileResult[]): void {
+  const expected = unitFileStages(files).map(stage => stage.file);
+  assert.deepEqual(results.map(result => result.file).sort(), expected, 'Missing, extra or duplicate unit inventory');
+  for (const result of results) assert.ok(Number.isSafeInteger(result.tests) && result.tests > 0, 'Invalid completed unit result');
 }
 
 export async function runChecks(checks: (() => Promise<void>)[]): Promise<void> {
@@ -164,18 +180,18 @@ function nativeInventory(value: unknown, project: string): string[] {
 
 async function software(): Promise<void> {
   const files = (await readdir('tests')).filter(file => file.endsWith('.test.ts')).sort().map(file => `tests/${file}`);
-  const groups: {shard: number; tests: number}[] = [];
+  const groups: UnitFileResult[] = [];
+  let status = 'failed';
   try {
-    await runChecks(Array.from({length:UNIT_SHARDS}, (_, index) => async () => {
-      const shard = index + 1;
-      const name = `units-${shard}`;
+    await runChecks(unitFileStages(files).map(({name, file}) => async () => {
       await runStage(name, process.execPath, ['--experimental-strip-types', '--test', '--test-concurrency=1',
-        '--test-reporter=tap', `--test-shard=${shard}/${UNIT_SHARDS}`, ...files], 60_000, logPath(name));
-      groups.push({shard, tests:assertUnitResults(await readFile(logPath(name), 'utf8'))});
+        '--test-reporter=tap', file], 60_000, logPath(name));
+      groups.push({file, tests:assertUnitResults(await readFile(logPath(name), 'utf8'))});
     }));
+    assertUnitCoverage(files, groups);
+    status = 'passed';
   } finally {
-    await save('software', {commit:candidate().commit, platform:process.platform, node:process.version, files, groups,
-      status:groups.length === UNIT_SHARDS ? 'passed' : 'failed'});
+    await save('software', {commit:candidate().commit, platform:process.platform, node:process.version, files, groups, status});
   }
 }
 

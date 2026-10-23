@@ -1,4 +1,3 @@
-export const UNIT_SHARDS = 7;
 export const BROWSER_SHARDS = 1;
 export const BROWSER_GLOBAL_TIMEOUT_MS = 170_000;
 

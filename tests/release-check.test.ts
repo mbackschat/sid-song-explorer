@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {assertCandidate, assertUnitResults, reconcileBrowserCoverage, runChecks, runStage} from '../scripts/release-check.ts';
+import {assertCandidate, assertUnitCoverage, assertUnitResults, reconcileBrowserCoverage, runChecks, runStage, unitFileStages} from '../scripts/release-check.ts';
 
 test('independent checks all execute and preserve each failure without retrying', async () => {
   const calls: number[] = [];
@@ -30,6 +30,35 @@ test('unit evidence requires completed passing native results without skips or t
   assert.equal(assertUnitResults(result), 12);
   for (const bad of ['', result.replace('# fail 0', '# fail 1'), result.replace('# skipped 0', '# skipped 1'), result.replace('# todo 0', '# todo 1'), result.replace('# pass 12', '# pass 11')]) {
     assert.throws(() => assertUnitResults(bad));
+  }
+});
+
+test('unit stages isolate each discovered file independently of inventory insertion or order', () => {
+  const files = ['tests/stereo-engine.test.ts', 'tests/cached-session.test.ts', 'tests/engine.test.ts'];
+  const stages = unitFileStages(files);
+  assert.deepEqual(stages, [
+    {name:'units-cached-session', file:'tests/cached-session.test.ts'},
+    {name:'units-engine', file:'tests/engine.test.ts'},
+    {name:'units-stereo-engine', file:'tests/stereo-engine.test.ts'},
+  ]);
+  const expanded = unitFileStages(['tests/aaa-new.test.ts', ...[...files].reverse(), 'tests/zzz-new.test.ts']);
+  assert.deepEqual(expanded.filter(stage => files.includes(stage.file)), stages);
+  assert.equal(new Set(expanded.map(stage => stage.name)).size, expanded.length);
+  assert.throws(() => unitFileStages([]), /inventory/i);
+  assert.throws(() => unitFileStages([...files, files[0]!]), /inventory/i);
+});
+
+test('unit coverage requires exactly one completed native result per discovered file', () => {
+  const files = ['tests/cached-session.test.ts', 'tests/stereo-engine.test.ts'];
+  const results = [{file:files[0]!, tests:14}, {file:files[1]!, tests:10}];
+  assert.doesNotThrow(() => assertUnitCoverage(files, [...results].reverse()));
+  for (const incomplete of [[], results.slice(1), [...results, results[0]!], [...results, {file:'tests/extra.test.ts', tests:1}]]) {
+    assert.throws(() => assertUnitCoverage(files, incomplete), /inventory/i);
+  }
+  assert.throws(() => assertUnitCoverage([], []), /inventory/i);
+  assert.throws(() => assertUnitCoverage([...files, files[0]!], results), /inventory/i);
+  for (const tests of [0, -1, 1.5, NaN]) {
+    assert.throws(() => assertUnitCoverage(files, [{...results[0]!, tests}, results[1]!]), /result/i);
   }
 });
 
