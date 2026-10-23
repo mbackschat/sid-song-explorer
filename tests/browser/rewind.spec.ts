@@ -1,6 +1,28 @@
 import {test, expect} from './fixtures.ts';
 import {holdWorkerRequest} from './worker-control.ts';
 
+test('newly loaded tunes start at the left edge before resuming centered following', async ({page}) => {
+  await page.setViewportSize({width:390, height:1100});
+  await page.goto('/');
+  await page.locator('#load-button').click();
+  await expect(page.locator('#play-button')).toBeEnabled();
+  const lane = page.locator('#voice-lane-0');
+  await expect.poll(() => lane.getAttribute('aria-valuemin').then(Number)).toBe(0);
+  await expect(page.locator('#seek-slider')).toHaveValue('0');
+  await page.locator('#play-button').click();
+  await expect.poll(() => lane.evaluate(element => {
+    const start = Number(element.getAttribute('aria-valuemin'));
+    const end = Number(element.getAttribute('aria-valuemax'));
+    const heard = Number((document.querySelector('#seek-slider') as HTMLInputElement).value);
+    return heard > (end - start) / 2 && Math.abs((start + end) / 2 - heard) < .03;
+  })).toBe(true);
+  await page.locator('#local-file').setInputFiles('public/generated/bach-toccata.sid');
+  await expect(page.locator('#source-kind')).toContainText('Local file');
+  await expect(page.locator('#play-status')).toHaveText('Ready');
+  await expect(page.locator('#seek-slider')).toHaveValue('0');
+  await expect.poll(() => lane.getAttribute('aria-valuemin').then(Number)).toBe(0);
+});
+
 test('rewind starts the scrolling viewport at zero and releases held inspection', async ({page}) => {
   await page.goto('/');
   await page.locator('#load-button').click();

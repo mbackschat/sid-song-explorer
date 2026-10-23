@@ -201,7 +201,10 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     input('loop-start').value = markers?.start == null ? '' : String(markers.start);
     input('loop-end').value = markers?.end == null ? '' : String(markers.end);
   };
-  const resetInspection = () => { setSelectedLoopMarkers(null); fittedEnd = null; seekViewport = null; held = null; cursor = 0; selectedEnd = null; timelineLimit = 30; evidenceKey = ''; sourceKey = ''; };
+  const startViewport = () => {
+    seekViewport = timelineView === 'scroll' ? {center:timelineSpan / 2, span:timelineSpan, heard:null, marker:null} : null;
+  };
+  const resetInspection = () => { setSelectedLoopMarkers(null); fittedEnd = null; startViewport(); held = null; cursor = 0; selectedEnd = null; timelineLimit = 30; evidenceKey = ''; sourceKey = ''; };
   const loadBytes = async (bytes: Uint8Array, entry: Entry | null, library: LibraryMetadata | null = null) => {
     reference.pause();
     const profile = currentProfile();
@@ -377,7 +380,7 @@ export function mountExplorer(root: HTMLElement, controls: PlayerControls, catal
     else { await controls.play(); notice = ''; }
   }); });
   button('restart-button').addEventListener('click', () => {
-    seekViewport = timelineView === 'scroll' ? {center:timelineSpan / 2, span:timelineSpan, heard:null, marker:null} : null;
+    startViewport();
     held = null;
     selectedEnd = null;
     compositionPanel.follow();

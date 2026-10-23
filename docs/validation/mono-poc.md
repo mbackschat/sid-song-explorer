@@ -138,7 +138,7 @@ Pending seeks must preserve chart, scrollbar and button geometry, clicked range 
 
 ### Restart viewport
 
-Restart from beginning releases held inspection and shows a Scroll viewport starting at zero throughout the pending seek and after completion. Playback advances from the left edge to center before normal centered following resumes. Fit keeps its range, and explicit Follow still centers immediately. [The rewind guards](../../tests/browser/rewind.spec.ts) hold the real seek request for pending assertions, then verify completion and sample viewport/heard-time relationships atomically through the center handoff.
+Loading a tune and Restart from beginning both release held inspection and start the Scroll viewport at zero. Restart keeps this viewport throughout the pending seek and after completion. Playback advances from the left edge to center before normal centered following resumes. Fit keeps its range, and explicit Follow still centers immediately. [The rewind guards](../../tests/browser/rewind.spec.ts) hold the real seek request for pending assertions, then verify completion and sample viewport/heard-time relationships atomically through the center handoff. They also check initial sample loading and replacement by a local file.
 
 ### Clicked-note marker clarification
 

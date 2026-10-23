@@ -16,6 +16,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 340px; }
 button, input, select { font: inherit; }
+select { font-size: 12px; }
 button, select { min-height: 40px; }
 button { border: 1px solid #3b4669; border-radius: 7px; padding: 9px 13px; background: #222a44; color: #edf0ff; cursor: pointer; font-weight: 550; }
 button:hover { background: #303a59; border-color: #6d739c; }

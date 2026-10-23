@@ -18,6 +18,8 @@ test('highlights load on selection, replace playing tunes and recover from downl
   await page.goto('/');
   const highlights = page.getByLabel('SID highlights', {exact: true});
   await expect(highlights).toBeVisible();
+  expect(await page.locator('select').evaluateAll(elements => elements.map(element => getComputedStyle(element).fontSize)))
+    .toEqual(['12px', '12px', '12px', '12px', '12px']);
   await expect(highlights.locator('option')).toHaveCount(11);
   expect(downloads).toBe(0);
   const release = await holdWorkerRequest(page, 'load');
